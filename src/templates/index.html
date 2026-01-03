@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Snap Nexus</title>
+    <!-- Pico.css -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" type="image/png" href="/favicon.ico">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Shared Season Logic -->
+    <script src="/client-utils.js"></script>
+    <style>
+        .movers-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .movers-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <main class="container">
+        <!-- NAV -->
+        <nav class="container-fluid">
+            <ul>
+                <li><img src="/logo.png" class="header-logo" alt="Logo"><strong>Snap Nexus</strong></li>
+            </ul>
+            <ul>
+                <li><a href="/" class="active">Home</a></li>
+                <li><a href="/player-search">Search</a></li>
+                <li><a href="/decks">Decks</a></li>
+            </ul>
+        </nav>
+
+        <!-- HEADER -->
+        <!-- HEADER -->
+        <hgroup class="hero-header">
+            <h1 class="hero-title">Infinite Dashboard</h1>
+            <p class="text-muted fw-300">Tracking the Global Infinite Leaderboard</p>
+        </hgroup>
+        <!-- SECTION 1: SEASON CHARTS -->
+        <article>
+            <header class="grid">
+                <div><strong>📈 Season Trajectory</strong></div>
+                <div class="text-right">
+                    <select id="seasonSelector" class="small-select"></select>
+                </div>
+            </header>
+            <div class="chart-container">
+                <canvas id="seasonChart"></canvas>
+            </div>
+        </article>
+
+        <article>
+            <header class="grid">
+                <div><strong>📊 Previous Season Totals</strong></div>
+            </header>
+            <div id="history-chart-container" class="chart-container" style="height:250px;">
+                <canvas id="historyChart"></canvas>
+            </div>
+        </article>
+
+        <!-- SECTION 2: ALLIANCE RANKINGS -->
+        <section class="mt-40">
+            <div class="mover-card">
+                <h3 class="text-small mb-15">🏆 Alliance Power Ranking</h3>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Alliance</th>
+                            <th id="th-members" style="cursor:pointer;" onclick="sortAlliances('members')">Members <span
+                                    style="color:#666">↕</span></th>
+                            <th id="th-avgSP" style="cursor:pointer;" onclick="sortAlliances('avgSP')">Avg SP <span
+                                    style="color:#666">↕</span></th>
+                            <th id="th-highestRank" style="cursor:pointer;" onclick="sortAlliances('highestRank')">Top
+                                Rank
+                                <span style="color:#666">↕</span>
+                            </th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="alliance-table">
+                        <tr>
+                            <td>Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <!-- Compact Pagination -->
+                <div class="pagination-container">
+                    <small id="pageIndicator" class="text-muted" style="font-variant-numeric: tabular-nums;">Page
+                        1</small>
+                    <div role="group" class="mb-0" style="width:auto;">
+                        <button id="btnPrev" class="outline secondary btn-small" onclick="changeAlliancePage(-1)"
+                            disabled>Prev</button>
+                        <button id="btnNext" class="outline secondary btn-small"
+                            onclick="changeAlliancePage(1)">Next</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 3: MOVERS -->
+        <section class="mt-40">
+            <div class="grid">
+                <div class="mover-card">
+                    <h3 class="mb-15 success-msg" style="font-size: 1rem;">🔥 Meta Abusers <small class="text-muted"
+                            style="font-weight:normal; float:right;">Top 10</small></h3>
+                    <table id="gainers-table">
+                        <tbody>
+                            <tr>
+                                <td>Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="mover-card">
+                    <h3 class="mb-15 error-msg" style="font-size: 1rem;">❄️ Biggest Pumpers <small class="text-muted"
+                            style="font-weight:normal; float:right;">Top 10</small></h3>
+                    <table id="losers-table">
+                        <tbody>
+                            <tr>
+                                <td>Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            <p class="text-center mt-15 text-small" style="color: #555;">Comparing Daily SP Changes</p>
+        </section>
+
+        <!-- Data Disclaimer -->
+        <div class="disclaimer-box">
+            <strong>Note:</strong> Data collection began on <strong>October 19th, 2025</strong>.
+            Ranks outside the <strong>Top 1000</strong> are not recorded.
+        </div>
+    </main>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+        let chartInstance = null;
+        let historyChartInstance = null;
+
+        // Global Chart Defaults
+        Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
+        Chart.defaults.color = '#aaa';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
+
+        // --- HARDCODED LEGACY DATA (From Extension) ---
+        // Moved to API: /api/history/legacy
+
+        const COLORS = {
+            gold: { border: 'rgb(255, 204, 0)', bg: 'rgba(255, 204, 0, 0.1)', point: 'rgb(255, 204, 0)' },
+            blue: { border: 'rgb(0, 123, 255)', bg: 'rgba(0, 123, 255, 0.1)' }
+        };
+
+        // --- UTILS ---
+
+        (async function init() {
+            populateSeasonSelector();
+            await loadSeasonChart();
+            loadHistoryChart();
+            await fetchMovers();
+
+            $('seasonSelector').addEventListener('change', (e) => loadSeasonChart(e.target.value));
+        })();
+
+        function populateSeasonSelector() {
+            const sel = $('seasonSelector');
+            sel.innerHTML = '';
+
+            const now = new Date();
+            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+            // Add Current Season
+            // Marvel Snap Season Logic: Starts first Tuesday
+            // If we are before the first Tuesday, the "Current Season" is technically the previous month.
+            const currentM = now.getMonth();
+            const currentY = now.getFullYear();
+
+            let seasonM = currentM;
+            let seasonY = currentY;
+
+            const firstDay = new Date(currentY, currentM, 1);
+            let dayOffset = 1;
+            while (new Date(currentY, currentM, dayOffset).getDay() !== 2) { // 2 = Tuesday
+                dayOffset++;
+            }
+            const seasonStart = new Date(currentY, currentM, dayOffset);
+
+            // Replace complex logic with helper
+            const activeSeason = SnapUtils.getCurrentSeason(now);
+            seasonY = activeSeason.year;
+            seasonM = activeSeason.month - 1; // Convert back to 0-indexed for this loop logic
+
+
+            const optC = document.createElement('option');
+            optC.value = 'current';
+            optC.text = `${months[seasonM]} ${seasonY} (Current)`;
+            sel.appendChild(optC);
+
+            // Add Past Seasons (Back to Oct 2025)
+            const startYear = 2025;
+            const startMonth = 9; // October index
+            let y = currentY;
+            let m = currentM - 1;
+
+            if (m < 0) { m = 11; y--; }
+
+            while (y > startYear || (y === startYear && m >= startMonth)) {
+                // Filter: Exclude if this is somehow the "Current Active Season" (already added)
+                // Logic: "Current" option was added above based on seasonM/seasonY.
+                // If the loop variables match that, skip.
+                if (y !== seasonY || m !== seasonM) {
+                    const opt = document.createElement('option');
+                    opt.value = `${y}-${m + 1}`;
+                    opt.text = `${months[m]} ${y}`;
+                    sel.appendChild(opt);
+                }
+
+                m--;
+                if (m < 0) { m = 11; y--; }
+            }
+        }
+
+        // --- CHART 1: TRAJECTORY (GOLD) ---
+        async function loadSeasonChart(seasonVal) {
+            const now = new Date();
+            let year, month;
+
+            if (!seasonVal || seasonVal === 'current') {
+                // Determine actual season month/year
+                const activeSeason = SnapUtils.getCurrentSeason(now);
+                year = activeSeason.year;
+                month = activeSeason.month; // 1-indexed matches usage below
+            } else {
+                [year, month] = seasonVal.split('-').map(Number);
+            }
+
+            const start = SnapUtils.getSeasonStartForMonth(year, month - 1);
+            const seasonEnd = SnapUtils.getSeasonEndForMonth(year, month - 1);
+
+            let fetchEnd;
+            // If viewing current season (dynamic), show up to today.
+            if (seasonVal === 'current' || (year === now.getFullYear() && month === now.getMonth() + 1)) {
+                fetchEnd = now;
+            } else {
+                // For past seasons, use the calculated season end (API is inclusive)
+                fetchEnd = seasonEnd;
+            }
+
+            const eStr = fetchEnd.toISOString().split('T')[0];
+            const sStr = start.toISOString().split('T')[0];
+
+            try {
+                // Note: Updated to use /api prefix
+                const req = await fetch(`/api/season/stats?start=${sStr}&end=${eStr}`);
+                const data = await req.json();
+
+                const ctx = $('seasonChart').getContext('2d');
+                if (chartInstance) chartInstance.destroy();
+
+                chartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(d => d.date.slice(5).replace('-', '/')),
+                        datasets: [{
+                            label: 'Infinite Players',
+                            // Map 0 -> null EXCLUDING the start date (where 0 is valid reset)
+                            data: data.map(d => {
+                                if (d.date === sStr) return d.total; // Allow 0 on Start Date
+                                return d.total > 0 ? d.total : null; // Else treat 0 as missing
+                            }),
+                            borderColor: COLORS.gold.border,
+                            backgroundColor: COLORS.gold.bg,
+                            pointBackgroundColor: COLORS.gold.point,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 3,
+                            spanGaps: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                        scales: {
+                            y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#f0f0f0' }, title: { display: true, text: 'Players', color: '#f0f0f0' } },
+                            x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#f0f0f0' }, title: { display: true, text: 'Date (M/D)', color: '#f0f0f0' } }
+                        }
+                    }
+                });
+            } catch (e) { }
+        }
+
+        // --- CHART 2: HISTORY (BLUE) ---
+        let cachedHistory = null;
+
+        async function loadHistoryChart() {
+            try {
+                if (!cachedHistory) {
+                    // 1. Fetch Legacy Data
+                    const legacyReq = await fetch('/api/history/legacy');
+                    const legacyData = await legacyReq.json();
+
+                    // 2. Determine Missing Seasons (Dec 2025 onwards)
+                    const dynamicData = [];
+                    const now = new Date();
+
+                    // Start checking from Dec 2025 (Month 11)
+                    // We only want COMPLETED seasons.
+                    let checkY = 2025;
+                    let checkM = 11; // 0-indexed Dec
+
+                    while (true) {
+                        // Calculate Season End for this month
+                        const seasonEnd = SnapUtils.getSeasonEndForMonth(checkY, checkM);
+
+                        // If season hasn't ended yet, stop  
+
+                        const graceTime = new Date(seasonEnd);
+                        graceTime.setUTCHours(19);
+
+                        if (graceTime > now) break;
+
+                        // If it's a valid past season, fetch its end-date data
+                        const dateStr = seasonEnd.toISOString().split('T')[0];
+                        try {
+                            // Use range with same start/end to get that specific day's total efficiently
+                            const r = await fetch(`/api/history/range?start=${dateStr}&end=${dateStr}`);
+                            if (r.ok) {
+                                const json = await r.json();
+                                if (json && json.length > 0 && json[0].total) {
+                                    const monthName = seasonEnd.toLocaleString('default', { month: 'long' });
+                                    dynamicData.push({
+                                        label: monthName,
+                                        total: json[0].total,
+                                        month: checkM + 1,
+                                        year: checkY
+                                    });
+                                }
+                            }
+                        } catch (e) {
+                        }
+
+                        // Increment
+                        checkM++;
+                        if (checkM > 11) { checkM = 0; checkY++; }
+                    }
+
+                    cachedHistory = [...legacyData, ...dynamicData];
+                }
+
+                // Standardize Labels: "Jan '25"
+                cachedHistory = cachedHistory.map(d => {
+                    const date = new Date(d.year, d.month - 1, 1);
+                    const shortMonth = date.toLocaleString('default', { month: 'short' });
+                    const shortYear = d.year.toString().slice(-2);
+                    return { ...d, label: `${shortMonth} '${shortYear}` };
+                });
+
+                // Sort chronologically
+                cachedHistory.sort((a, b) => {
+                    if (a.year !== b.year) return a.year - b.year;
+                    return a.month - b.month;
+                });
+
+                const ctx = $('historyChart').getContext('2d');
+                if (historyChartInstance) historyChartInstance.destroy();
+
+                historyChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: cachedHistory.map(d => d.label),
+                        datasets: [{
+                            label: 'Infinite Players',
+                            data: cachedHistory.map(d => d.total),
+                            backgroundColor: COLORS.blue.bg,
+                            borderColor: COLORS.blue.border,
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true,
+                            pointRadius: 3,
+                            pointBackgroundColor: COLORS.blue.border
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#f0f0f0' }, title: { display: true, text: 'Players', color: '#f0f0f0' } },
+                            x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#f0f0f0', maxRotation: 45, minRotation: 45 }, title: { display: true, text: 'Season', color: '#f0f0f0' } }
+                        }
+                    }
+                });
+            } catch (e) { }
+        }
+
+        // --- MOVERS ---
+        async function fetchMovers() {
+            // Logic: Scraper runs at 19:00 UTC.
+            // If current UTC time < 19:00, "Today's" scrape hasn't happened yet.
+            // So we show Yesterday vs DayBefore.
+            // If >= 19:00, we show Today vs Yesterday.
+
+            const now = new Date();
+            const utcHour = now.getUTCHours();
+
+            let d1 = new Date();
+            let d2 = new Date();
+
+            if (utcHour < 19) {
+                // Scrape pending for today. Show Yesterday vs Day Before.
+                d1.setDate(d1.getDate() - 1);
+                d2.setDate(d2.getDate() - 2);
+            } else {
+                // Scrape done for today. Show Today vs Yesterday.
+                d2.setDate(d2.getDate() - 1);
+            }
+
+            const date1 = d1.toISOString().split('T')[0];
+            const date2 = d2.toISOString().split('T')[0];
+
+            try {
+                // Note: Updated to use /api prefix
+                const req = await fetch(`/api/leaderboard/movers?date1=${date1}&date2=${date2}`);
+                if (!req.ok) {
+                    const err = await req.json();
+                    $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>No data available (${req.status})</td></tr>`;
+                    $('losers-table').querySelector('tbody').innerHTML = `<tr><td>No data available (${req.status})</td></tr>`;
+                    $('alliance-table').innerHTML = `<tr><td colspan="5">No data available for date range</td></tr>`;
+                    return;
+                }
+                const data = await req.json();
+                const renderRows = (list, isGain) => {
+                    if (!list || !list.length) return "<tr><td>No data</td></tr>";
+                    return list.slice(0, 10).map(p => {
+                        return `<tr><td><a href="/player/${p.id}" style="color:inherit; text-decoration:none;">${p.name}</a></td><td class="${isGain ? 'gainer' : 'loser'}">${isGain ? '+' : ''}${p.change}</td></tr>`;
+                    }).join('');
+                };
+                $('gainers-table').querySelector('tbody').innerHTML = renderRows(data.topGainers, true);
+                $('losers-table').querySelector('tbody').innerHTML = renderRows(data.topLosers, false);
+
+                // Initialize Alliances
+                currentAllianceData = data.allianceRankings || [];
+                // Default sort: Members Desc
+                sortAlliances('members', false);
+
+            } catch (e) {
+                $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>Error loading data</td></tr>`;
+                $('losers-table').querySelector('tbody').innerHTML = `<tr><td>Error loading data</td></tr>`;
+                $('alliance-table').innerHTML = `<tr><td colspan="4">Error loading data</td></tr>`;
+            }
+        }
+
+        // --- ALLIANCE SORTING ---
+        let currentAllianceData = [];
+        let sortState = { key: null, asc: false };
+
+        function sortAlliances(key) {
+            // Toggle sort if same key
+            if (sortState.key === key) {
+                sortState.asc = !sortState.asc;
+            } else {
+                sortState.key = key;
+                sortState.asc = true; // Default asc for new key? Actually numbers usually desc.
+                if (key === 'members' || key === 'avgSP') sortState.asc = false; // Higher is better
+                if (key === 'highestRank') sortState.asc = true; // Lower is better (Rank 1)
+            }
+
+            // Sort
+            currentAllianceData.sort((a, b) => {
+                let valA = a[key];
+                let valB = b[key];
+
+                if (valA < valB) return sortState.asc ? -1 : 1;
+                if (valA > valB) return sortState.asc ? 1 : -1;
+                return 0;
+            });
+
+            updateSortIcons();
+            renderAlliances();
+        }
+
+        function updateSortIcons() {
+            const keys = ['members', 'avgSP', 'highestRank'];
+            keys.forEach(k => {
+                const th = $(`th-${k}`);
+                let icon = '↕';
+                let label = '';
+                if (k === 'members') label = 'Members';
+                if (k === 'avgSP') label = 'Avg SP';
+                if (k === 'highestRank') label = 'Top Rank';
+
+                if (sortState.key === k) {
+                    icon = sortState.asc ? '↑' : '↓';
+                }
+
+                th.innerHTML = `${label} <span class="text-muted">${icon}</span>`;
+                if (sortState.key === k) {
+                    th.querySelector('span').style.color = '#fff';
+                }
+            });
+        }
+
+        // --- PAGINATION ---
+        let alliancePage = 1;
+        const allianceRowsPerPage = 10;
+
+        function changeAlliancePage(delta) {
+            alliancePage += delta;
+            renderAlliances();
+        }
+
+        function renderAlliances() {
+            const list = currentAllianceData;
+            const tbody = $('alliance-table');
+            if (!list || !list.length) {
+                tbody.innerHTML = "<tr><td colspan='5'>No data</td></tr>";
+                $('pageIndicator').innerText = "Page 1 of 1";
+                return;
+            }
+
+            // Calculate Slice
+            const start = (alliancePage - 1) * allianceRowsPerPage;
+            const end = start + allianceRowsPerPage;
+            const slice = list.slice(start, end);
+
+            // Render Rows
+            tbody.innerHTML = slice.map(a => {
+                return `<tr>
+                    <td><span class="tag-alliance"><a href="/alliance/${a.tag}" class="card-clickable" style="color:inherit; text-decoration:none;">[${a.tag}]</a></span></td>
+                    <td>${a.members}</td>
+                    <td>${Math.round(a.avgSP).toLocaleString()}</td>
+                    <td>#${a.highestRank}</td>
+                    <td class="text-right"><a href="/alliance/${a.tag}" class="text-muted" style="text-decoration:none; font-size:1.2em;">&rsaquo;</a></td>
+                </tr>`;
+            }).join('');
+
+            // Update Controls
+            const totalPages = Math.ceil(list.length / allianceRowsPerPage);
+            $('pageIndicator').innerText = `Page ${alliancePage} of ${totalPages || 1}`;
+            $('btnPrev').disabled = alliancePage === 1;
+            $('btnNext').disabled = alliancePage >= totalPages;
+        }
+    </script>
+</body>
+
+</html>

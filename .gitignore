@@ -1,0 +1,15 @@
+# Local Wrangler cache
+.wrangler/
+
+# Build output
+dist/
+
+# Installed npm dependencies
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Config
+.env

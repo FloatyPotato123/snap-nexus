@@ -1,0 +1,32 @@
+{
+  "name": "marvel-snap",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build:client": "esbuild src/client/utils.js --bundle --outfile=dist/client-utils.js.txt --format=iife",
+    "build:worker": "esbuild src/index.js --bundle --outfile=dist/index.js --format=esm --loader:.html=text --loader:.css=text --loader:.txt=text",
+    "build": "npm run build:client && npm run build:worker"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FloatyPotato123/marvel-snap.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/FloatyPotato123/marvel-snap/issues"
+  },
+  "homepage": "https://github.com/FloatyPotato123/marvel-snap#readme",
+  "dependencies": {
+    "buffer": "^6.0.3",
+    "hono": "^4.11.3",
+    "lodash-es": "^4.17.22",
+    "snapdeck": "^2.4.4"
+  },
+  "devDependencies": {
+    "esbuild": "^0.18.19"
+  }
+}

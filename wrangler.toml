@@ -1,0 +1,21 @@
+name = "marvelsnap"
+main = "dist/index.js"
+compatibility_date = "2025-12-10"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[triggers]
+crons = ["0 19 * * *"]
+
+[[kv_namespaces]]
+binding = "MARVEL_SNAP_HUB"
+id = "f0db931b10c848eda7dee99f1c106a19"
+preview_id = "f0db931b10c848eda7dee99f1c106a19"
+
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
+[build]
+command = "npm run build"

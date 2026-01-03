@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Player Profile - Snap Nexus</title>
+    <!-- Pico.css -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="icon" type="image/png" href="/favicon.ico">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <!-- Shared Season Logic -->
+    <script src="/client-utils.js"></script>
+    <style>
+        /* Timeline Component */
+        .timeline {
+            position: relative;
+            border-left: 2px solid rgba(255, 255, 255, 0.1);
+            margin-left: 10px;
+            padding-left: 25px;
+            padding-top: 10px;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 25px;
+        }
+
+        .timeline-item:last-child {
+            margin-bottom: 0;
+        }
+
+        /* The Dot */
+        .timeline-item::before {
+            content: '';
+            position: absolute;
+            left: -31px;
+            top: 5px;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: var(--accent-gold);
+            border: 2px solid #1e293b;
+            /* Match bg to create 'gap' effect */
+            box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.2);
+        }
+
+        /* Different color for past names if wanted, or keep uniform */
+        .timeline-item.past::before {
+            background: #64748b;
+            box-shadow: none;
+        }
+
+        .timeline-date {
+            font-size: 0.75rem;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            font-family: monospace;
+        }
+
+        .timeline-name {
+            font-size: 1.1rem;
+            font-weight: bold;
+            color: #f8fafc;
+        }
+    </style>
+</head>
+
+<body>
+
+    <main class="container">
+        <!-- NAV -->
+        <nav class="container-fluid">
+            <ul>
+                <li><img src="/logo.png" class="header-logo" alt="Logo"><strong>Snap Nexus</strong></li>
+            </ul>
+            <ul>
+                <li><a href="/">Home</a></li>
+                <li><a href="/player-search">Search</a></li>
+                <li><a href="/decks">Decks</a></li>
+            </ul>
+        </nav>
+
+        <a href="/player-search" id="backLink" class="secondary">← Back to Search Results</a>
+
+        <script>
+            // Check for back_q param to preserve search context
+            const params = new URLSearchParams(window.location.search);
+            const backQ = params.get('back_q');
+            if (backQ) {
+                // Use 'q' param for search page
+                document.getElementById('backLink').href = `/player-search?q=${encodeURIComponent(backQ)}`;
+            }
+        </script>
+
+        <div id="loading" aria-busy="true" class="status-msg">Loading Profile...</div>
+
+        <div id="content" class="mb-40" style="display:none;">
+
+            <!-- HEADER -->
+            <article class="text-center border-gold">
+                <!-- Current Rank Badge -->
+                <div id="pRankBadge" class="mt-10" style="display:none;">
+                    <div class="tag-rank-lg">Rank <span id="pRank">--</span></div>
+                </div>
+
+                <h1 id="pName" class="mt-10 mb-0" style="font-size:2.5rem;"></h1>
+                <div id="pId" style="display:none;"></div>
+            </article>
+
+            <!-- NAME HISTORY -->
+            <article>
+                <header>Name History</header>
+                <div id="historyTimeline" class="timeline"></div>
+            </article>
+
+
+
+            <!-- 2. Season Performance -->
+            <article>
+                <header class="grid">
+                    <div>Season Performance</div>
+                    <div class="text-right">
+                        <select id="seasonSelect" class="small-select"></select>
+                    </div>
+                </header>
+                <div class="chart-container">
+                    <canvas id="seasonChart"></canvas>
+                </div>
+                <div id="noSeasonStats" class="status-msg" style="display:none;">No ranked data for this season.</div>
+            </article>
+
+            <!-- 3. Historical Season Ranks -->
+            <article>
+                <header>Historical Season Finishes</header>
+                <div class="chart-container">
+                    <canvas id="historicalChart"></canvas>
+                </div>
+                <div id="noHistoricalStats" style="display:none; text-align:center; padding:20px;">No historical season
+                    finishes found.</div>
+            </article>
+
+            <!-- PEAK STATS -->
+            <div class="grid">
+                <article class="text-center border-blue">
+                    <small class="text-muted">Best Rank</small>
+                    <div id="peakRank" class="fw-800" style="font-size:2rem;">-</div>
+                </article>
+                <article class="text-center border-gold">
+                    <small class="text-muted">Highest SP</small>
+                    <div id="peakSP" class="fw-800" style="font-size:2rem;">-</div>
+                </article>
+            </div>
+
+            <!-- Data Disclaimer -->
+            <div class="disclaimer-box">
+                <strong>Note:</strong> Data collection began on <strong>October 19th, 2025</strong>.
+                Ranks outside the <strong>Top 1000</strong> are not recorded.
+            </div>
+        </div>
+    </main>
+
+    <script>
+        const $ = (id) => document.getElementById(id);
+        const pathParts = window.location.pathname.split('/');
+        const playerId = pathParts[pathParts.length - 1];
+
+        // Global Chart Defaults
+        Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
+        Chart.defaults.color = '#aaa';
+        Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
+
+        // Chart Instances
+        let seasonChartInstance = null;
+        let historicalChartInstance = null;
+
+        function populateSeasonSelector() {
+            const select = $('seasonSelect');
+            const now = new Date();
+            const startYear = 2025;
+            const startMonth = 9; // October index (0-11)
+
+            // Loop from current date down to Nov 2025
+            let y = now.getFullYear();
+            let m = now.getMonth();
+
+            // Marvel Snap Season Logic: Starts first Tuesday
+            const activeSeason = SnapUtils.getCurrentSeason(now);
+            y = activeSeason.year;
+            m = activeSeason.month - 1; // 0-indexed for loop
+
+
+            // Loop backwards to startYear
+            while (y > startYear || (y === startYear && m >= startMonth)) {
+
+                const opt = document.createElement('option');
+                opt.value = `${y}-${m + 1}`; // 2026-1 for Jan
+                const monthName = new Date(y, m).toLocaleString('default', { month: 'long' });
+                opt.text = `${monthName} ${y}`;
+                select.appendChild(opt);
+
+                m--;
+                if (m < 0) { m = 11; y--; }
+            }
+
+            // Handle loading new data on change
+            select.addEventListener('change', async () => {
+                const [year, month] = select.value.split('-');
+                await loadSeasonData(year, month);
+            });
+        }
+
+        async function loadSeasonData(year, month) {
+            try {
+                // If loading specific season, re-fetch profile with params
+                // Note: This fetches everything again, but allows us to reuse the robust API logic
+                // Could optimize later to fetch stats-only if needed.
+                const req = await fetch(`/api/player/${playerId}?month=${month}&year=${year}`);
+                if (!req.ok) throw new Error("Failed to load season");
+                const data = await req.json();
+
+                if (data.currentSeasonStats && data.currentSeasonStats.length > 0) {
+                    $('seasonChart').style.display = 'block';
+                    $('noSeasonStats').style.display = 'none';
+                    renderSeasonChart(data.currentSeasonStats);
+                } else {
+                    $('seasonChart').style.display = 'none';
+                    $('noSeasonStats').style.display = 'block';
+                }
+            } catch (e) { }
+        }
+
+        async function loadProfile() {
+            try {
+                populateSeasonSelector();
+
+                const req = await fetch(`/api/player/${playerId}`);
+                if (!req.ok) throw new Error("Player not found");
+                const data = await req.json();
+
+                $('pName').innerText = data.name;
+                $('pId').innerText = data.id;
+
+                // Current Rank
+                if (data.currentRank) {
+                    $('pRank').innerText = data.currentRank;
+                    $('pRankBadge').style.display = 'block';
+                } else {
+                    $('pRankBadge').style.display = 'none';
+                }
+
+                // Alliance Info
+                // Render Header
+                const allianceHtml = data.alliance ?
+                    `<span class="tag-alliance"><a href="/alliance/${data.alliance.tag}" style="color:inherit; text-decoration:none;">[${data.alliance.tag}]</a></span> ` : '';
+
+                $('pName').innerHTML = `${allianceHtml}${data.name}`;
+                document.title = `${data.name} | Snap Nexus`;
+
+                // Calculate Peak Stats
+                let bestRank = 999999;
+                let maxSP = 0;
+
+                const allStats = [
+                    ...(data.currentSeasonStats || []),
+                    ...(data.historicalSeasonRanks || [])
+                ];
+
+                allStats.forEach(s => {
+                    if (s.rank && s.rank < bestRank) bestRank = s.rank;
+                    if (s.sp && s.sp > maxSP) maxSP = s.sp;
+                });
+
+                $('peakRank').innerText = bestRank < 999999 ? `#${bestRank.toLocaleString()}` : '-';
+                $('peakSP').innerText = maxSP > 0 ? maxSP.toLocaleString() : '-';
+
+
+                // History Timeline
+                let timelineHtml = '';
+                // Sort history desc (newest first) explicitly
+                const historyList = (data.history || []).sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
+
+                historyList.forEach((h, index) => {
+                    const isCurrent = index === 0;
+                    const isOldest = index === historyList.length - 1;
+                    const dateClass = isCurrent ? 'timeline-date' : 'timeline-date';
+                    const dotClass = isCurrent ? '' : 'past';
+                    const label = isOldest ? '' : h.seenAt;
+
+                    timelineHtml += `
+                        <div class="timeline-item ${dotClass}">
+                            <div class="timeline-name">${h.name}</div>
+                            <div class="${dateClass}">${label}</div>
+                        </div>
+                    `;
+                });
+                $('historyTimeline').innerHTML = timelineHtml || '<div class="status-msg">No history found</div>';
+
+                // Charts & Stats
+                if (data.currentSeasonStats && data.currentSeasonStats.length > 0) {
+                    $('seasonChart').style.display = 'block';
+                    $('noSeasonStats').style.display = 'none';
+                    renderSeasonChart(data.currentSeasonStats);
+                } else {
+                    $('seasonChart').style.display = 'none';
+                    $('noSeasonStats').style.display = 'block';
+                }
+
+                if (data.historicalSeasonRanks && data.historicalSeasonRanks.length > 0) {
+                    $('historicalChart').style.display = 'block';
+                    $('noHistoricalStats').style.display = 'none';
+                    renderHistoricalChart(data.historicalSeasonRanks);
+                } else {
+                    $('historicalChart').style.display = 'none';
+                    $('noHistoricalStats').style.display = 'block';
+                }
+
+                $('loading').style.display = 'none';
+                $('content').style.display = 'block';
+            } catch (e) {
+                $('loading').innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+            }
+        }
+
+        function renderSeasonChart(stats) {
+            const ctx = $('seasonChart').getContext('2d');
+            if (seasonChartInstance) seasonChartInstance.destroy();
+
+            seasonChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: stats.map(s => {
+                        const d = new Date(s.date);
+                        return `${d.getMonth() + 1}/${d.getDate()}`;
+                    }),
+                    datasets: [
+                        {
+                            label: 'Rank',
+                            data: stats.map(s => s.rank),
+                            borderColor: '#2196F3', // Blue
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.2,
+                            fill: true
+                        },
+                        {
+                            label: 'SP',
+                            data: stats.map(s => s.sp),
+                            borderColor: '#ffcc00', // Gold
+                            backgroundColor: 'rgba(255, 204, 0, 0)',
+                            yAxisID: 'y1',
+                            tension: 0.2,
+                            borderDash: [5, 5]
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            reverse: true, // Rank 1 top
+                            title: { display: true, text: 'Rank', color: '#2196F3' },
+                            grid: { color: '#333' },
+                            ticks: { color: '#2196F3' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Snap Points', color: '#ffcc00' },
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#ffcc00' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#fff' } }
+                    }
+                }
+            });
+        }
+
+        function renderHistoricalChart(stats) {
+            const ctx = $('historicalChart').getContext('2d');
+            if (historicalChartInstance) historicalChartInstance.destroy();
+
+            historicalChartInstance = new Chart(ctx, {
+                type: 'line', // Switched to Line
+                data: {
+                    labels: stats.map(s => s.season),
+                    datasets: [{
+                        label: 'Season End Rank',
+                        data: stats.map(s => s.rank),
+                        backgroundColor: 'rgba(187, 134, 252, 0.2)', // Purple tint
+                        borderColor: '#bb86fc',
+                        borderWidth: 2,
+                        tension: 0.2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
+                        y: {
+                            reverse: true, // Rank 1 top
+                            grid: { color: '#333' },
+                            ticks: { color: '#aaa' },
+                            title: { display: true, text: 'Rank', color: '#aaa' }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#fff' } }
+                    }
+                }
+            });
+        }
+
+        loadProfile();
+    </script>
+</body>
+
+</html>

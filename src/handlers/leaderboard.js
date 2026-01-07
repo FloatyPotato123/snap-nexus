@@ -280,6 +280,7 @@ function getSeasonDailyKeys(targetDate) {
 
     const keys = [];
     const cur = new Date(seasonStart);
+    cur.setUTCDate(cur.getUTCDate() + 1); // Skip Day 1 (Reset Day) as it contains Old Season Final Data
     while (cur <= end) {
         const y = cur.getUTCFullYear();
         const m = String(cur.getUTCMonth() + 1).padStart(2, '0');
@@ -358,7 +359,7 @@ export async function handleGetPlayerProfile(c) {
             if (!entry) return null;
             return {
                 date: r.date,
-                rank: entry.rank,
+                rank: entry.rank + 1,
                 sp: entry.score
             };
         })
@@ -372,7 +373,7 @@ export async function handleGetPlayerProfile(c) {
             if (!entry) return null;
             return {
                 season: r.label,
-                rank: entry.rank,
+                rank: entry.rank + 1,
                 sp: entry.score
             };
         })

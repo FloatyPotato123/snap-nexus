@@ -154,6 +154,11 @@
     width: 100%;
 }
 
+.chart-container canvas {
+    height: 100% !important;
+    width: 100% !important;
+}
+
 /* Nav Polish */
 nav.container-fluid {
     border-bottom: 1px solid var(--pico-muted-border-color);

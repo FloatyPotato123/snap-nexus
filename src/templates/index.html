@@ -58,8 +58,10 @@
                     <select id="seasonSelector" class="small-select"></select>
                 </div>
             </header>
-            <div class="chart-container">
+            <div id="seasonChartContainer" class="chart-container">
                 <canvas id="seasonChart"></canvas>
+                <div id="noSeasonData" class="status-msg" style="display:none;">No data available for this season yet
+                </div>
             </div>
         </article>
 
@@ -142,8 +144,9 @@
 
         <!-- Data Disclaimer -->
         <div class="disclaimer-box">
-            <strong>Note:</strong> Data collection began on <strong>October 19th, 2025</strong>.
-            Ranks outside the <strong>Top 1000</strong> are not recorded.
+            <strong>Note:</strong> Historical data collected from the <strong>Top 1000</strong> leaderboard at daily
+            reset.
+            Data available since <strong>October 19, 2025</strong>.
         </div>
     </main>
 
@@ -249,6 +252,8 @@
             }
 
             const start = SnapUtils.getSeasonStartForMonth(year, month - 1);
+            // Skip Day 1 (Reset Day) to avoid showing Old Season data
+            start.setDate(start.getDate() + 1);
             const seasonEnd = SnapUtils.getSeasonEndForMonth(year, month - 1);
 
             let fetchEnd;
@@ -271,17 +276,25 @@
                 const ctx = $('seasonChart').getContext('2d');
                 if (chartInstance) chartInstance.destroy();
 
+                if (!data || data.length === 0) {
+                    $('seasonChart').style.display = 'none';
+                    $('noSeasonData').style.display = 'block';
+                    $('noSeasonData').innerText = 'No ranked data for this season';
+                    $('seasonChartContainer').style.height = 'auto'; // Collapse
+                    return;
+                }
+
+                $('seasonChart').style.display = 'block';
+                $('noSeasonData').style.display = 'none';
+                $('seasonChartContainer').style.height = '350px'; // Restore
+
                 chartInstance = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: data.map(d => d.date.slice(5).replace('-', '/')),
                         datasets: [{
                             label: 'Infinite Players',
-                            // Map 0 -> null EXCLUDING the start date (where 0 is valid reset)
-                            data: data.map(d => {
-                                if (d.date === sStr) return d.total; // Allow 0 on Start Date
-                                return d.total > 0 ? d.total : null; // Else treat 0 as missing
-                            }),
+                            data: data.map(d => d.total),
                             borderColor: COLORS.gold.border,
                             backgroundColor: COLORS.gold.bg,
                             pointBackgroundColor: COLORS.gold.point,
@@ -339,7 +352,7 @@
                         const dateStr = seasonEnd.toISOString().split('T')[0];
                         try {
                             // Use range with same start/end to get that specific day's total efficiently
-                            const r = await fetch(`/api/history/range?start=${dateStr}&end=${dateStr}`);
+                            const r = await fetch(`/api/season/stats?start=${dateStr}&end=${dateStr}`);
                             if (r.ok) {
                                 const json = await r.json();
                                 if (json && json.length > 0 && json[0].total) {

@@ -129,10 +129,11 @@
                         <select id="seasonSelect" class="small-select"></select>
                     </div>
                 </header>
-                <div class="chart-container">
+                <div id="seasonChartContainer" class="chart-container">
                     <canvas id="seasonChart"></canvas>
+                    <div id="noSeasonStats" class="status-msg" style="display:none;">No ranked data for this season.
+                    </div>
                 </div>
-                <div id="noSeasonStats" class="status-msg" style="display:none;">No ranked data for this season.</div>
             </article>
 
             <!-- 3. Historical Season Ranks -->
@@ -159,8 +160,9 @@
 
             <!-- Data Disclaimer -->
             <div class="disclaimer-box">
-                <strong>Note:</strong> Data collection began on <strong>October 19th, 2025</strong>.
-                Ranks outside the <strong>Top 1000</strong> are not recorded.
+                <strong>Note:</strong> Historical data collected from the <strong>Top 1000</strong> leaderboard at daily
+                reset.
+                Data available since <strong>October 19, 2025</strong>.
             </div>
         </div>
     </main>
@@ -305,10 +307,12 @@
                 if (data.currentSeasonStats && data.currentSeasonStats.length > 0) {
                     $('seasonChart').style.display = 'block';
                     $('noSeasonStats').style.display = 'none';
+                    $('seasonChartContainer').style.height = '350px';
                     renderSeasonChart(data.currentSeasonStats);
                 } else {
                     $('seasonChart').style.display = 'none';
                     $('noSeasonStats').style.display = 'block';
+                    $('seasonChartContainer').style.height = 'auto'; // Collapse
                 }
 
                 if (data.historicalSeasonRanks && data.historicalSeasonRanks.length > 0) {
@@ -336,7 +340,7 @@
                 data: {
                     labels: stats.map(s => {
                         const d = new Date(s.date);
-                        return `${d.getMonth() + 1}/${d.getDate()}`;
+                        return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
                     }),
                     datasets: [
                         {

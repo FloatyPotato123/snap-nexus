@@ -55,9 +55,8 @@ export function getSeasonEnd(date) {
     nextMonth.setUTCMonth(nextMonth.getUTCMonth() + 1);
     const nextSeasonStart = getSeasonStart(nextMonth);
 
-    const seasonEnd = new Date(nextSeasonStart);
-    seasonEnd.setUTCDate(seasonEnd.getUTCDate() - 1);
-    return seasonEnd;
+    // End on the reset day itself (to include the 19:00 final snapshot)
+    return new Date(nextSeasonStart);
 }
 
 /**
@@ -67,15 +66,13 @@ export function getSeasonEnd(date) {
  * @returns {Date} The season end date.
  */
 export function getSeasonEndForMonth(year, monthIndex) {
-    // Season End is the day BEFORE the next season starts
+    // Season End is the reset day itself
     let nextM = monthIndex + 1;
     let nextY = year;
     if (nextM > 11) { nextM = 0; nextY++; }
 
     const nextStart = getSeasonStartForMonth(nextY, nextM);
-    const end = new Date(nextStart);
-    end.setUTCDate(end.getUTCDate() - 1);
-    return end;
+    return new Date(nextStart);
 }
 
 /**

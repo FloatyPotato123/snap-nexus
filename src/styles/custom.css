@@ -159,6 +159,14 @@
     width: 100% !important;
 }
 
+/* Header Logo */
+.header-logo {
+    height: 2rem;
+    width: auto;
+    margin-right: 0 !important;
+    vertical-align: middle;
+}
+
 /* Nav Polish */
 nav.container-fluid {
     border-bottom: 1px solid var(--pico-muted-border-color);

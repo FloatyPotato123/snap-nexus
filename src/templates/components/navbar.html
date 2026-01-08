@@ -1,0 +1,37 @@
+<nav class="container-fluid">
+    <ul>
+        <li>
+            <a href="/" class="logo-link"
+                style="color:inherit; text-decoration:none; display:flex; align-items:center; gap:0.4rem;">
+                <img src="/logo.png" class="header-logo">
+                <strong>Snap Nexus</strong>
+            </a>
+        </li>
+    </ul>
+    <ul>
+        <li><a href="/">Home</a></li>
+        <li><a href="/player-search">Search</a></li>
+        <li><a href="/decks">Decks</a></li>
+    </ul>
+</nav>
+
+<script>
+    // Auto-active link highlight
+    (function () {
+        try {
+            const current = window.location.pathname;
+            // Select only nav links that are NOT the logo link
+            const navLinks = document.querySelectorAll('nav ul li a[href^="/"]:not(.logo-link)');
+
+            navLinks.forEach(link => {
+                const href = link.getAttribute('href');
+                if (href === '/') {
+                    if (current === '/') link.classList.add('active');
+                } else if (current.startsWith(href)) {
+                    // e.g. /player-search matches /player-search?q=foo
+                    link.classList.add('active');
+                }
+            });
+        } catch (e) { }
+    })();
+</script>

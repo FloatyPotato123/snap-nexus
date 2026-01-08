@@ -17,18 +17,23 @@ import {
 } from "./handlers/leaderboard.js";
 import { runDailyScrape } from "./handlers/scraper.js";
 
-// HTML Templates
 import indexHtml from "./templates/index.html";
 import searchHtml from "./templates/player-search.html";
 import profileHtml from "./templates/player-profile.html";
 import decksHtml from "./templates/decks.html";
 import allianceHtml from "./templates/alliance.html";
+import navbarHtml from "./templates/components/navbar.html";
 
 // Custom CSS
 import customCss from "./styles/custom.css";
 import { getWeeklyCardReleases } from "./handlers/cards";
 
 const app = new Hono();
+
+// Helper to inject Navbar
+function render(html) {
+  return html.replace('<!-- NAV -->', navbarHtml);
+}
 
 // --- ASSETS ---
 app.get("/styles.css", (c) => c.text(customCss, 200, { 'Content-Type': 'text/css' }));
@@ -45,11 +50,11 @@ app.get("/logo.png", (c) => {
 });
 
 // --- UI ROUTES ---
-app.get("/", (c) => c.html(indexHtml));
-app.get("/player-search", (c) => c.html(searchHtml));
-app.get("/player/:id", (c) => c.html(profileHtml));
-app.get("/decks", (c) => c.html(decksHtml));
-app.get("/alliance/:tag", (c) => c.html(allianceHtml));
+app.get("/", (c) => c.html(render(indexHtml)));
+app.get("/player-search", (c) => c.html(render(searchHtml)));
+app.get("/player/:id", (c) => c.html(render(profileHtml)));
+app.get("/decks", (c) => c.html(render(decksHtml)));
+app.get("/alliance/:tag", (c) => c.html(render(allianceHtml)));
 
 // --- API DATA ROUTES ---
 const api = new Hono();

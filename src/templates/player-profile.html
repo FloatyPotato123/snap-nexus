@@ -139,24 +139,12 @@
             <!-- 3. Historical Season Ranks -->
             <article>
                 <header>Historical Season Finishes</header>
-                <div class="chart-container">
+                <div id="historicalChartContainer" class="chart-container">
                     <canvas id="historicalChart"></canvas>
                 </div>
-                <div id="noHistoricalStats" style="display:none; text-align:center; padding:20px;">No historical season
-                    finishes found.</div>
+                <div id="noHistoricalStats" class="status-msg" style="display:none;">No historical season finishes
+                    found.</div>
             </article>
-
-            <!-- PEAK STATS -->
-            <div class="grid">
-                <article class="text-center border-blue">
-                    <small class="text-muted">Best Rank</small>
-                    <div id="peakRank" class="fw-800" style="font-size:2rem;">-</div>
-                </article>
-                <article class="text-center border-gold">
-                    <small class="text-muted">Highest SP</small>
-                    <div id="peakSP" class="fw-800" style="font-size:2rem;">-</div>
-                </article>
-            </div>
 
             <!-- Data Disclaimer -->
             <div class="disclaimer-box">
@@ -229,10 +217,12 @@
                 if (data.currentSeasonStats && data.currentSeasonStats.length > 0) {
                     $('seasonChart').style.display = 'block';
                     $('noSeasonStats').style.display = 'none';
+                    $('seasonChartContainer').style.height = '350px';
                     renderSeasonChart(data.currentSeasonStats);
                 } else {
                     $('seasonChart').style.display = 'none';
                     $('noSeasonStats').style.display = 'block';
+                    $('seasonChartContainer').style.height = 'auto'; // Collapse
                 }
             } catch (e) { }
         }
@@ -263,24 +253,6 @@
 
                 $('pName').innerHTML = `${allianceHtml}${data.name}`;
                 document.title = `${data.name} | Snap Nexus`;
-
-                // Calculate Peak Stats
-                let bestRank = 999999;
-                let maxSP = 0;
-
-                const allStats = [
-                    ...(data.currentSeasonStats || []),
-                    ...(data.historicalSeasonRanks || [])
-                ];
-
-                allStats.forEach(s => {
-                    if (s.rank && s.rank < bestRank) bestRank = s.rank;
-                    if (s.sp && s.sp > maxSP) maxSP = s.sp;
-                });
-
-                $('peakRank').innerText = bestRank < 999999 ? `#${bestRank.toLocaleString()}` : '-';
-                $('peakSP').innerText = maxSP > 0 ? maxSP.toLocaleString() : '-';
-
 
                 // History Timeline
                 let timelineHtml = '';
@@ -318,10 +290,12 @@
                 if (data.historicalSeasonRanks && data.historicalSeasonRanks.length > 0) {
                     $('historicalChart').style.display = 'block';
                     $('noHistoricalStats').style.display = 'none';
+                    $('historicalChartContainer').style.height = '350px';
                     renderHistoricalChart(data.historicalSeasonRanks);
                 } else {
                     $('historicalChart').style.display = 'none';
                     $('noHistoricalStats').style.display = 'block';
+                    $('historicalChartContainer').style.height = 'auto'; // Collapse
                 }
 
                 $('loading').style.display = 'none';
@@ -399,29 +373,51 @@
             if (historicalChartInstance) historicalChartInstance.destroy();
 
             historicalChartInstance = new Chart(ctx, {
-                type: 'line', // Switched to Line
+                type: 'line',
                 data: {
                     labels: stats.map(s => s.season),
-                    datasets: [{
-                        label: 'Season End Rank',
-                        data: stats.map(s => s.rank),
-                        backgroundColor: 'rgba(187, 134, 252, 0.2)', // Purple tint
-                        borderColor: '#bb86fc',
-                        borderWidth: 2,
-                        tension: 0.2,
-                        fill: true
-                    }]
+                    datasets: [
+                        {
+                            label: 'Season End Rank',
+                            data: stats.map(s => s.rank),
+                            borderColor: '#2196F3', // Blue (Rank)
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            yAxisID: 'y',
+                            tension: 0.2,
+                            fill: true
+                        },
+                        {
+                            label: 'Season End SP',
+                            data: stats.map(s => s.sp),
+                            borderColor: '#ffcc00', // Gold (SP)
+                            backgroundColor: 'rgba(255, 204, 0, 0)',
+                            yAxisID: 'y1',
+                            tension: 0.2
+                        }
+                    ]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
                     scales: {
                         x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
                         y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
                             reverse: true, // Rank 1 top
+                            title: { display: true, text: 'Rank', color: '#2196F3' },
                             grid: { color: '#333' },
-                            ticks: { color: '#aaa' },
-                            title: { display: true, text: 'Rank', color: '#aaa' }
+                            ticks: { color: '#2196F3' }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Snap Points', color: '#ffcc00' },
+                            grid: { drawOnChartArea: false },
+                            ticks: { color: '#ffcc00' }
                         }
                     },
                     plugins: {

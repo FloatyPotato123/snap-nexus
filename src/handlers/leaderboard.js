@@ -632,6 +632,8 @@ export async function handleLeaderboardComparison(c) {
                 name: curr.playerName,
                 id: curr.playerId,
                 change: diff,
+                spStart: prevScore,
+                spEnd: curr.score,
                 rank: curr.rank || 0,
                 alliance: alliance
             });
@@ -645,9 +647,13 @@ export async function handleLeaderboardComparison(c) {
 
     movers.sort((a, b) => b.change - a.change);
 
+    // Explicitly filter to avoid crossover
+    const gainers = movers.filter(m => m.change > 0);
+    const losers = movers.filter(m => m.change < 0);
+
     return c.json({
-        topGainers: movers.slice(0, 50),
-        topLosers: movers.slice(-50).reverse(),
+        topGainers: gainers.slice(0, 50),
+        topLosers: losers.reverse().slice(0, 50),
         allianceRankings: rankings.sort((a, b) => b.members - a.members).slice(0, 50),
         date1: date1Str,
         date2: date2Str

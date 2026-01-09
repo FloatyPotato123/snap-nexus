@@ -77,9 +77,12 @@ async function getLiveRankMap() {
                 // Force String ID for consistency with KV
                 const id = String(entry.id || entry.playerId);
 
-                // Store BOTH rank and name (API uses 'playerName' or 'name')
                 if (id) {
-                    newMap.set(id, { rank, name: entry.playerName || entry.name });
+                    newMap.set(id, {
+                        rank,
+                        name: entry.playerName,
+                        score: entry.score // Capture SP
+                    });
                 }
             });
         }
@@ -470,29 +473,45 @@ export async function handleAllianceProfile(c) {
     const tag = c.req.param('tag').toUpperCase(); // Tags are usually uppercase
     if (!tag) return c.json({ error: "Missing Tag" }, 400);
 
-    // 1. Get Latest Leaderboard (Fallback Logic)
-    let now = new Date();
-    let key = getLeaderboardKey(now);
+    // 1. Get Live Data (Primary) or Snapshot (Fallback)
     let leaderboard = [];
-    let snapshotDate = now.toISOString().split('T')[0];
+    let snapshotDate = new Date().toISOString().split('T')[0];
 
     try {
-        let data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
+        const liveMap = await getLiveRankMap();
+        if (liveMap.size > 0) {
+            leaderboard = Array.from(liveMap.entries()).map(([id, e]) => ({
+                playerId: id,
+                playerName: e.name,
+                rank: e.rank,
+                score: e.score
+            }));
+            snapshotDate = "LIVE";
+        } else {
+            // Fallback to Snapshot
+            let now = new Date();
+            let key = getLeaderboardKey(now);
+            let data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
 
-        // If today is empty, try yesterday
-        if (!data || !data.results) {
-            now.setDate(now.getDate() - 1);
-            key = getLeaderboardKey(now);
-            snapshotDate = now.toISOString().split('T')[0];
-            data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
+            if (!data || !data.results) {
+                now.setDate(now.getDate() - 1);
+                key = getLeaderboardKey(now);
+                snapshotDate = now.toISOString().split('T')[0];
+                data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
+            }
+
+            if (data && data.results) {
+                leaderboard = data.results.map(p => ({
+                    ...p,
+                    rank: (p.rank || 0) + 1
+                }));
+            }
         }
-
-        if (data && data.results) leaderboard = data.results;
-        else return c.json({ error: "No leaderboard data available (checked Today & Yesterday)." }, 404);
-
     } catch (e) {
         return c.json({ error: "Failed to load leaderboard." }, 500);
     }
+
+    if (leaderboard.length === 0) return c.json({ error: "No leaderboard data available." }, 404);
 
     // 2. Get Alliance Map
     const allianceMap = await fetchAllianceMap();
@@ -510,7 +529,7 @@ export async function handleAllianceProfile(c) {
             members.push({
                 id: p.playerId,
                 name: p.playerName,
-                rank: p.rank + 1, // Fix 0-indexing
+                rank: p.rank,
                 score: p.score
             });
         }
@@ -521,9 +540,6 @@ export async function handleAllianceProfile(c) {
     }
 
     // 4. Calculate Stats
-    // We also need to compute the "Power Rank" relative to other alliances.
-    // This is expensive to do on every request, but sticking to the plan:
-    // We'll quickly aggregate ALL alliances to find the rank of ours.
 
     const allStats = {};
     leaderboard.forEach(p => {
@@ -574,11 +590,12 @@ export async function handleLeaderboardComparison(c) {
         return c.json({ error: "Missing date1 or date2" }, 400);
     }
 
-    // Parallel fetch: Leaderboards + Alliances
-    const [d1, d2, allianceMap] = await Promise.all([
+    // Parallel fetch: Leaderboards + Alliances + Live Data
+    const [d1, d2, allianceMap, liveRankMap] = await Promise.all([
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
-        fetchAllianceMap()
+        fetchAllianceMap(),
+        getLiveRankMap()
     ]);
 
     if (!d1 || !d2) {
@@ -591,42 +608,14 @@ export async function handleLeaderboardComparison(c) {
     d2.results.forEach(p => prevMap.set(p.playerId, p.score));
 
     const movers = [];
-    const allianceStats = {};
 
+    // We strictly use d1 (Snapshot) for Movers to ensure consistency with the "24h Change" logic
     d1.results.forEach(curr => {
-        // --- Alliance Logic ---
-        const lowerName = (curr.playerName || '').trim().toLowerCase();
-        const alliance = allianceMap.get(lowerName);
-
-        if (alliance?.tag && alliance.tag !== 'UNTAGGED') {
-            const key = alliance.tag;
-            if (!allianceStats[key]) {
-                allianceStats[key] = {
-                    tag: alliance.tag,
-                    name: alliance.name,
-                    members: 0,
-                    totalSP: 0,
-                    highestRank: 99999,
-                    netChange: 0
-                };
-            }
-            allianceStats[key].members++;
-            allianceStats[key].totalSP += curr.score;
-            // Ranks are 1-based in normalized display
-            allianceStats[key].highestRank = Math.min(allianceStats[key].highestRank, curr.rank + 1);
-        }
-
-        // --- Movers Logic ---
         const prevScore = prevMap.get(curr.playerId);
         if (prevScore !== undefined) {
             const diff = curr.score - prevScore;
-
-            if (alliance?.tag && alliance.tag !== 'UNTAGGED') {
-                const key = alliance.tag;
-                if (allianceStats[key]) {
-                    allianceStats[key].netChange += diff;
-                }
-            }
+            const lowerName = (curr.playerName || '').trim().toLowerCase();
+            const alliance = allianceMap.get(lowerName);
 
             movers.push({
                 name: curr.playerName,
@@ -637,6 +626,38 @@ export async function handleLeaderboardComparison(c) {
                 rank: curr.rank || 0,
                 alliance: alliance
             });
+        }
+    });
+
+    // --- ALLIANCE LOGIC (LIVE DATA POWERED) ---
+    // Use Live Map if available, otherwise fallback to Snapshot (d1)
+    const sourceData = liveRankMap.size > 0 ? Array.from(liveRankMap.values()) : d1.results;
+    const allianceStats = {};
+
+    sourceData.forEach(entry => {
+        // liveRankMap Entry: { rank, name, score }
+        // d1 Entry: { rank, playerName, score, ... }
+        const name = entry.name || entry.playerName || '';
+        const score = entry.score || 0;
+        const rank = entry.rank || 99999;
+
+        const lowerName = name.trim().toLowerCase();
+        const alliance = allianceMap.get(lowerName);
+
+        if (alliance?.tag && alliance.tag !== 'UNTAGGED') {
+            const key = alliance.tag;
+            if (!allianceStats[key]) {
+                allianceStats[key] = {
+                    tag: alliance.tag,
+                    name: alliance.name,
+                    members: 0,
+                    totalSP: 0,
+                    highestRank: 99999
+                };
+            }
+            allianceStats[key].members++;
+            allianceStats[key].totalSP += score;
+            allianceStats[key].highestRank = Math.min(allianceStats[key].highestRank, rank);
         }
     });
 
@@ -651,14 +672,12 @@ export async function handleLeaderboardComparison(c) {
     const gainers = movers.filter(m => m.change > 0);
     const losers = movers.filter(m => m.change < 0);
 
-    const liveMap = await getLiveRankMap();
-
     return c.json({
         topGainers: gainers.slice(0, 50),
         topLosers: losers.reverse().slice(0, 50),
         allianceRankings: rankings.sort((a, b) => b.members - a.members).slice(0, 50),
         date1: date1Str,
         date2: date2Str,
-        totalInfinitePlayers: liveMap.size
+        totalInfinitePlayers: liveRankMap.size
     });
 }

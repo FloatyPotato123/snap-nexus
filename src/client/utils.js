@@ -17,3 +17,20 @@ window.SnapUtils.getCurrentSeason = getCurrentSeason;
 
 // Export Helper $
 window.SnapUtils.$ = (id) => document.getElementById(id);
+
+// Export Animate Helper
+window.SnapUtils.animateValue = function (obj, start, end, duration) {
+    let startTimestamp = null;
+    const step = (timestamp) => {
+        if (!startTimestamp) startTimestamp = timestamp;
+        const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+        // Ease out cubic
+        const easeProgress = 1 - Math.pow(1 - progress, 3);
+        const current = Math.floor(easeProgress * (end - start) + start);
+        obj.innerHTML = current.toLocaleString();
+        if (progress < 1) {
+            window.requestAnimationFrame(step);
+        }
+    };
+    window.requestAnimationFrame(step);
+};

@@ -146,7 +146,7 @@
     </main>
 
     <script>
-        const $ = (id) => document.getElementById(id);
+        const $ = SnapUtils.$;
         let chartInstance = null;
         let historyChartInstance = null;
 
@@ -482,15 +482,18 @@
 
                 // Update Infinite Count
                 if (data.totalInfinitePlayers) {
-                    const count = data.totalInfinitePlayers.toLocaleString();
-                    const content = `
-                        <span class="infinite-stat-value">${count}</span>
-                        <span class="infinite-stat-label">Infinite Players</span>
-                    `;
+                    const count = data.totalInfinitePlayers;
                     const below = document.getElementById('infinite-stats-below');
                     if (below) {
-                        below.innerHTML = content;
+                        below.innerHTML = `
+                            <span class="infinite-stat-value" id="infinite-count-num">0</span>
+                            <span class="infinite-stat-label">Infinite Players</span>
+                        `;
                         below.style.display = 'block';
+
+                        // Animate from 0 to target
+                        const countEl = document.getElementById('infinite-count-num');
+                        SnapUtils.animateValue(countEl, 0, count, 1500);
                     }
                 }
 

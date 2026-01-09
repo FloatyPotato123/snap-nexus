@@ -7,7 +7,7 @@ const CACHE_TTL_MS = 5 * 60 * 1000; // 5 Minutes
 const ALLIANCE_API_URL = "https://quiet-mountain-519c.scottieofaberoth.workers.dev";
 
 // --- STATE/CACHE ---
-let liveRankCache = { timestamp: 0, data: new Map() };
+let liveLeaderboardCache = { timestamp: 0, data: new Map(), total: 0 };
 let allianceCache = { timestamp: 0, data: new Map() };
 
 // --- HELPERS ---
@@ -54,12 +54,13 @@ async function fetchAllianceMap() {
 }
 
 /**
- * Fetches live Top 1000 ranks from the official API.
+ * Fetches live Top 1000 ranks and global Infinite total from the official API.
+ * @returns {Promise<{map: Map, total: number}>}
  */
-async function getLiveRankMap() {
+async function getLiveLeaderboardData() {
     const now = Date.now();
-    if (now - liveRankCache.timestamp < CACHE_TTL_MS && liveRankCache.data.size > 0) {
-        return liveRankCache.data;
+    if (now - liveLeaderboardCache.timestamp < CACHE_TTL_MS && liveLeaderboardCache.data.size > 0) {
+        return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
     }
 
     const { year, month } = getCurrentSeason(new Date());
@@ -67,7 +68,7 @@ async function getLiveRankMap() {
 
     try {
         const res = await fetch(apiUrl);
-        if (!res.ok) return liveRankCache.data;
+        if (!res.ok) return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
         const data = await res.json();
 
         const newMap = new Map();
@@ -87,10 +88,11 @@ async function getLiveRankMap() {
             });
         }
 
-        liveRankCache = { timestamp: now, data: newMap };
-        return newMap;
+        const globalTotal = data?.total || 0;
+        liveLeaderboardCache = { timestamp: now, data: newMap, total: globalTotal };
+        return { map: newMap, total: globalTotal };
     } catch (e) {
-        return liveRankCache.data;
+        return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
     }
 }
 
@@ -144,7 +146,7 @@ export async function handlePlayerHistory(c) {
 
         // 2. Hydrate with History (D1) - One single query for all IDs
         const historyMap = await batchGetPlayerHistories(c.env.DB, uniqueIds);
-        const liveMap = await getLiveRankMap();
+        const { map: liveMap } = await getLiveLeaderboardData();
 
         const enriched = uniqueIds.map(id => {
             const history = historyMap[id] || [];
@@ -310,7 +312,7 @@ export async function handleGetPlayerProfile(c) {
     const allianceInfo = allianceMap.get(currentName.trim().toLowerCase()) || null;
 
     // Determine Current Rank (LIVE)
-    const liveRankMap = await getLiveRankMap();
+    const { map: liveRankMap } = await getLiveLeaderboardData();
     const liveEntry = liveRankMap.get(id); // { rank, name }
 
     let currentRank = liveEntry ? liveEntry.rank : null;
@@ -401,7 +403,7 @@ export async function handleAllianceProfile(c) {
     let snapshotDate = new Date().toISOString().split('T')[0];
 
     try {
-        const liveMap = await getLiveRankMap();
+        const { map: liveMap } = await getLiveLeaderboardData();
         if (liveMap.size > 0) {
             leaderboard = Array.from(liveMap.entries()).map(([id, e]) => ({
                 playerId: id,
@@ -514,11 +516,11 @@ export async function handleLeaderboardComparison(c) {
     }
 
     // Parallel fetch: Leaderboards + Alliances + Live Data
-    const [d1, d2, allianceMap, liveRankMap] = await Promise.all([
+    const [d1, d2, allianceMap, { map: liveRankMap, total: liveTotal }] = await Promise.all([
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
         fetchAllianceMap(),
-        getLiveRankMap()
+        getLiveLeaderboardData()
     ]);
 
     if (!d1 || !d2) {
@@ -601,6 +603,6 @@ export async function handleLeaderboardComparison(c) {
         allianceRankings: rankings.sort((a, b) => b.members - a.members).slice(0, 50),
         date1: date1Str,
         date2: date2Str,
-        totalInfinitePlayers: liveRankMap.size
+        totalInfinitePlayers: liveTotal
     });
 }

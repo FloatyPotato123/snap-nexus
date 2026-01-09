@@ -17,5 +17,10 @@ type = "Text"
 globs = ["**/*.html"]
 fallthrough = true
 
+[[d1_databases]]
+binding = "DB"
+database_name = "snap_nexus_db"
+database_id = "3b63431f-5423-4098-bf1f-0ef92826a259"
+
 [build]
 command = "npm run build"

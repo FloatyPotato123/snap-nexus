@@ -1,0 +1,189 @@
+/**
+ * Cloudflare D1 Database Helper
+ * Handles Search Indexing and Querying
+ */
+
+/**
+ * Search for players by name (case-insensitive substring)
+ * Uses PlayerAliases to find any name the player has ever used.
+ * @param {D1Database} db 
+ * @param {string} query 
+ * @param {number} limit 
+ */
+export async function searchPlayers(db, query, limit = 10) {
+    if (!query || query.length < 2) return [];
+
+    const normalized = query.toLowerCase();
+
+    // Search using FTS5 virtual table (Trigram indexed)
+    // Wrap in quotes to avoid FTS5 syntax errors with reserved words like "AND"
+    const sql = `
+        SELECT DISTINCT player_id as id, name 
+        FROM PlayerSearch 
+        WHERE PlayerSearch MATCH ? 
+        ORDER BY rank 
+        LIMIT ?
+    `;
+
+    try {
+        const { results } = await db.prepare(sql)
+            .bind(`"${normalized}"*`, limit)
+            .run();
+        return results || [];
+    } catch (e) {
+        console.error("DB Search Error:", e);
+        return [];
+    }
+}
+
+/**
+ * Upsert (Insert or Replace) a player in the index
+ * Updates the main Players table AND adds to PlayerAliases.
+ * @param {D1Database} db 
+ * @param {string} id 
+ * @param {string} name 
+ * @param {string} seenAt Optional date string
+ */
+export async function upsertPlayer(db, id, name, seenAt) {
+    if (!id || !name) return;
+
+    const normalized = name.toLowerCase();
+    const now = Date.now();
+    const date = seenAt || new Date().toISOString().split('T')[0];
+
+    // 1. Update Main Table (Latest Info)
+    const sqlMain = `
+        INSERT INTO Players (id, name, normalized_name, updated_at) 
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET 
+            name = excluded.name,
+            normalized_name = excluded.normalized_name,
+            updated_at = excluded.updated_at
+    `;
+
+    // 2. Add to Aliases (Never delete, just ignore if exists)
+    const sqlAlias = `
+        INSERT OR IGNORE INTO PlayerAliases (player_id, name, normalized_name, first_seen_at)
+        VALUES (?, ?, ?, ?)
+    `;
+
+    try {
+        await db.batch([
+            db.prepare(sqlMain).bind(id, name, normalized, now),
+            db.prepare(sqlAlias).bind(id, name, normalized, date)
+        ]);
+    } catch (e) {
+        console.error("DB Upsert Error:", id, name, e);
+        throw e;
+    }
+}
+
+/**
+ * Batch Upsert (For Scraper/Live Sync or Snapshot Migration)
+ * Updates BOTH Master Name and ensures it's in Aliases.
+ * @param {D1Database} db 
+ * @param {Array<{id, name}>} players 
+ * @param {string} seenAt Optional date string (e.g. "2024-10-19")
+ */
+export async function batchUpsertPlayers(db, players, seenAt) {
+    if (!players || players.length === 0) return;
+
+    const sqlMain = `
+        INSERT INTO Players (id, name, normalized_name, updated_at) 
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET 
+            name = excluded.name,
+            normalized_name = excluded.normalized_name,
+            updated_at = excluded.updated_at
+    `;
+
+    const sqlAlias = `
+        INSERT OR IGNORE INTO PlayerAliases (player_id, name, normalized_name, first_seen_at)
+        VALUES (?, ?, ?, ?)
+    `;
+
+    const stmtMain = db.prepare(sqlMain);
+    const stmtAlias = db.prepare(sqlAlias);
+
+    const statements = [];
+    const now = Date.now();
+    const date = seenAt || new Date().toISOString().split('T')[0];
+
+    for (const p of players) {
+        if (!p.id || !p.name) continue;
+        const normalized = p.name.toLowerCase();
+        statements.push(stmtMain.bind(p.id, p.name, normalized, now));
+        statements.push(stmtAlias.bind(p.id, p.name, normalized, date));
+    }
+
+    // Cloudflare D1 has a limit on statements per batch/transaction.
+    const CHUNK_SIZE = 50;
+    for (let i = 0; i < statements.length; i += CHUNK_SIZE) {
+        const chunk = statements.slice(i, i + CHUNK_SIZE);
+        try {
+            await db.batch(chunk);
+        } catch (e) {
+            console.error(`Batch Upsert Error at chunk ${i}:`, e);
+            throw e;
+        }
+    }
+}
+
+
+/**
+ * Get name history for a player
+ * Replaces the 'history:' KV keys.
+ * @param {D1Database} db 
+ * @param {string} playerId 
+ */
+export async function getPlayerHistory(db, playerId) {
+    if (!playerId) return [];
+
+    const sql = `
+        SELECT name, first_seen_at as seenAt 
+        FROM PlayerAliases 
+        WHERE player_id = ? 
+        ORDER BY first_seen_at ASC
+    `;
+
+    try {
+        const { results } = await db.prepare(sql).bind(playerId).all();
+        return results || [];
+    } catch (e) {
+        console.error("DB History Error:", playerId, e);
+        return [];
+    }
+}
+
+/**
+ * Get name history for multiple players in one query
+ * @param {D1Database} db 
+ * @param {Array<string>} playerIds 
+ */
+export async function batchGetPlayerHistories(db, playerIds) {
+    if (!playerIds || playerIds.length === 0) return {};
+
+    // SQLite doesn't support arrays directly, so we build placeholders
+    const placeholders = playerIds.map(() => '?').join(',');
+    const sql = `
+        SELECT player_id, name, first_seen_at as seenAt 
+        FROM PlayerAliases 
+        WHERE player_id IN (${placeholders})
+        ORDER BY first_seen_at ASC
+    `;
+
+    try {
+        const { results } = await db.prepare(sql).bind(...playerIds).all();
+
+        // Group by player_id
+        const map = {};
+        (results || []).forEach(row => {
+            if (!map[row.player_id]) map[row.player_id] = [];
+            map[row.player_id].push({ name: row.name, seenAt: row.seenAt });
+        });
+        return map;
+    } catch (e) {
+        console.error("DB Batch History Error:", e);
+        return {};
+    }
+}

@@ -1,5 +1,6 @@
 import { getCurrentSeason, getSeasonStartForMonth } from '../utils/seasons.js';
-import { getLeaderboardKey, getPlayerHistoryKey, getPlayerMapKey } from '../utils/keys.js';
+import { getLeaderboardKey } from '../utils/keys.js';
+import { batchUpsertPlayers } from "../utils/db.js";
 
 const SEASON_ROLLOVER_BUFFER_MINUTES = 15;
 
@@ -19,116 +20,34 @@ export async function runDailyScrape(env) {
     // API URL
     const LEADERBOARD_API_URL = `https://marvelsnap.com/wp-json/api/v1/leaderboard?month=${targetMonth}&year=${targetYear}&region=global`;
 
-
-
     try {
         if (!env.MARVEL_SNAP_HUB) throw new Error("MARVEL_SNAP_HUB binding missing");
 
-        // Fetch Official Data
+        // 1. Fetch Official Data
         const response = await fetch(LEADERBOARD_API_URL);
         if (!response.ok) throw new Error(`API Error: ${response.status}`);
 
         const data = await response.json();
         const leaderboard = data.results || [];
 
-
-
-        // Save RAW Snapshot
+        // 2. Save RAW Snapshot to KV (for historical reference and charts)
         await env.MARVEL_SNAP_HUB.put(DAILY_STORAGE_KEY, JSON.stringify(data));
 
-        // Process History
-        await processNameChanges(env, leaderboard);
+        // 3. Sync to D1 Search Index
+        // This ensures the search identity is up-to-date and all aliases are indexed.
+        const seenAt = now.toISOString().split('T')[0];
+        const playersToSync = leaderboard
+            .filter(p => (p.id || p.playerId) && (p.name || p.playerName))
+            .map(p => ({
+                id: String(p.id || p.playerId),
+                name: p.name || p.playerName
+            }));
 
-
-
-    } catch (e) {
-        // Silent error in production
-    }
-}
-
-/**
- * Core Logic for Name Change Detection
- */
-async function processNameChanges(env, currentLeaderboard) {
-    // Yesterday
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    const YESTERDAY_KEY = getLeaderboardKey(d);
-
-
-
-    let previousData = [];
-    try {
-        const rawPrev = await env.MARVEL_SNAP_HUB.get(YESTERDAY_KEY, { type: 'json' });
-        if (rawPrev && rawPrev.results) {
-            previousData = rawPrev.results;
+        if (playersToSync.length > 0) {
+            await batchUpsertPlayers(env.DB, playersToSync, seenAt);
         }
     } catch (e) {
-        return; // First run or missing data, nothing to diff
-    }
-
-    // Map ID -> Name for yesterday
-    const prevMap = new Map();
-    previousData.forEach(p => {
-        if (p.id) prevMap.set(p.id, p);
-    });
-
-    const writes = []; // Batch promises
-
-    // Iterate TODAY'S leaderboard
-    for (const player of currentLeaderboard) {
-        if (!player.id) continue;
-
-        const prevPlayer = prevMap.get(player.id);
-        const seenAt = new Date().toISOString().split('T')[0];
-
-        // 1. Update Map: Name -> ID
-        const cleanName = (player.name || '').trim();
-        if (cleanName) {
-            const mapKey = getPlayerMapKey(cleanName);
-            // Read existing map to append (handling arrays)
-            let existingIds = [];
-            try {
-                const rawMap = await env.MARVEL_SNAP_HUB.get(mapKey, { type: 'json' });
-                if (Array.isArray(rawMap)) existingIds = rawMap;
-                else if (rawMap) existingIds = [rawMap]; // Legacy support
-            } catch (e) { }
-
-            // Add ID if not present
-            if (!existingIds.includes(player.id)) {
-                existingIds.push(player.id);
-                writes.push(env.MARVEL_SNAP_HUB.put(mapKey, JSON.stringify(existingIds)));
-            }
-        }
-
-        // 2. Check for Name Change or New Entry
-        if (!prevPlayer) {
-            writes.push(appendHistory(env, player.id, player.name, seenAt));
-        } else if (prevPlayer.name !== player.name) {
-            writes.push(appendHistory(env, player.id, player.name, seenAt));
-        }
-    }
-
-    // Wait for all KV writes
-    await Promise.all(writes);
-
-}
-
-async function appendHistory(env, id, name, date) {
-    const key = getPlayerHistoryKey(id);
-    let history = [];
-
-    // Read existing history
-    try {
-        const raw = await env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
-        if (Array.isArray(raw)) history = raw;
-    } catch (e) { }
-
-    // Avoid duplicates
-    const alreadyExists = history.some(h => h.name === name && h.seenAt === date);
-    if (!alreadyExists) {
-        history.push({ name, seenAt: date });
-        await env.MARVEL_SNAP_HUB.put(key, JSON.stringify(history));
+        console.error("[Scraper] Error:", e.message);
     }
 }
 

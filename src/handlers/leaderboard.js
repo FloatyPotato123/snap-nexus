@@ -1,6 +1,6 @@
 import { getSeasonStart, getCurrentSeason, getSeasonStartForMonth, getSeasonEnd } from '../utils/seasons.js';
-import { getLeaderboardKey, getPlayerHistoryKey } from '../utils/keys.js';
-import { refreshPlayerKeyCache } from '../utils/searchCache.js';
+import { getLeaderboardKey } from '../utils/keys.js';
+import { searchPlayers, getPlayerHistory, batchGetPlayerHistories } from '../utils/db.js';
 
 // --- SHARED CONSTANTS ---
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 Minutes
@@ -122,152 +122,75 @@ export async function handleLeaderboard(c) {
     }
 }
 
-
-
-
-
+// API: Search Player History
 export async function handlePlayerHistory(c) {
-    const name = c.req.query('name') || c.req.query('q');
+    const url = new URL(c.req.url);
+    const name = url.searchParams.get("name") || url.searchParams.get("q");
 
-    if (!name) {
-        return c.json({ error: "Missing name/q parameter" }, 400);
+    if (!name || name.length < 2) {
+        return c.json({ matches: [] });
     }
 
-    const lowerQuery = name.trim().toLowerCase();
+    try {
+        // 1. Search Index (D1) -> Get IDs
+        const candidates = await searchPlayers(c.env.DB, name, 100);
 
-    // 1. Get Full Key List (Cached)
-    const allKeys = await refreshPlayerKeyCache(c.env.MARVEL_SNAP_HUB);
-
-    // 2. Perform In-Memory Fuzzy Search
-    // Filter keys that INCLUDE the query (case-insensitive)
-    // Key format: "map:somelowercasename"
-    const matchedKeys = allKeys.filter(k => {
-        const rawName = k.replace("map:", "");
-        return rawName.toLowerCase().includes(lowerQuery);
-    });
-
-    // 3. Sort Matches by Relevance
-    // Relevance: Exact Match > Starts With > Includes
-    matchedKeys.sort((a, b) => {
-        const nameA = a.replace("map:", "").toLowerCase();
-        const nameB = b.replace("map:", "").toLowerCase();
-
-        const exactA = nameA === lowerQuery;
-        const exactB = nameB === lowerQuery;
-        if (exactA && !exactB) return -1;
-        if (!exactA && exactB) return 1;
-
-        const startA = nameA.startsWith(lowerQuery);
-        const startB = nameB.startsWith(lowerQuery);
-        if (startA && !startB) return -1;
-        if (!startA && startB) return 1;
-
-        return nameA.localeCompare(nameB);
-    });
-
-    // Limit to top 15 matches (paginated)
-    const cursor = parseInt(c.req.query('cursor') || '0', 10);
-    const PAGE_SIZE = 15;
-    const topMatches = matchedKeys.slice(cursor, cursor + PAGE_SIZE);
-
-    let allPlayerIds = [];
-
-    // 4. Fetch IDs for matches
-    if (topMatches.length > 0) {
-        const matchPromises = topMatches.map(kName => c.env.MARVEL_SNAP_HUB.get(kName, { type: 'json' }));
-        const results = await Promise.all(matchPromises);
-
-        results.forEach(res => {
-            if (Array.isArray(res)) allPlayerIds.push(...res);
-            else if (res) allPlayerIds.push(res);
-        });
-    }
-
-    allPlayerIds = [...new Set(allPlayerIds)];
-
-    // 5. Fetch Latest Leaderboard (Live)
-    const rankMap = await getLiveRankMap();
-
-    // 6. Fetch History list & Enrich
-    const profiles = await Promise.all(allPlayerIds.map(async (id) => {
-        const history = await c.env.MARVEL_SNAP_HUB.get(getPlayerHistoryKey(id), { type: 'json' });
-
-        const liveEntry = rankMap.get(id);
-
-        // Use live name if available, otherwise history name
-        const displayName = liveEntry?.name || getCurrentNameFromHistory(history);
-        const displayRank = liveEntry?.rank || null;
-
-        // Inject live name if it's different from last history entry 
-        if (liveEntry && liveEntry.name) {
-            const lastRec = history[history.length - 1];
-            const todayStr = new Date().toISOString().split('T')[0];
-            if (!lastRec || (lastRec.name !== liveEntry.name && lastRec.seenAt !== todayStr)) {
-                history.push({ name: liveEntry.name, seenAt: todayStr });
-            }
+        if (candidates.length === 0) {
+            return c.json({ matches: [] });
         }
 
-        return {
-            playerId: id,
-            name: displayName,
-            currentRank: displayRank,
-            history: history || []
-        };
-    }));
+        // Deduplicate IDs
+        const uniqueIds = [...new Set(candidates.map(p => p.id))];
 
-    // Sort by Rank (if available) then Name
+        // 2. Hydrate with History (D1) - One single query for all IDs
+        const historyMap = await batchGetPlayerHistories(c.env.DB, uniqueIds);
+        const liveMap = await getLiveRankMap();
 
-    profiles.sort((a, b) => {
-        if (a.currentRank && b.currentRank) return a.currentRank - b.currentRank;
-        if (a.currentRank) return -1;
-        if (b.currentRank) return 1;
-        return 0;
-    });
+        const enriched = uniqueIds.map(id => {
+            const history = historyMap[id] || [];
 
-    // Check for Text Format (Twitch)
-    const format = c.req.query('format');
-    if (format === 'text') {
-        if (profiles.length === 0) return c.text(`No matches found for "${name}".`);
+            let displayName = "";
+            let currentRank = null;
 
-        const topMatches = profiles.slice(0, 5); // Limit to top 5 for chat
-        const lines = []; // Removed header line
-
-        topMatches.forEach(p => {
-            let line = "";
-            if (p.currentRank) line += `#${p.currentRank} `;
-            else line += `(UR) `;
-
-            line += p.name;
-
-            // Find unique aliases from history
-            if (p.history && p.history.length > 0) {
-                const aliases = [...new Set(p.history.map(h => h.name))]
-                    .filter(n => n !== p.name && n !== p.name.trim()); // Exclude current name
-
-                if (aliases.length > 0) {
-                    line += ` (aka ${aliases.slice(0, 2).join(", ")})`; // Limit aliases
-                }
+            const liveEntry = liveMap.get(id);
+            if (liveEntry) {
+                currentRank = liveEntry.rank;
+                displayName = liveEntry.name;
             }
-            lines.push(line);
+
+            if (history.length > 0) {
+                const latest = history[history.length - 1];
+                if (!displayName) displayName = latest.name;
+            }
+
+            // Fallback
+            if (!displayName) {
+                const match = candidates.find(c => c.id === id);
+                if (match) displayName = match.name;
+            }
+
+            return {
+                id: id,
+                playerId: id,
+                name: displayName || "Unknown",
+                currentRank,
+                history: history
+            };
         });
 
-        if (profiles.length > 5) lines.push(`...and ${profiles.length - 5} more.`);
+        // 3. Sort by Rank (Ascending)
+        enriched.sort((a, b) => {
+            const r1 = a.currentRank || 999999;
+            const r2 = b.currentRank || 999999;
+            return r1 - r2;
+        });
 
-        // Twitch chat doesn't support newlines, so we use ", " for clean separation
-        return c.text(lines.join(', '));
+        return c.json({ matches: enriched });
+    } catch (e) {
+        console.error("Search Error:", e);
+        return c.json({ matches: [], error: e.message });
     }
-
-    const nextCursor = (cursor + PAGE_SIZE < matchedKeys.length) ? cursor + PAGE_SIZE : null;
-
-    return c.json({
-        query: name,
-        matches: profiles,
-        total: matchedKeys.length,
-        nextCursor: nextCursor
-    });
 }
-
-
 
 // Helper: Get daily keys for a specific season
 // targetDate: A date within the desired API month/year
@@ -336,8 +259,8 @@ export async function handleGetPlayerProfile(c) {
         targetDate = new Date(Date.UTC(year, month - 1, 15));
     }
 
-    // 1. Fetch History (Names) AND Alliance Map
-    const historyPromise = c.env.MARVEL_SNAP_HUB.get(getPlayerHistoryKey(id), { type: 'json' });
+    // 1. Fetch History (Names) from D1 AND Alliance Map
+    const historyPromise = getPlayerHistory(c.env.DB, id);
     const alliancePromise = fetchAllianceMap();
 
     // 2. Fetch Season Stats (Daily)

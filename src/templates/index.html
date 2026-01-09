@@ -43,11 +43,17 @@
         <!-- SECTION 1: SEASON CHARTS -->
         <article>
             <header class="grid">
-                <div><strong>📈 Season Trajectory</strong></div>
+                <div>
+                    <strong>📈 Season Trajectory</strong>
+                </div>
                 <div class="text-right">
                     <select id="seasonSelector" class="small-select"></select>
                 </div>
             </header>
+
+            <div id="infinite-stats-below" class="infinite-stat-box"
+                style="display:none; margin-top: 10px; margin-bottom: 20px;"></div>
+
             <div id="seasonChartContainer" class="chart-container">
                 <canvas id="seasonChart"></canvas>
                 <div id="noSeasonData" class="status-msg" style="display:none;">No data available for this season yet
@@ -473,6 +479,20 @@
                 currentAllianceData = data.allianceRankings || [];
                 // Default sort: Members Desc
                 sortAlliances('members', false);
+
+                // Update Infinite Count
+                if (data.totalInfinitePlayers) {
+                    const count = data.totalInfinitePlayers.toLocaleString();
+                    const content = `
+                        <span class="infinite-stat-value">${count}</span>
+                        <span class="infinite-stat-label">Infinite Players</span>
+                    `;
+                    const below = document.getElementById('infinite-stats-below');
+                    if (below) {
+                        below.innerHTML = content;
+                        below.style.display = 'block';
+                    }
+                }
 
             } catch (e) {
                 $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>Error loading data</td></tr>`;

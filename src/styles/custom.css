@@ -167,6 +167,27 @@
     vertical-align: middle;
 }
 
+/* Infinite Player Count */
+.infinite-stat-box {
+    text-align: center;
+    /* margin handled by utility classes per location */
+}
+
+.infinite-stat-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+}
+
+.infinite-stat-label {
+    font-size: 1rem;
+    /* Same size as value */
+    font-weight: 500;
+    color: var(--pico-color);
+    opacity: 0.9;
+    margin-left: 4px;
+}
+
 /* Nav Polish */
 nav.container-fluid {
     border-bottom: 1px solid var(--pico-muted-border-color);

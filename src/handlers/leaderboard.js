@@ -406,10 +406,10 @@ export async function handleGetPlayerProfile(c) {
         id,
         name: finalName,
         currentRank: currentRank,
-        alliance: allianceInfo, // { tag, name }
         history: history,
         currentSeasonStats: stats, // Daily stats for current season
-        historicalSeasonRanks: historicalRanks // Rank at end of past seasons
+        historicalSeasonRanks: historicalRanks, // Rank at end of past seasons
+        alliance: allianceInfo
     });
 }
 
@@ -651,11 +651,14 @@ export async function handleLeaderboardComparison(c) {
     const gainers = movers.filter(m => m.change > 0);
     const losers = movers.filter(m => m.change < 0);
 
+    const liveMap = await getLiveRankMap();
+
     return c.json({
         topGainers: gainers.slice(0, 50),
         topLosers: losers.reverse().slice(0, 50),
         allianceRankings: rankings.sort((a, b) => b.members - a.members).slice(0, 50),
         date1: date1Str,
-        date2: date2Str
+        date2: date2Str,
+        totalInfinitePlayers: liveMap.size
     });
 }

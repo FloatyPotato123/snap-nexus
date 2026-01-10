@@ -5,7 +5,7 @@ import clientUtilsScript from "../dist/client-utils.js.txt";
 import logoBase64 from "./assets/logo.b64.txt";
 globalThis.Buffer = Buffer;
 
-import { handleRandomDeck, handleStressDeck } from "./handlers/deck.js";
+import { handleRandomDeck, handleStressDeck, handleDecodeDeck } from "./handlers/deck.js";
 import {
   handleLeaderboard,
   handlePlayerHistory,
@@ -60,6 +60,7 @@ app.get("/alliance/:tag", (c) => c.html(render(allianceHtml)));
 const api = new Hono();
 api.get("/decks/random", (c) => handleRandomDeck(c));
 api.get("/decks/stress", (c) => handleStressDeck(c));
+api.get("/decks/decode", (c) => handleDecodeDeck(c));
 
 // Leaderboard/History
 api.get("/players/search", (c) => handlePlayerHistory(c));

@@ -128,8 +128,10 @@ export async function handleLeaderboard(c) {
 export async function handlePlayerHistory(c) {
     const url = new URL(c.req.url);
     const name = url.searchParams.get("name") || url.searchParams.get("q");
+    const format = url.searchParams.get("format"); // 'json' or 'text'
 
     if (!name || name.length < 2) {
+        if (format === 'text') return c.text("Please provide a search term (min 2 chars).");
         return c.json({ matches: [] });
     }
 
@@ -138,6 +140,7 @@ export async function handlePlayerHistory(c) {
         const candidates = await searchPlayers(c.env.DB, name, 100);
 
         if (candidates.length === 0) {
+            if (format === 'text') return c.text("No players found.");
             return c.json({ matches: [] });
         }
 
@@ -187,11 +190,52 @@ export async function handlePlayerHistory(c) {
             return r1 - r2;
         });
 
+        // --- TEXT FORMATTING ---
+        if (format === 'text') {
+            return c.text(formatSearchTextOutput(enriched));
+        }
+
         return c.json({ matches: enriched });
     } catch (e) {
         console.error("Search Error:", e);
+        if (format === 'text') return c.text(`Search Error: ${e.message}`);
         return c.json({ matches: [], error: e.message });
     }
+}
+
+/**
+ * Formats a list of players into a concise comma-separated string.
+ * Truncates output to fit within ~400 characters.
+ */
+function formatSearchTextOutput(players) {
+    const MAX_LENGTH = 380;
+    let output = "";
+
+    for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+
+        // Filter aliases (exclude current display name)
+        // p.history is an array of { name, seenAt }
+        const uniqueAliases = [...new Set(p.history.map(h => h.name))]
+            .filter(n => n && n !== p.name);
+
+        const akaStr = uniqueAliases.length > 0 ? ` (aka ${uniqueAliases.join(', ')})` : "";
+
+        // Format: #Rank Name OR Name
+        const rankPart = p.currentRank ? `#${p.currentRank} ` : '';
+        const entry = `${rankPart}${p.name}${akaStr}`;
+
+        const separator = (i === 0) ? "" : ", ";
+        const tentativeLen = output.length + separator.length + entry.length;
+
+        if (tentativeLen > MAX_LENGTH) {
+            output += `, ... (+${players.length - i} more)`;
+            break;
+        }
+
+        output += separator + entry;
+    }
+    return output;
 }
 
 // Helper: Get daily keys for a specific season

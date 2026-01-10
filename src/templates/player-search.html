@@ -45,7 +45,7 @@
             // Check URL params on load
             window.addEventListener('DOMContentLoaded', () => {
                 const params = new URLSearchParams(window.location.search);
-                const query = params.get('name') || params.get('q');
+                const query = params.get('q');
 
                 if (query) {
                     $('searchInput').value = query;
@@ -75,8 +75,7 @@
 
                     // Update URL without reloading
                     const newUrl = new URL(window.location);
-                    newUrl.searchParams.set('name', query);
-                    newUrl.searchParams.delete('type');
+                    newUrl.searchParams.set('q', query);
                     window.history.pushState({}, '', newUrl);
 
                     resDiv.innerHTML = '<div class="status-msg">Searching...</div>';
@@ -87,7 +86,7 @@
                 }
 
                 try {
-                    const req = await fetch(`/api/players/search?name=${encodeURIComponent(query)}&cursor=${currentCursor}`);
+                    const req = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&cursor=${currentCursor}`);
                     if (!req.ok) throw new Error(await req.text());
                     const data = await req.json();
 

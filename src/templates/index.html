@@ -14,45 +14,33 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <!-- Shared Season Logic -->
     <script src="/client-utils.js"></script>
-    <style>
-        .movers-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
 
-        @media (max-width: 768px) {
-            .movers-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
 </head>
 
 <body>
 
     <main class="container">
         <!-- NAV -->
-
-        <!-- HEADER -->
-        <!-- HEADER -->
         <hgroup class="hero-header">
             <h1 class="hero-title">Infinite Dashboard</h1>
             <p class="text-muted fw-300">Tracking the Global Infinite Leaderboard</p>
         </hgroup>
         <!-- SECTION 1: SEASON CHARTS -->
-        <article>
+        <article style="position: relative;">
             <header class="grid">
-                <div>
+                <div style="display: flex; align-items: center;">
                     <strong>📈 Season Trajectory</strong>
+                    <!-- Infinite Players Badge -->
+                    <span id="infinite-header-container" class="infinite-badge">
+                        <span class="live-dot"></span>
+                        <span class="text-gold count" id="infinite-count-header">0</span>
+                        <span class="text-muted label">Infinite Players</span>
+                    </span>
                 </div>
                 <div class="text-right">
                     <select id="seasonSelector" class="small-select"></select>
                 </div>
             </header>
-
-            <div id="infinite-stats-below" class="infinite-stat-box"
-                style="display:none; margin-top: 10px; margin-bottom: 20px;"></div>
 
             <div id="seasonChartContainer" class="chart-container">
                 <canvas id="seasonChart"></canvas>
@@ -289,7 +277,7 @@
                         labels: data.map(d => d.date.slice(5).replace('-', '/')),
                         datasets: [{
                             label: 'Infinite Players',
-                            data: data.map(d => d.total),
+                            data: data.map((d, i) => (i > 0 && d.total === 0) ? null : d.total),
                             borderColor: COLORS.gold.border,
                             backgroundColor: COLORS.gold.bg,
                             pointBackgroundColor: COLORS.gold.point,
@@ -483,17 +471,13 @@
                 // Update Infinite Count
                 if (data.totalInfinitePlayers) {
                     const count = data.totalInfinitePlayers;
-                    const below = document.getElementById('infinite-stats-below');
-                    if (below) {
-                        below.innerHTML = `
-                            <span class="infinite-stat-value" id="infinite-count-num">0</span>
-                            <span class="infinite-stat-label">Infinite Players</span>
-                        `;
-                        below.style.display = 'block';
 
-                        // Animate from 0 to target
-                        const countEl = document.getElementById('infinite-count-num');
-                        SnapUtils.animateValue(countEl, 0, count, 1500);
+                    // Infinite Players Badge
+                    const headerCont = document.getElementById('infinite-header-container');
+                    const headerVal = document.getElementById('infinite-count-header');
+                    if (headerCont && headerVal) {
+                        headerCont.style.display = 'inline-flex';
+                        SnapUtils.animateValue(headerVal, 0, count, 1500);
                     }
                 }
 

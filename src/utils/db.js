@@ -51,7 +51,6 @@ export async function upsertPlayer(db, id, name, seenAt) {
     const now = Date.now();
     const date = seenAt || new Date().toISOString().split('T')[0];
 
-    // 1. Update Main Table (Latest Info)
     const sqlMain = `
         INSERT INTO Players (id, name, normalized_name, updated_at) 
         VALUES (?, ?, ?, ?)
@@ -61,17 +60,26 @@ export async function upsertPlayer(db, id, name, seenAt) {
             updated_at = excluded.updated_at
     `;
 
-    // 2. Add to Aliases (Never delete, just ignore if exists)
     const sqlAlias = `
-        INSERT OR IGNORE INTO PlayerAliases (player_id, name, normalized_name, first_seen_at)
+        INSERT INTO PlayerAliases (player_id, name, normalized_name, first_seen_at)
         VALUES (?, ?, ?, ?)
     `;
 
+    const history = await getPlayerHistory(db, id);
+    let shouldInsert = true;
+    if (history && history.length > 0) {
+        const latest = history[history.length - 1];
+        if (latest.name === name) {
+            shouldInsert = false;
+        }
+    }
+
     try {
-        await db.batch([
-            db.prepare(sqlMain).bind(id, name, normalized, now),
-            db.prepare(sqlAlias).bind(id, name, normalized, date)
-        ]);
+        const batch = [db.prepare(sqlMain).bind(id, name, normalized, now)];
+        if (shouldInsert) {
+            batch.push(db.prepare(sqlAlias).bind(id, name, normalized, date));
+        }
+        await db.batch(batch);
     } catch (e) {
         console.error("DB Upsert Error:", id, name, e);
         throw e;
@@ -80,13 +88,19 @@ export async function upsertPlayer(db, id, name, seenAt) {
 
 /**
  * Batch Upsert (For Scraper/Live Sync or Snapshot Migration)
- * Updates BOTH Master Name and ensures it's in Aliases.
+ * Updates Master Name and intelligent history insertion (A -> B -> A support).
  * @param {D1Database} db 
  * @param {Array<{id, name}>} players 
  * @param {string} seenAt Optional date string (e.g. "2024-10-19")
  */
 export async function batchUpsertPlayers(db, players, seenAt) {
     if (!players || players.length === 0) return;
+
+    const now = Date.now();
+    const date = seenAt || new Date().toISOString().split('T')[0];
+
+    // Fetch latest alias for each player to determine if we insert a new one
+    const historyMap = await batchGetPlayerHistories(db, playerIds);
 
     const sqlMain = `
         INSERT INTO Players (id, name, normalized_name, updated_at) 
@@ -98,23 +112,38 @@ export async function batchUpsertPlayers(db, players, seenAt) {
     `;
 
     const sqlAlias = `
-        INSERT OR IGNORE INTO PlayerAliases (player_id, name, normalized_name, first_seen_at)
+        INSERT INTO PlayerAliases (player_id, name, normalized_name, first_seen_at)
         VALUES (?, ?, ?, ?)
     `;
 
     const stmtMain = db.prepare(sqlMain);
     const stmtAlias = db.prepare(sqlAlias);
-
     const statements = [];
-    const now = Date.now();
-    const date = seenAt || new Date().toISOString().split('T')[0];
 
     for (const p of players) {
         if (!p.id || !p.name) continue;
         const normalized = p.name.toLowerCase();
+
+        // Update Master Table (Always updates "Current Name")
         statements.push(stmtMain.bind(p.id, p.name, normalized, now));
-        statements.push(stmtAlias.bind(p.id, p.name, normalized, date));
+
+        // Logic: Should we insert a new history entry?
+        const history = historyMap[p.id]; // Array of {name, seenAt} sorted asc
+        let shouldInsert = true;
+
+        if (history && history.length > 0) {
+            const latest = history[history.length - 1];
+            if (latest.name === p.name) {
+                shouldInsert = false;
+            }
+        }
+
+        if (shouldInsert) {
+            statements.push(stmtAlias.bind(p.id, p.name, normalized, date));
+        }
     }
+
+    if (statements.length === 0) return;
 
     // Cloudflare D1 has a limit on statements per batch/transaction.
     const CHUNK_SIZE = 50;
@@ -124,7 +153,6 @@ export async function batchUpsertPlayers(db, players, seenAt) {
             await db.batch(chunk);
         } catch (e) {
             console.error(`Batch Upsert Error at chunk ${i}:`, e);
-            throw e;
         }
     }
 }

@@ -99,9 +99,6 @@ export async function batchUpsertPlayers(db, players, seenAt) {
     const now = Date.now();
     const date = seenAt || new Date().toISOString().split('T')[0];
 
-    // Fetch latest alias for each player to determine if we insert a new one
-    const historyMap = await batchGetPlayerHistories(db, playerIds);
-
     const sqlMain = `
         INSERT INTO Players (id, name, normalized_name, updated_at) 
         VALUES (?, ?, ?, ?)
@@ -118,41 +115,54 @@ export async function batchUpsertPlayers(db, players, seenAt) {
 
     const stmtMain = db.prepare(sqlMain);
     const stmtAlias = db.prepare(sqlAlias);
-    const statements = [];
 
-    for (const p of players) {
-        if (!p.id || !p.name) continue;
-        const normalized = p.name.toLowerCase();
+    // Process in chunks to avoid SQLite bind limits on both READ and WRITE
+    const PROCESS_CHUNK_SIZE = 50;
 
-        // Update Master Table (Always updates "Current Name")
-        statements.push(stmtMain.bind(p.id, p.name, normalized, now));
+    for (let i = 0; i < players.length; i += PROCESS_CHUNK_SIZE) {
+        const chunk = players.slice(i, i + PROCESS_CHUNK_SIZE);
+        const playerIds = chunk.map(p => p.id);
 
-        // Logic: Should we insert a new history entry?
-        const history = historyMap[p.id]; // Array of {name, seenAt} sorted asc
-        let shouldInsert = true;
+        // 1. Bulk Fetch History for this chunk
+        let historyMap = {};
+        try {
+            historyMap = await batchGetPlayerHistories(db, playerIds);
+        } catch (e) {
+            console.error(`Batch History Fetch Error (Chunk ${i}):`, e);
+            // Continue with empty history (safe fallback, might duplicate aliases but won't crash)
+        }
 
-        if (history && history.length > 0) {
-            const latest = history[history.length - 1];
-            if (latest.name === p.name) {
-                shouldInsert = false;
+        const statements = [];
+
+        for (const p of chunk) {
+            if (!p.id || !p.name) continue;
+            const normalized = p.name.toLowerCase();
+
+            // Update Master Table (Always updates "Current Name")
+            statements.push(stmtMain.bind(p.id, p.name, normalized, now));
+
+            // Logic: Should we insert a new history entry?
+            const history = historyMap[p.id];
+            let shouldInsert = true;
+
+            if (history && history.length > 0) {
+                const latest = history[history.length - 1];
+                if (latest.name === p.name) {
+                    shouldInsert = false;
+                }
+            }
+
+            if (shouldInsert) {
+                statements.push(stmtAlias.bind(p.id, p.name, normalized, date));
             }
         }
 
-        if (shouldInsert) {
-            statements.push(stmtAlias.bind(p.id, p.name, normalized, date));
-        }
-    }
-
-    if (statements.length === 0) return;
-
-    // Cloudflare D1 has a limit on statements per batch/transaction.
-    const CHUNK_SIZE = 50;
-    for (let i = 0; i < statements.length; i += CHUNK_SIZE) {
-        const chunk = statements.slice(i, i + CHUNK_SIZE);
-        try {
-            await db.batch(chunk);
-        } catch (e) {
-            console.error(`Batch Upsert Error at chunk ${i}:`, e);
+        if (statements.length > 0) {
+            try {
+                await db.batch(statements);
+            } catch (e) {
+                console.error(`Batch Upsert Error (Chunk ${i}):`, e);
+            }
         }
     }
 }

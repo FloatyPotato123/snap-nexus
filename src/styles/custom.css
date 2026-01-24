@@ -514,3 +514,9 @@ table th {
     margin-right: 8px;
     animation: pulse-gold 2s infinite;
 }
+
+header hgroup h1,
+header hgroup h2,
+header>div {
+    white-space: nowrap;
+}

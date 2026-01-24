@@ -30,15 +30,38 @@
             <header class="grid">
                 <div style="display: flex; align-items: center;">
                     <strong>📈 Season Trajectory</strong>
-                    <!-- Infinite Players Badge -->
+
                     <span id="infinite-header-container" class="infinite-badge">
                         <span class="live-dot"></span>
                         <span class="text-gold count" id="infinite-count-header">0</span>
                         <span class="text-muted label">Infinite Players</span>
                     </span>
                 </div>
-                <div class="text-right">
-                    <select id="seasonSelector" class="small-select"></select>
+                <div class="text-right" style="position:relative; display:flex; justify-content:flex-end;">
+                    <button id="seasonTrigger" onclick="toggleSeasonDropdown()" class="fake-select">
+                        <span id="seasonTriggerText">Loading...</span>
+                    </button>
+
+                    <div id="seasonDropdown" style="
+                        display: none;
+                        position: absolute;
+                        top: 100%;
+                        right: 0;
+                        margin-top: 5px;
+                        background: var(--card-bg);
+                        border: 1px solid rgba(255,255,255,0.1);
+                        border-radius: 8px;
+                        width: 240px;
+                        max-height: 400px;
+                        overflow-y: auto;
+                        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+                        backdrop-filter: blur(10px);
+                        z-index: 1000;
+                        padding: 8px;
+                        text-align: left;
+                    ">
+
+                    </div>
                 </div>
             </header>
 
@@ -146,10 +169,21 @@
         // --- HARDCODED LEGACY DATA (From Extension) ---
         // Moved to API: /api/history/legacy
 
-        const COLORS = {
-            gold: { border: 'rgb(255, 204, 0)', bg: 'rgba(255, 204, 0, 0.1)', point: 'rgb(255, 204, 0)' },
-            blue: { border: 'rgb(0, 123, 255)', bg: 'rgba(0, 123, 255, 0.1)' }
-        };
+        // Palette (12 Colors)
+        const PALETTE = [
+            { border: '#fbbf24', bg: 'rgba(251, 191, 36, 0.1)' }, // Amber (Current/Gold)
+            { border: '#60a5fa', bg: 'rgba(96, 165, 250, 0.1)' }, // Blue
+            { border: '#a855f7', bg: 'rgba(168, 85, 247, 0.1)' }, // Purple
+            { border: '#f87171', bg: 'rgba(248, 113, 113, 0.1)' }, // Red
+            { border: '#4ade80', bg: 'rgba(74, 222, 128, 0.1)' }, // Green
+            { border: '#22d3ee', bg: 'rgba(34, 211, 238, 0.1)' }, // Cyan
+            { border: '#fb923c', bg: 'rgba(251, 146, 60, 0.1)' }, // Orange
+            { border: '#f472b6', bg: 'rgba(244, 114, 182, 0.1)' }, // Pink
+            { border: '#2dd4bf', bg: 'rgba(45, 212, 191, 0.1)' }, // Teal
+            { border: '#818cf8', bg: 'rgba(129, 140, 248, 0.1)' }, // Indigo
+            { border: '#a3e635', bg: 'rgba(163, 230, 53, 0.1)' }, // Lime
+            { border: '#e879f9', bg: 'rgba(232, 121, 249, 0.1)' }  // Magenta
+        ];
 
         // --- UTILS ---
 
@@ -158,147 +192,274 @@
             await loadSeasonChart();
             loadHistoryChart();
             await fetchMovers();
-
-            $('seasonSelector').addEventListener('change', (e) => loadSeasonChart(e.target.value));
         })();
 
+        function toggleSeasonDropdown() {
+            const dd = $('seasonDropdown');
+            const isOpen = dd.style.display === 'block';
+            dd.style.display = isOpen ? 'none' : 'block';
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const dd = $('seasonDropdown');
+            const trig = $('seasonTrigger');
+            if (dd && trig && !dd.contains(e.target) && !trig.contains(e.target)) {
+                dd.style.display = 'none';
+            }
+        });
+
         function populateSeasonSelector() {
-            const sel = $('seasonSelector');
-            sel.innerHTML = '';
+            const container = $('seasonDropdown');
+            if (!container) return;
+            container.innerHTML = '';
 
             const now = new Date();
             const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
-            // Add Current Season
-            // Marvel Snap Season Logic: Starts first Tuesday
-            // If we are before the first Tuesday, the "Current Season" is technically the previous month.
-            const currentM = now.getMonth();
-            const currentY = now.getFullYear();
+            // Helper to add checkbox item
+            const addItem = (val, text, isDefault) => {
+                const div = document.createElement('div');
+                div.style.padding = '4px 0';
+                div.innerHTML = `
+                    <label style="display:flex; align-items:center; cursor:pointer; width:100%; margin:0;">
+                        <input type="checkbox" value="${val}" class="season-check" ${isDefault ? 'checked' : ''} onchange="handleSeasonChange()">
+                        <span style="font-size:0.9rem; margin-left:8px;">${text}</span>
+                    </label>
+                `;
+                container.appendChild(div);
+            };
 
-            let seasonM = currentM;
-            let seasonY = currentY;
-
-            const firstDay = new Date(currentY, currentM, 1);
-            let dayOffset = 1;
-            while (new Date(currentY, currentM, dayOffset).getDay() !== 2) { // 2 = Tuesday
-                dayOffset++;
-            }
-            const seasonStart = new Date(currentY, currentM, dayOffset);
-
-            // Replace complex logic with helper
+            // Current Season
             const activeSeason = SnapUtils.getCurrentSeason(now);
-            seasonY = activeSeason.year;
-            seasonM = activeSeason.month - 1; // Convert back to 0-indexed for this loop logic
+            const seasonY = activeSeason.year;
+            const seasonM = activeSeason.month - 1;
 
+            addItem('current', `${months[seasonM]} ${seasonY}`, true);
 
-            const optC = document.createElement('option');
-            optC.value = 'current';
-            optC.text = `${months[seasonM]} ${seasonY} (Current)`;
-            sel.appendChild(optC);
-
-            // Add Past Seasons (Back to Oct 2025)
+            // Past Seasons
             const startYear = 2025;
             const startMonth = 9; // October index
-            let y = currentY;
-            let m = currentM - 1;
-
+            let y = seasonY;
+            let m = seasonM - 1;
             if (m < 0) { m = 11; y--; }
 
             while (y > startYear || (y === startYear && m >= startMonth)) {
-                // Filter: Exclude if this is somehow the "Current Active Season" (already added)
-                // Logic: "Current" option was added above based on seasonM/seasonY.
-                // If the loop variables match that, skip.
                 if (y !== seasonY || m !== seasonM) {
-                    const opt = document.createElement('option');
-                    opt.value = `${y}-${m + 1}`;
-                    opt.text = `${months[m]} ${y}`;
-                    sel.appendChild(opt);
+                    addItem(`${y}-${m + 1}`, `${months[m]} ${y}`, false);
                 }
-
                 m--;
                 if (m < 0) { m = 11; y--; }
             }
+
+            updateTriggerText();
         }
 
-        // --- CHART 1: TRAJECTORY (GOLD) ---
-        async function loadSeasonChart(seasonVal) {
-            const now = new Date();
-            let year, month;
+        function handleSeasonChange() {
+            updateTriggerText();
+            loadSeasonChart();
+        }
 
-            if (!seasonVal || seasonVal === 'current') {
-                // Determine actual season month/year
-                const activeSeason = SnapUtils.getCurrentSeason(now);
-                year = activeSeason.year;
-                month = activeSeason.month; // 1-indexed matches usage below
+        function updateTriggerText() {
+            const checked = document.querySelectorAll('.season-check:checked');
+            const btnText = $('seasonTriggerText');
+            if (!btnText) return;
+
+            if (checked.length === 0) {
+                btnText.innerText = 'Select Season...';
+            } else if (checked.length === 1) {
+                // Find visible text
+                const label = checked[0].nextElementSibling.innerText;
+                btnText.innerText = label;
             } else {
-                [year, month] = seasonVal.split('-').map(Number);
+                btnText.innerText = `Comparing ${checked.length} Seasons`;
+            }
+        }
+
+        // --- CHART 1: MULTI-SEASON ---
+        // --- CONFIGURATION ---
+        const CHART_PALETTE = [
+            { border: '#ffce2b', bg: 'rgba(255, 206, 43, 0.2)', point: '#fff' }, // Gold (Current)
+            { border: '#bb86fc', bg: 'rgba(187, 134, 252, 0.1)' }, // Purple
+            { border: '#03dac6', bg: 'rgba(3, 218, 198, 0.1)' },   // Teal
+            { border: '#cf6679', bg: 'rgba(207, 102, 121, 0.1)' }, // Red
+            { border: '#3700b3', bg: 'rgba(55, 0, 179, 0.1)' },    // Dark Blue
+            { border: '#018786', bg: 'rgba(1, 135, 134, 0.1)' }    // Dark Teal
+        ];
+
+        function getChartOptions(useRelativeAxis) {
+            return {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: 'index', intersect: false },
+                plugins: {
+                    legend: { display: true, labels: { color: '#f0f0f0' } },
+                    tooltip: {
+                        callbacks: {
+                            title: (items) => useRelativeAxis ? `Day ${items[0].dataIndex + 1}` : items[0].label
+                        }
+                    }
+                },
+                scales: {
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#f0f0f0' },
+                        title: { display: true, text: 'Players', color: '#f0f0f0' }
+                    },
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#f0f0f0' },
+                        title: { display: true, text: useRelativeAxis ? 'Day of Season' : 'Date (M/D)', color: '#f0f0f0' }
+                    }
+                }
+            };
+        }
+
+        async function fetchSeasonData(season, now) {
+            let year, month;
+            if (!season.val || season.val === 'current') {
+                const active = SnapUtils.getCurrentSeason(now);
+                year = active.year;
+                month = active.month;
+            } else {
+                [year, month] = season.val.split('-').map(Number);
             }
 
             const start = SnapUtils.getSeasonStartForMonth(year, month - 1);
-            // Skip Day 1 (Reset Day) to avoid showing Old Season data
-            start.setDate(start.getDate() + 1);
-            const seasonEnd = SnapUtils.getSeasonEndForMonth(year, month - 1);
+            start.setDate(start.getDate() + 1); // Skip Day 1
+            const end = SnapUtils.getSeasonEndForMonth(year, month - 1);
 
-            let fetchEnd;
-            // If viewing current season (dynamic), show up to today.
-            if (seasonVal === 'current' || (year === now.getFullYear() && month === now.getMonth() + 1)) {
+            // Cap at today for current season
+            let fetchEnd = end;
+            const active = SnapUtils.getCurrentSeason(now);
+            if (year === active.year && month === active.month) {
                 fetchEnd = now;
-            } else {
-                // For past seasons, use the calculated season end (API is inclusive)
-                fetchEnd = seasonEnd;
             }
 
-            const eStr = fetchEnd.toISOString().split('T')[0];
             const sStr = start.toISOString().split('T')[0];
+            const eStr = fetchEnd.toISOString().split('T')[0];
 
             try {
-                // Note: Updated to use /api prefix
                 const req = await fetch(`/api/season/stats?start=${sStr}&end=${eStr}`);
                 const data = await req.json();
+                return { ...season, data, year, month, start };
+            } catch {
+                return null;
+            }
+        }
 
-                const ctx = $('seasonChart').getContext('2d');
+        // --- CHART 1: MULTI-SEASON ---
+        async function loadSeasonChart(seasonVal) {
+            seasonVal = seasonVal || ($('seasonSelector') ? $('seasonSelector').value : 'current');
+
+            // Collect selected seasons
+            const checkboxes = Array.from(document.querySelectorAll('.season-check:checked'));
+            let seasonsToFetch = checkboxes.map(cb => ({
+                val: cb.value,
+                label: cb.nextElementSibling.innerText.split(' (')[0] // Clean label
+            }));
+
+            // Fallback if triggered directly with a value but logic above missed it
+            if (seasonsToFetch.length === 0 && seasonVal && seasonVal !== 'current') {
+                seasonsToFetch = [{ val: seasonVal, label: 'Selected Season' }]; // Fallback label
+            }
+            // Fallback to current
+
+
+            const useRelativeAxis = seasonsToFetch.length > 1;
+            const now = new Date();
+
+            const results = (await Promise.all(
+                seasonsToFetch.map(s => fetchSeasonData(s, now))
+            )).filter(r => r && r.data && r.data.length > 0);
+
+            if (results.length === 0) {
                 if (chartInstance) chartInstance.destroy();
+                $('seasonChart').style.display = 'none';
+                $('noSeasonData').style.display = 'block';
+                $('noSeasonData').innerText = 'Select a season to view data';
+                return;
+            }
 
-                if (!data || data.length === 0) {
-                    $('seasonChart').style.display = 'none';
-                    $('noSeasonData').style.display = 'block';
-                    $('noSeasonData').innerText = 'No ranked data for this season';
-                    $('seasonChartContainer').style.height = 'auto'; // Collapse
-                    return;
+            $('seasonChart').style.display = 'block';
+            $('noSeasonData').style.display = 'none';
+            $('seasonChartContainer').style.height = '350px';
+
+            const ctx = $('seasonChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            // 1. Process Data Points
+            const processedDatasets = results.map(res => {
+                const points = res.data.map(d => {
+                    let x, y = d.total;
+                    if (useRelativeAxis) {
+                        const startMs = res.start.getTime();
+                        const dateMs = new Date(d.date).getTime();
+                        x = Math.round((dateMs - startMs) / (1000 * 60 * 60 * 24));
+                    } else {
+                        x = d.date.slice(5).replace('-', '/');
+                    }
+                    return { x, y };
+                });
+                return { ...res, points };
+            });
+
+            // 2. Generate Labels
+            let labels;
+            if (useRelativeAxis) {
+                let maxDay = 0;
+                processedDatasets.forEach(d => d.points.forEach(p => maxDay = Math.max(maxDay, p.x)));
+                maxDay = Math.max(maxDay, 28);
+                labels = Array.from({ length: maxDay + 1 }, (_, i) => `Day ${i + 1}`);
+            } else {
+                labels = processedDatasets[0].points.map(p => p.x);
+            }
+
+            // 3. Create Chart Datasets
+
+            const chartDatasets = processedDatasets.map((res) => {
+                // Calculate month difference for consistent coloring based on recency
+                // Current Season (0 diff) = Gold
+                const active = SnapUtils.getCurrentSeason(now);
+                const diffYears = active.year - res.year;
+                const diffMonths = active.month - res.month;
+                const totalMonthDiff = (diffYears * 12) + diffMonths;
+
+                const colorIndex = Math.abs(totalMonthDiff) % CHART_PALETTE.length;
+                const color = CHART_PALETTE[colorIndex];
+                const isPrimary = res.val === 'current';
+
+                let data;
+                if (useRelativeAxis) {
+                    data = new Array(labels.length).fill(null);
+                    res.points.forEach(p => {
+                        if (p.x >= 0 && p.x < data.length && p.y > 0) data[p.x] = p.y;
+                    });
+                } else {
+                    data = res.points.map(p => (p.y > 0 ? p.y : null));
                 }
 
-                $('seasonChart').style.display = 'block';
-                $('noSeasonData').style.display = 'none';
-                $('seasonChartContainer').style.height = '350px'; // Restore
+                return {
+                    label: res.label,
+                    data: data,
+                    borderColor: color.border,
+                    backgroundColor: color.bg,
+                    pointBackgroundColor: color.point || color.border,
+                    borderWidth: 3,
+                    tension: 0.3,
+                    fill: true,
+                    pointRadius: 3,
+                    borderDash: [],
+                    hitRadius: 10,
+                    spanGaps: true
+                };
+            });
 
-                chartInstance = new Chart(ctx, {
-                    type: 'line',
-                    data: {
-                        labels: data.map(d => d.date.slice(5).replace('-', '/')),
-                        datasets: [{
-                            label: 'Infinite Players',
-                            data: data.map((d, i) => (i > 0 && d.total === 0) ? null : d.total),
-                            borderColor: COLORS.gold.border,
-                            backgroundColor: COLORS.gold.bg,
-                            pointBackgroundColor: COLORS.gold.point,
-                            borderWidth: 2,
-                            tension: 0.3,
-                            fill: true,
-                            pointRadius: 3,
-                            spanGaps: true
-                        }]
-                    },
-                    options: {
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false } },
-                        scales: {
-                            y: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#f0f0f0' }, title: { display: true, text: 'Players', color: '#f0f0f0' } },
-                            x: { grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: '#f0f0f0' }, title: { display: true, text: 'Date (M/D)', color: '#f0f0f0' } }
-                        }
-                    }
-                });
-            } catch (e) { }
+            chartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets: chartDatasets },
+                options: getChartOptions(useRelativeAxis)
+            });
         }
 
         // --- CHART 2: HISTORY (BLUE) ---
@@ -363,7 +524,7 @@
                 cachedHistory = cachedHistory.map(d => {
                     const date = new Date(d.year, d.month - 1, 1);
                     const shortMonth = date.toLocaleString('default', { month: 'short' });
-                    const shortYear = d.year.toString().slice(-2);
+                    const shortYear = date.getFullYear().toString().slice(-2); // Use getFullYear for consistency
                     return { ...d, label: `${shortMonth} '${shortYear}` };
                 });
 
@@ -383,13 +544,13 @@
                         datasets: [{
                             label: 'Infinite Players',
                             data: cachedHistory.map(d => d.total),
-                            backgroundColor: COLORS.blue.bg,
-                            borderColor: COLORS.blue.border,
+                            backgroundColor: PALETTE[1].bg, // BLUE
+                            borderColor: PALETTE[1].border, // BLUE
                             borderWidth: 2,
                             tension: 0.3,
                             fill: true,
                             pointRadius: 3,
-                            pointBackgroundColor: COLORS.blue.border
+                            pointBackgroundColor: PALETTE[1].border
                         }]
                     },
                     options: {
@@ -409,7 +570,7 @@
         async function fetchMovers() {
             // Logic: Scraper runs at 19:00 UTC.
             // If current UTC time < 19:00, "Today's" scrape hasn't happened yet.
-            // So we show Yesterday vs DayBefore.
+            // So we show Yesterday vs Day Before.
             // If >= 19:00, we show Today vs Yesterday.
 
             const now = new Date();

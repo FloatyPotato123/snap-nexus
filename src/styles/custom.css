@@ -287,12 +287,36 @@ table th {
     text-shadow: 0 0 30px rgba(255, 204, 0, 0.15);
 }
 
-.small-select {
-    width: auto !important;
-    display: inline-block !important;
-    margin: 0 !important;
-    padding: 5px 45px 5px 10px !important;
-    font-size: 0.9rem;
+.fake-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--pico-form-element-background-color);
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+    border-radius: var(--pico-border-radius);
+    color: var(--pico-color);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: var(--pico-font-weight);
+    padding: 2px 10px;
+    padding-right: 1.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(113, 128, 150)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-position: center right 0.4rem;
+    background-size: 1rem auto;
+    background-repeat: no-repeat;
+    display: inline-block;
+    width: auto;
+    min-width: 140px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: border-color var(--pico-transition), box-shadow var(--pico-transition);
+}
+
+.fake-select:focus {
+    border-color: var(--pico-form-element-focus-color);
+    box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-form-element-focus-color);
+    outline: none;
 }
 
 .status-msg {
@@ -441,7 +465,8 @@ table th {
 
 /* Infinite Player Count Badge */
 .infinite-badge {
-    display: none; /* Controlled by JS */
+    display: none;
+    /* Controlled by JS */
     align-items: center;
     white-space: nowrap;
     flex-shrink: 0;
@@ -467,9 +492,17 @@ table th {
 
 /* Pulse Animation for Live Dot */
 @keyframes pulse-gold {
-    0% { box-shadow: 0 0 0 0 rgba(255, 206, 43, 0.7); }
-    70% { box-shadow: 0 0 0 4px rgba(255, 206, 43, 0); }
-    100% { box-shadow: 0 0 0 0 rgba(255, 206, 43, 0); }
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 206, 43, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 4px rgba(255, 206, 43, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 206, 43, 0);
+    }
 }
 
 .live-dot {

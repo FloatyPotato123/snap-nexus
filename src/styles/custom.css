@@ -209,25 +209,35 @@ nav a:hover {
 .nav-search-container {
     display: flex;
     align-items: center;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--pico-muted-border-color);
-    border-radius: 20px;
-    padding: 2px 6px;
+    background: var(--pico-form-element-background-color);
+    border: 1px solid var(--pico-form-element-border-color);
+    border-radius: 6.25rem;
+    /* Pill shape */
+    padding: 0 0.25rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    width: 400px;
+    width: 25rem;
+    max-width: 100%;
     overflow: hidden;
+    height: calc(var(--pico-form-element-height, 2.5rem) * 0.85);
+}
+
+@media (max-width: 768px) {
+    .nav-search-container {
+        width: 13rem;
+    }
 }
 
 .nav-search-container.collapsed {
-    width: 42px;
+    width: 2.625rem;
     background: transparent;
     border-color: transparent;
+    padding: 0;
 }
 
 .search-toggle-btn {
     background: transparent !important;
     border: none !important;
-    padding: 8px !important;
+    padding: 0 !important;
     margin: 0 !important;
     color: var(--pico-muted-color) !important;
     cursor: pointer;
@@ -235,8 +245,11 @@ nav a:hover {
     align-items: center;
     justify-content: center;
     transition: color 0.2s;
-    width: auto !important;
+    width: 2.625rem !important;
+    height: 100% !important;
+    flex-shrink: 0;
     box-shadow: none !important;
+    outline: none !important;
 }
 
 .search-toggle-btn:hover {
@@ -247,7 +260,7 @@ nav a:hover {
     background: transparent !important;
     border: none !important;
     margin-bottom: 0 !important;
-    padding: 4px 12px 4px 0 !important;
+    padding: 0 0.25rem !important;
     font-size: 0.9rem !important;
     box-shadow: none !important;
     transition: opacity 0.3s;
@@ -258,15 +271,8 @@ nav a:hover {
     opacity: 0;
     pointer-events: none;
     width: 0;
-    padding: 0 !important;
 }
 
-@media (max-width: 768px) {
-    .nav-search {
-        display: none;
-        /* Hide search on mobile nav for now or find better placement */
-    }
-}
 
 /* Disclaimer Footer */
 .disclaimer-box {

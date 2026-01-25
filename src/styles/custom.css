@@ -268,6 +268,8 @@ nav.container-fluid {
     border-bottom: 1px solid var(--pico-muted-border-color);
     padding-bottom: 10px;
     margin-bottom: 40px !important;
+    position: relative;
+    /* Anchor for absolute search overlay */
 }
 
 nav a.active {
@@ -298,10 +300,41 @@ nav a:hover {
     height: calc(var(--pico-form-element-height, 2.5rem) * 0.85);
 }
 
-@media (max-width: 768px) {
+@media (max-width: 1024px) {
     .nav-search-container {
-        width: 13rem;
+        /* Default state (collapsed): standard width */
+        width: 2.625rem;
+        transition: width 0.3s ease, border-color 0.3s ease, background 0.3s ease;
     }
+
+    .nav-search-container:not(.collapsed) {
+        position: absolute;
+        top: -5px;
+        /* Cover top padding/margin */
+        bottom: -5px;
+        /* Cover bottom padding/border */
+        left: -10px;
+        /* Bleed to edges */
+        right: -10px;
+        width: auto;
+        max-width: none;
+        height: auto;
+        transform: none;
+        z-index: 9999 !important;
+        /* Force top */
+        background: #13171f !important;
+        /* Hardcoded Pico Slate Dark to ensure opacity */
+        border: none !important;
+        border-bottom: 2px solid var(--accent-gold) !important;
+        border-radius: 0;
+        padding-left: 20px;
+        padding-right: 20px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.5);
+        /* Strong shadow to mask underneath */
+        display: flex;
+        align-items: center;
+    }
+
 }
 
 .nav-search-container.collapsed {

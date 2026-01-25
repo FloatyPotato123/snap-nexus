@@ -102,6 +102,7 @@ export async function handlePlayerHistory(c) {
     const url = new URL(c.req.url);
     const name = url.searchParams.get("name") || url.searchParams.get("q");
     const format = url.searchParams.get("format"); // 'json' or 'text'
+    const qLimit = parseInt(url.searchParams.get("limit") || "100");
 
     if (!name || name.length < 2) {
         if (format === 'text') return c.text("Please provide a search term (min 2 chars).");
@@ -110,7 +111,7 @@ export async function handlePlayerHistory(c) {
 
     try {
         // 1. Search Index (D1) -> Get IDs
-        const candidates = await searchPlayers(c.env.DB, name, 100);
+        const candidates = await searchPlayers(c.env.DB, name, qLimit);
 
         if (candidates.length === 0) {
             if (format === 'text') return c.text("No players found.");

@@ -133,6 +133,95 @@
     border-radius: 8px;
 }
 
+/* Search Suggestions */
+.search-suggestions {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: 0;
+    background: var(--pico-card-background-color);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: var(--pico-border-radius);
+    z-index: 1000;
+    box-shadow: var(--pico-card-box-shadow);
+    display: none;
+    max-height: 350px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.search-suggestion-item {
+    padding: calc(var(--pico-spacing) * 0.5) var(--pico-spacing);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.2s;
+}
+
+.suggestion-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.suggestion-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.suggestion-name {
+    font-size: 0.95rem;
+    font-weight: 400;
+}
+
+.suggestion-name strong,
+.suggestion-aka strong {
+    font-weight: 700;
+    color: var(--pico-contrast);
+}
+
+.suggestion-aka {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    font-style: italic;
+}
+
+.search-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.search-suggestion-item:hover,
+.search-suggestion-item.selected {
+    background: var(--pico-dropdown-hover-background-color, rgba(255, 204, 0, 0.08));
+}
+
+.suggestion-name {
+    font-weight: 500;
+}
+
+.suggestion-rank {
+    font-size: 0.75rem;
+    color: var(--accent-gold);
+    background: rgba(255, 204, 0, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.search-suggestion-footer {
+    padding: calc(var(--pico-spacing) * 0.75) var(--pico-spacing);
+    text-align: center;
+    background: var(--pico-card-sectioning-background-color, rgba(255, 255, 255, 0.03));
+    border-top: 1px solid var(--pico-card-border-color);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--accent-gold);
+}
+
 /* Components */
 .chart-container {
     position: relative;
@@ -199,11 +288,13 @@ nav a:hover {
     border: 1px solid var(--pico-form-element-border-color);
     border-radius: 6.25rem;
     /* Pill shape */
+    position: relative;
+    /* For absolute suggestions */
     padding: 0 0.25rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     width: 25rem;
     max-width: 100%;
-    overflow: hidden;
+    /* overflow: hidden; -- Removed to allow suggestions dropdown */
     height: calc(var(--pico-form-element-height, 2.5rem) * 0.85);
 }
 

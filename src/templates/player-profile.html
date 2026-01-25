@@ -455,7 +455,7 @@
             btn.setAttribute('aria-busy', 'true');
 
             // We wrap the entire generation in the ClipboardItem Promise
-            // This ensures the "write" call happens immediately (sync context) 
+            // This ensures the "write" call happens immediately (sync context)
             const blobPromise = new Promise(async (resolve, reject) => {
                 try {
                     // Check if chart exists
@@ -510,57 +510,79 @@
                     }
 
                     // 2. Setup Layout
-                    // Reduced from 1600x900 to be more screen friendly, but keeping 16:9
-                    const width = 1200;
-                    const height = 675;
-                    const padding = 40;
-                    // Dynamic Header Height: 160 if we show rank, 120 (standard) if we don't
-                    const headerHeight = rankText ? 160 : 120;
+                    const layoutScale = 1.0; // Use this to scale everything proportionally
+                    const width = 1200 * layoutScale;
+                    const height = 675 * layoutScale;
+                    const padding = 30 * layoutScale;
+                    const headerHeight = (rankText ? 160 : 120) * layoutScale;
 
-                    // 3. Setup Export Canvas
+                    // 3. Setup Export Canvas (High-DPI)
+                    const dpi = 3; // 3x DPI - Optimal for compatibility and quality
+                    const highResWidth = width * dpi;
+                    const highResHeight = height * dpi;
+                    const highResPadding = padding * dpi;
+                    const highResHeaderHeight = headerHeight * dpi;
+
                     const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
+                    canvas.width = highResWidth;
+                    canvas.height = highResHeight;
                     const ctx = canvas.getContext('2d');
+
+                    // Quality settings (Must happen AFTER ctx is created)
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
 
                     // 4. Background
                     ctx.fillStyle = '#1e293b'; // Slate 800
-                    ctx.fillRect(0, 0, width, height);
+                    ctx.fillRect(0, 0, highResWidth, highResHeight);
 
                     // 5. Render High-Res Chart (Off-screen)
                     const tempCanvas = document.createElement('canvas');
-                    tempCanvas.width = width - (padding * 2);
-                    tempCanvas.height = height - headerHeight - padding;
+                    tempCanvas.width = highResWidth - (highResPadding * 2);
+                    tempCanvas.height = highResHeight - highResHeaderHeight - highResPadding;
                     const tempCtx = tempCanvas.getContext('2d');
 
                     // Clone Config & Scale Fonts
-                    // Scale factor reduced slightly for smaller canvas
-                    const scaleFactor = 1.5;
                     const originalConfig = seasonChartInstance.config;
                     const newOptions = JSON.parse(JSON.stringify(originalConfig.options));
 
                     newOptions.animation = false; // Instant render
                     newOptions.responsive = false;
                     newOptions.maintainAspectRatio = false;
-                    newOptions.devicePixelRatio = 1; // 1:1 pixel mapping to avoid clipping
+                    newOptions.devicePixelRatio = dpi; // Render at 2x DPI internally
 
-                    // Helper to safely set font size
+                    // Helper to safely set font size and padding
                     const setFont = (obj, size) => {
                         if (!obj.font) obj.font = {};
-                        obj.font.size = size;
+                        obj.font.size = size * dpi;
                         obj.font.family = "'Inter', system-ui, sans-serif";
                     };
 
-                    // Scale Axis Fonts
-                    if (newOptions.scales.x && newOptions.scales.x.ticks) setFont(newOptions.scales.x.ticks, 14 * scaleFactor);
-                    if (newOptions.scales.y && newOptions.scales.y.ticks) setFont(newOptions.scales.y.ticks, 14 * scaleFactor);
-                    if (newOptions.scales.y1 && newOptions.scales.y1.ticks) setFont(newOptions.scales.y1.ticks, 14 * scaleFactor);
+                    const adjustAxis = (axis, fontSize, titleSize) => {
+                        if (!axis) return;
+                        if (!axis.ticks) axis.ticks = {};
+                        setFont(axis.ticks, fontSize);
+                        axis.ticks.padding = 10 * dpi; // Add space between labels and axis lines
+
+                        if (!axis.title) axis.title = {};
+                        setFont(axis.title, titleSize);
+                        axis.title.padding = { top: 10 * dpi, bottom: 0 };
+                    };
+
+                    adjustAxis(newOptions.scales.x, 14, 16);
+                    adjustAxis(newOptions.scales.y, 14, 16);
+                    adjustAxis(newOptions.scales.y1, 14, 16);
 
                     // Scale Legend
                     if (newOptions.plugins && newOptions.plugins.legend && newOptions.plugins.legend.labels) {
-                        setFont(newOptions.plugins.legend.labels, 14 * scaleFactor);
-                        newOptions.plugins.legend.labels.boxWidth = 40; // bigger boxes
+                        setFont(newOptions.plugins.legend.labels, 14);
+                        newOptions.plugins.legend.labels.boxWidth = 40 * dpi;
+                        newOptions.plugins.legend.labels.padding = 20 * dpi;
                     }
+
+                    // Add global chart padding to avoid labels hitting edges
+                    if (!newOptions.layout) newOptions.layout = {};
+                    newOptions.layout.padding = 15 * dpi;
 
                     // Create Temp Chart
                     const tempChart = new Chart(tempCtx, {
@@ -572,10 +594,16 @@
                     // Wait for render (Chart.js needs a tick even with animation:false sometimes)
                     await new Promise(r => setTimeout(r, 50));
 
-                    // Draw Temp Chart to Main Canvas
-                    ctx.drawImage(tempCanvas, padding, headerHeight);
+                    // Draw the high‑DPI temp chart onto the main high‑DPI canvas
+                    ctx.drawImage(
+                        tempCanvas,
+                        0, 0, tempCanvas.width, tempCanvas.height,
+                        highResPadding, highResHeaderHeight,
+                        highResWidth - (highResPadding * 2),
+                        highResHeight - highResHeaderHeight - highResPadding
+                    );
 
-                    // Destroy temp to free memory
+                    // Clean up temporary chart and canvas
                     tempChart.destroy();
                     tempCanvas.remove();
 
@@ -587,34 +615,34 @@
 
                     // Name
                     ctx.fillStyle = '#f8fafc';
-                    ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
+                    ctx.font = `bold ${48 * dpi}px system-ui, -apple-system, sans-serif`;
                     ctx.textAlign = 'left';
-                    ctx.fillText(rawName, padding, padding + 15);
+                    ctx.fillText(rawName, highResPadding, highResPadding + (15 * dpi));
 
                     // Season (Right)
                     ctx.fillStyle = '#94a3b8';
-                    ctx.font = '30px system-ui, -apple-system, sans-serif';
+                    ctx.font = `${30 * dpi}px system-ui, -apple-system, sans-serif`;
                     ctx.textAlign = 'right';
-                    ctx.fillText(seasonName, width - padding, padding + 25);
+                    ctx.fillText(seasonName, highResWidth - highResPadding, highResPadding + (25 * dpi));
 
                     // Rank & SP (Below Name, if exists)
                     if (rankText) {
                         ctx.textAlign = 'left';
-                        const rankY = padding + 75;
+                        const rankY = highResPadding + (75 * dpi);
 
                         ctx.fillStyle = '#2196F3'; // Blue
-                        ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
-                        ctx.fillText(rankText, padding, rankY);
+                        ctx.font = `bold ${32 * dpi}px system-ui, -apple-system, sans-serif`;
+                        ctx.fillText(rankText, highResPadding, rankY);
 
                         if (spText) {
                             const rankWidth = ctx.measureText(rankText).width;
                             ctx.fillStyle = '#ffcc00'; // Gold
-                            ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
-                            ctx.fillText(spText, padding + rankWidth + 25, rankY);
+                            ctx.font = `bold ${32 * dpi}px system-ui, -apple-system, sans-serif`;
+                            ctx.fillText(spText, highResPadding + rankWidth + (25 * dpi), rankY);
                         }
                     }
 
-                    // 7. Finalize Blob
+                    // 7. Finalize Blob (Directly use high-res canvas)
                     canvas.toBlob((blob) => {
                         if (blob) resolve(blob);
                         else reject(new Error("Blob failed"));
@@ -630,13 +658,13 @@
                 new ClipboardItem({ 'image/png': blobPromise })
             ]).then(() => {
                 btn.removeAttribute('aria-busy');
-                btn.innerText = "✅ Copied!";
+                btn.innerText = "✓ Copied";
                 setTimeout(() => btn.innerText = originalText, 2500);
             }).catch((err) => {
-                console.error("Clipboard write failed", err);
+                console.error("Clipboard write failed:", err);
                 btn.removeAttribute('aria-busy');
-                btn.innerText = "❌ Error";
-                // alert("Could not copy: " + (err.message || err));
+                btn.innerText = "✕ Failed";
+                alert("Could not copy: " + (err.name === 'NotAllowedError' ? 'Clipboard permission denied.' : (err.message || err)));
                 setTimeout(() => btn.innerText = originalText, 2500);
             });
         }
@@ -644,5 +672,4 @@
     </script>
 </body>
 
-</html>
 ```

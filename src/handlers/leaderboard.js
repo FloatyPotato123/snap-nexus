@@ -4,11 +4,8 @@ import { searchPlayers, getPlayerHistory, batchGetPlayerHistories } from '../uti
 
 // --- SHARED CONSTANTS ---
 const CACHE_TTL_MS = 60 * 1000; // 1 Minute
-const ALLIANCE_API_URL = "https://quiet-mountain-519c.scottieofaberoth.workers.dev";
-
 // --- STATE/CACHE ---
 let liveLeaderboardCache = { timestamp: 0, data: new Map(), total: 0 };
-let allianceCache = { timestamp: 0, data: new Map() };
 
 // --- HELPERS ---
 
@@ -22,36 +19,6 @@ function getCurrentNameFromHistory(history) {
     return sorted[0].name || "Unknown";
 }
 
-/**
- * Fetches and maps alliances (Player Name -> {tag, name, uuid, playerName})
- */
-async function fetchAllianceMap() {
-    const now = Date.now();
-    if (now - allianceCache.timestamp < CACHE_TTL_MS && allianceCache.data.size > 0) {
-        return allianceCache.data;
-    }
-
-    try {
-        const res = await fetch(ALLIANCE_API_URL);
-        if (!res.ok) return allianceCache.data;
-        const data = await res.json();
-
-        const map = new Map();
-        Object.entries(data).forEach(([playerName, info]) => {
-            const normName = playerName.trim().toLowerCase();
-            map.set(normName, {
-                tag: info.tag,
-                name: info.alliance_name,
-                uuid: info.id,
-                playerName: playerName
-            });
-        });
-        allianceCache = { timestamp: now, data: map };
-        return map;
-    } catch (e) {
-        return allianceCache.data;
-    }
-}
 
 /**
  * Fetches live Top 1000 ranks and global Infinite total from the official API.
@@ -311,9 +278,8 @@ export async function handleGetPlayerProfile(c) {
         targetDate = new Date(Date.UTC(year, month - 1, 15));
     }
 
-    // 1. Fetch History (Names) from D1 AND Alliance Map
+    // 1. Fetch History (Names) from D1
     const historyPromise = getPlayerHistory(c.env.DB, id);
-    const alliancePromise = fetchAllianceMap();
 
     // 2. Fetch Season Stats (Daily)
     const seasonKeys = getSeasonDailyKeys(targetDate);
@@ -323,7 +289,7 @@ export async function handleGetPlayerProfile(c) {
     const historicalKeys = getHistoricalSeasonEndKeys();
     const historyRankPromises = historicalKeys.map(k => c.env.MARVEL_SNAP_HUB.get(k.key, { type: 'json' }).then(data => ({ date: k.date, label: k.seasonName, data })));
 
-    const [history, allianceMap, ...allResults] = await Promise.all([historyPromise, alliancePromise, ...seasonPromises, ...historyRankPromises]);
+    const [history, ...allResults] = await Promise.all([historyPromise, ...seasonPromises, ...historyRankPromises]);
 
     // Split results back out
     const seasonResults = allResults.slice(0, seasonKeys.length);
@@ -359,8 +325,6 @@ export async function handleGetPlayerProfile(c) {
 
     const currentName = getCurrentNameFromHistory(history);
 
-    const allianceInfo = allianceMap.get(currentName.trim().toLowerCase()) || null;
-
     // Determine Current Rank (LIVE)
     const { map: liveRankMap } = await getLiveLeaderboardData();
     const liveEntry = liveRankMap.get(id); // { rank, name }
@@ -388,8 +352,7 @@ export async function handleGetPlayerProfile(c) {
         currentSP: currentSP,
         history: history,
         currentSeasonStats: stats, // Daily stats for current season
-        historicalSeasonRanks: historicalRanks, // Rank at end of past seasons
-        alliance: allianceInfo
+        historicalSeasonRanks: historicalRanks // Rank at end of past seasons
     });
 }
 
@@ -446,118 +409,6 @@ export function handleLegacyHistory(c) {
 
 
 
-export async function handleAllianceProfile(c) {
-    const tag = c.req.param('tag').toUpperCase(); // Tags are usually uppercase
-    if (!tag) return c.json({ error: "Missing Tag" }, 400);
-
-    // 1. Get Live Data (Primary) or Snapshot (Fallback)
-    let leaderboard = [];
-    let snapshotDate = new Date().toISOString().split('T')[0];
-
-    try {
-        const { map: liveMap } = await getLiveLeaderboardData();
-        if (liveMap.size > 0) {
-            leaderboard = Array.from(liveMap.entries()).map(([id, e]) => ({
-                playerId: id,
-                playerName: e.name,
-                rank: e.rank,
-                score: e.score
-            }));
-            snapshotDate = "LIVE";
-        } else {
-            // Fallback to Snapshot
-            let now = new Date();
-            let key = getLeaderboardKey(now);
-            let data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
-
-            if (!data || !data.results) {
-                now.setDate(now.getDate() - 1);
-                key = getLeaderboardKey(now);
-                snapshotDate = now.toISOString().split('T')[0];
-                data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
-            }
-
-            if (data && data.results) {
-                leaderboard = data.results.map(p => ({
-                    ...p,
-                    rank: (p.rank || 0) + 1
-                }));
-            }
-        }
-    } catch (e) {
-        return c.json({ error: "Failed to load leaderboard." }, 500);
-    }
-
-    if (leaderboard.length === 0) return c.json({ error: "No leaderboard data available." }, 404);
-
-    // 2. Get Alliance Map
-    const allianceMap = await fetchAllianceMap();
-
-    // 3. Filter Members
-    const members = [];
-    const aliases = new Set();
-
-    leaderboard.forEach(p => {
-        const lowerName = (p.playerName || '').trim().toLowerCase();
-        const info = allianceMap.get(lowerName);
-
-        if (info && info.tag === tag) {
-            if (info.name) aliases.add(info.name);
-            members.push({
-                id: p.playerId,
-                name: p.playerName,
-                rank: p.rank,
-                score: p.score
-            });
-        }
-    });
-
-    if (members.length === 0) {
-        return c.json({ error: `No members found for [${tag}] in the Top 1000.` }, 404);
-    }
-
-    // 4. Calculate Stats
-
-    const allStats = {};
-    leaderboard.forEach(p => {
-        const lowerName = (p.playerName || '').trim().toLowerCase();
-        const info = allianceMap.get(lowerName);
-        if (info && info.tag && info.tag !== 'UNTAGGED') {
-            if (!allStats[info.tag]) allStats[info.tag] = { count: 0 };
-            allStats[info.tag].count++;
-        }
-    });
-
-    // Sort alliances by member count (Power Rank definition)
-    const sortedTags = Object.entries(allStats)
-        .sort((a, b) => b[1].count - a[1].count)
-        .map(x => x[0]);
-
-    const powerRank = sortedTags.indexOf(tag) + 1;
-
-    // Aggregate our stats
-    const sortedAliases = [...aliases].sort((a, b) => a.localeCompare(b));
-    // Use the first sorted alias as display name fallback (though template will use all)
-    const displayName = sortedAliases[0] || tag;
-
-    // Sort roster by rank
-    const sortedRoster = members.sort((a, b) => a.rank - b.rank);
-
-    const allianceData = {
-        tag: tag,
-        name: displayName,
-        knownNames: sortedAliases, // Alphabetically sorted
-        members: members.length,
-        totalSP: members.reduce((sum, m) => sum + m.score, 0),
-        avgSP: members.length > 0 ? (members.reduce((sum, m) => sum + m.score, 0) / members.length) : 0,
-        highestRank: members.length > 0 ? sortedRoster[0].rank : 0,
-        powerRank: powerRank,
-        snapshotDate: snapshotDate,
-        roster: sortedRoster
-    };
-
-    return c.json(allianceData);
-}
 
 export async function handleLeaderboardComparison(c) {
     const date1Str = c.req.query('date1'); // e.g. Today
@@ -567,11 +418,10 @@ export async function handleLeaderboardComparison(c) {
         return c.json({ error: "Missing date1 or date2" }, 400);
     }
 
-    // Parallel fetch: Leaderboards + Alliances + Live Data
-    const [d1, d2, allianceMap, { map: liveRankMap, total: liveTotal }] = await Promise.all([
+    // Parallel fetch: Leaderboards + Live Data
+    const [d1, d2, { map: liveRankMap, total: liveTotal }] = await Promise.all([
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
-        fetchAllianceMap(),
         getLiveLeaderboardData()
     ]);
 
@@ -579,7 +429,7 @@ export async function handleLeaderboardComparison(c) {
         return c.json({ error: "Data missing for one or both dates." }, 404);
     }
 
-    // Process Momentum & Build Alliance Stats
+    // Process Momentum
     // 1. Build map of Day 2 (Yesterday)
     const prevMap = new Map();
     d2.results.forEach(p => prevMap.set(p.playerId, p.score));
@@ -591,57 +441,16 @@ export async function handleLeaderboardComparison(c) {
         const prevScore = prevMap.get(curr.playerId);
         if (prevScore !== undefined) {
             const diff = curr.score - prevScore;
-            const lowerName = (curr.playerName || '').trim().toLowerCase();
-            const alliance = allianceMap.get(lowerName);
-
             movers.push({
                 name: curr.playerName,
                 id: curr.playerId,
                 change: diff,
                 spStart: prevScore,
                 spEnd: curr.score,
-                rank: curr.rank || 0,
-                alliance: alliance
+                rank: curr.rank || 0
             });
         }
     });
-
-    // --- ALLIANCE LOGIC (LIVE DATA POWERED) ---
-    // Use Live Map if available, otherwise fallback to Snapshot (d1)
-    const sourceData = liveRankMap.size > 0 ? Array.from(liveRankMap.values()) : d1.results;
-    const allianceStats = {};
-
-    sourceData.forEach(entry => {
-        // liveRankMap Entry: { rank, name, score }
-        // d1 Entry: { rank, playerName, score, ... }
-        const name = entry.name || entry.playerName || '';
-        const score = entry.score || 0;
-        const rank = entry.rank || 99999;
-
-        const lowerName = name.trim().toLowerCase();
-        const alliance = allianceMap.get(lowerName);
-
-        if (alliance?.tag && alliance.tag !== 'UNTAGGED') {
-            const key = alliance.tag;
-            if (!allianceStats[key]) {
-                allianceStats[key] = {
-                    tag: alliance.tag,
-                    name: alliance.name,
-                    members: 0,
-                    totalSP: 0,
-                    highestRank: 99999
-                };
-            }
-            allianceStats[key].members++;
-            allianceStats[key].totalSP += score;
-            allianceStats[key].highestRank = Math.min(allianceStats[key].highestRank, rank);
-        }
-    });
-
-    const rankings = Object.values(allianceStats).map(a => ({
-        ...a,
-        avgSP: Math.round(a.totalSP / a.members)
-    }));
 
     movers.sort((a, b) => b.change - a.change);
 
@@ -652,7 +461,6 @@ export async function handleLeaderboardComparison(c) {
     return c.json({
         topGainers: gainers.slice(0, 50),
         topLosers: losers.reverse().slice(0, 50),
-        allianceRankings: rankings.sort((a, b) => b.members - a.members).slice(0, 50),
         date1: date1Str,
         date2: date2Str,
         totalInfinitePlayers: liveTotal

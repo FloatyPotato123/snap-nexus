@@ -253,12 +253,7 @@
                     $('pRank').dataset.rank = '';
                 }
 
-                // Alliance Info
-                // Render Header
-                const allianceHtml = data.alliance ?
-                    `<span class="tag-alliance"><a href="/alliance/${data.alliance.tag}" style="color:inherit; text-decoration:none;">[${data.alliance.tag}]</a></span> ` : '';
-
-                $('pName').innerHTML = `${allianceHtml}${data.name}`;
+                $('pName').innerText = data.name;
                 $('pName').dataset.rawName = data.name;
                 document.title = `${data.name} | Snap Nexus`;
 

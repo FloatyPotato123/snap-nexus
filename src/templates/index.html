@@ -78,46 +78,8 @@
             </div>
         </article>
 
-        <!-- SECTION 2: ALLIANCE RANKINGS -->
-        <section class="mt-40">
-            <div class="mover-card">
-                <h3 class="text-small mb-15">🏆 Alliance Power Ranking</h3>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Alliance</th>
-                            <th id="th-members" style="cursor:pointer;" onclick="sortAlliances('members')">Members <span
-                                    style="color:#666">↕</span></th>
-                            <th id="th-avgSP" style="cursor:pointer;" onclick="sortAlliances('avgSP')">Avg SP <span
-                                    style="color:#666">↕</span></th>
-                            <th id="th-highestRank" style="cursor:pointer;" onclick="sortAlliances('highestRank')">Top
-                                Rank
-                                <span style="color:#666">↕</span>
-                            </th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody id="alliance-table">
-                        <tr>
-                            <td>Loading...</td>
-                        </tr>
-                    </tbody>
-                </table>
-                <!-- Compact Pagination -->
-                <div class="pagination-container">
-                    <small id="pageIndicator" class="text-muted" style="font-variant-numeric: tabular-nums;">Page
-                        1</small>
-                    <div role="group" class="mb-0" style="width:auto;">
-                        <button id="btnPrev" class="outline secondary btn-small" onclick="changeAlliancePage(-1)"
-                            disabled>Prev</button>
-                        <button id="btnNext" class="outline secondary btn-small"
-                            onclick="changeAlliancePage(1)">Next</button>
-                    </div>
-                </div>
-            </div>
-        </section>
 
-        <!-- SECTION 3: MOVERS -->
+        <!-- SECTION 2: MOVERS -->
         <section class="mt-40">
             <div class="grid">
                 <div class="mover-card">
@@ -605,7 +567,6 @@
                     const err = await req.json();
                     $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>No data available (${req.status})</td></tr>`;
                     $('losers-table').querySelector('tbody').innerHTML = `<tr><td>No data available (${req.status})</td></tr>`;
-                    $('alliance-table').innerHTML = `<tr><td colspan="5">No data available for date range</td></tr>`;
                     return;
                 }
                 const data = await req.json();
@@ -627,10 +588,6 @@
                 $('gainers-table').querySelector('tbody').innerHTML = renderRows(data.topGainers, true);
                 $('losers-table').querySelector('tbody').innerHTML = renderRows(data.topLosers, false);
 
-                // Initialize Alliances
-                currentAllianceData = data.allianceRankings || [];
-                // Default sort: Members Desc
-                sortAlliances('members', false);
 
                 // Update Infinite Count
                 if (data.totalInfinitePlayers) {
@@ -648,100 +605,9 @@
             } catch (e) {
                 $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>Error loading data</td></tr>`;
                 $('losers-table').querySelector('tbody').innerHTML = `<tr><td>Error loading data</td></tr>`;
-                $('alliance-table').innerHTML = `<tr><td colspan="4">Error loading data</td></tr>`;
             }
         }
 
-        // --- ALLIANCE SORTING ---
-        let currentAllianceData = [];
-        let sortState = { key: null, asc: false };
-
-        function sortAlliances(key) {
-            // Toggle sort if same key
-            if (sortState.key === key) {
-                sortState.asc = !sortState.asc;
-            } else {
-                sortState.key = key;
-                sortState.asc = true; // Default asc for new key? Actually numbers usually desc.
-                if (key === 'members' || key === 'avgSP') sortState.asc = false; // Higher is better
-                if (key === 'highestRank') sortState.asc = true; // Lower is better (Rank 1)
-            }
-
-            // Sort
-            currentAllianceData.sort((a, b) => {
-                let valA = a[key];
-                let valB = b[key];
-
-                if (valA < valB) return sortState.asc ? -1 : 1;
-                if (valA > valB) return sortState.asc ? 1 : -1;
-                return 0;
-            });
-
-            updateSortIcons();
-            renderAlliances();
-        }
-
-        function updateSortIcons() {
-            const keys = ['members', 'avgSP', 'highestRank'];
-            keys.forEach(k => {
-                const th = $(`th-${k}`);
-                let icon = '↕';
-                let label = '';
-                if (k === 'members') label = 'Members';
-                if (k === 'avgSP') label = 'Avg SP';
-                if (k === 'highestRank') label = 'Top Rank';
-
-                if (sortState.key === k) {
-                    icon = sortState.asc ? '↑' : '↓';
-                }
-
-                th.innerHTML = `${label} <span class="text-muted">${icon}</span>`;
-                if (sortState.key === k) {
-                    th.querySelector('span').style.color = '#fff';
-                }
-            });
-        }
-
-        // --- PAGINATION ---
-        let alliancePage = 1;
-        const allianceRowsPerPage = 10;
-
-        function changeAlliancePage(delta) {
-            alliancePage += delta;
-            renderAlliances();
-        }
-
-        function renderAlliances() {
-            const list = currentAllianceData;
-            const tbody = $('alliance-table');
-            if (!list || !list.length) {
-                tbody.innerHTML = "<tr><td colspan='5'>No data</td></tr>";
-                $('pageIndicator').innerText = "Page 1 of 1";
-                return;
-            }
-
-            // Calculate Slice
-            const start = (alliancePage - 1) * allianceRowsPerPage;
-            const end = start + allianceRowsPerPage;
-            const slice = list.slice(start, end);
-
-            // Render Rows
-            tbody.innerHTML = slice.map(a => {
-                return `<tr>
-                    <td><span class="tag-alliance"><a href="/alliance/${a.tag}" class="card-clickable" style="color:inherit; text-decoration:none;">[${a.tag}]</a></span></td>
-                    <td>${a.members}</td>
-                    <td>${Math.round(a.avgSP).toLocaleString()}</td>
-                    <td>#${a.highestRank}</td>
-                    <td class="text-right"><a href="/alliance/${a.tag}" class="text-muted" style="text-decoration:none; font-size:1.2em;">&rsaquo;</a></td>
-                </tr>`;
-            }).join('');
-
-            // Update Controls
-            const totalPages = Math.ceil(list.length / allianceRowsPerPage);
-            $('pageIndicator').innerText = `Page ${alliancePage} of ${totalPages || 1}`;
-            $('btnPrev').disabled = alliancePage === 1;
-            $('btnNext').disabled = alliancePage >= totalPages;
-        }
     </script>
 </body>
 

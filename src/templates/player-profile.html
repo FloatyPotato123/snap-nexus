@@ -126,8 +126,9 @@
                     <div>Season Performance</div>
                     <div class="text-right"
                         style="display:flex; justify-content:flex-end; gap:10px; align-items:center;">
-                        <button id="shareSeasonGraphBtn" class="outline contrast" onclick="copySeasonGraphImage()"
-                            style="padding: 4px 8px; font-size: 0.8rem; border-radius: 4px;">📸 Copy Image</button>
+                        <button id="shareSeasonGraphBtn" class="btn-ghost" onclick="copySeasonGraphImage()">
+                            📸 Copy
+                        </button>
                         <select id="seasonSelect" class="small-select" style="margin-bottom:0; width:auto;"></select>
                     </div>
                 </header>
@@ -352,7 +353,7 @@
                             display: true,
                             position: 'left',
                             reverse: true, // Rank 1 top
-                            suggestedMin: 1,
+                            min: 1,
                             suggestedMax: 100,
                             title: { display: true, text: 'Rank', color: '#2196F3' },
                             grid: { color: '#333' },
@@ -417,7 +418,7 @@
                             display: true,
                             position: 'left',
                             reverse: true, // Rank 1 top
-                            suggestedMin: 1,
+                            min: 1, // Always show "Best" as 1
                             suggestedMax: 100,
                             title: { display: true, text: 'Rank', color: '#2196F3' },
                             grid: { color: '#333' },

@@ -365,6 +365,7 @@ export async function handleGetPlayerProfile(c) {
     const liveEntry = liveRankMap.get(id); // { rank, name }
 
     let currentRank = liveEntry ? liveEntry.rank : null;
+    let currentSP = liveEntry ? liveEntry.score : null;
     let finalName = liveEntry ? liveEntry.name : currentName;
 
     // Inject live name if it's different from last history entry 
@@ -383,6 +384,7 @@ export async function handleGetPlayerProfile(c) {
         id,
         name: finalName,
         currentRank: currentRank,
+        currentSP: currentSP,
         history: history,
         currentSeasonStats: stats, // Daily stats for current season
         historicalSeasonRanks: historicalRanks, // Rank at end of past seasons

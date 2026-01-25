@@ -234,9 +234,14 @@
                 // Current Rank
                 if (data.currentRank) {
                     $('pRank').innerText = data.currentRank;
+                    $('pRank').dataset.rank = data.currentRank;
+                    // Store Live SP for Image Gen
+                    $('pRank').dataset.sp = data.currentSP || '';
                     $('pRankBadge').style.display = 'block';
                 } else {
                     $('pRankBadge').style.display = 'none';
+                    $('pRank').dataset.sp = '';
+                    $('pRank').dataset.rank = '';
                 }
 
                 // Alliance Info
@@ -245,6 +250,7 @@
                     `<span class="tag-alliance"><a href="/alliance/${data.alliance.tag}" style="color:inherit; text-decoration:none;">[${data.alliance.tag}]</a></span> ` : '';
 
                 $('pName').innerHTML = `${allianceHtml}${data.name}`;
+                $('pName').dataset.rawName = data.name;
                 document.title = `${data.name} | Snap Nexus`;
 
                 // History Timeline
@@ -314,19 +320,20 @@
                             label: 'Rank',
                             data: stats.map(s => s.rank),
                             borderColor: '#2196F3', // Blue
-                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            backgroundColor: 'rgba(33, 150, 243, 0)', // Transparent
                             yAxisID: 'y',
                             tension: 0.2,
-                            fill: true
+                            fill: false,
+                            borderDash: [5, 5]
                         },
                         {
                             label: 'SP',
                             data: stats.map(s => s.sp),
                             borderColor: '#ffcc00', // Gold
-                            backgroundColor: 'rgba(255, 204, 0, 0)',
+                            backgroundColor: 'rgba(255, 204, 0, 0.1)', // Gold Fill
                             yAxisID: 'y1',
                             tension: 0.2,
-                            borderDash: [5, 5]
+                            fill: true
                         }
                     ]
                 },
@@ -342,7 +349,7 @@
                             position: 'left',
                             reverse: true, // Rank 1 top
                             suggestedMin: 1,
-                            suggestedMax: 10,
+                            suggestedMax: 100,
                             title: { display: true, text: 'Rank', color: '#2196F3' },
                             grid: { color: '#333' },
                             ticks: { color: '#2196F3' }
@@ -361,6 +368,8 @@
                     }
                 }
             });
+            // 6. Attach raw stats for image generation
+            seasonChartInstance.rawStats = stats;
         }
 
         function renderHistoricalChart(stats) {
@@ -376,18 +385,20 @@
                             label: 'Season End Rank',
                             data: stats.map(s => s.rank),
                             borderColor: '#2196F3', // Blue (Rank)
-                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            backgroundColor: 'rgba(33, 150, 243, 0)',
                             yAxisID: 'y',
                             tension: 0.2,
-                            fill: true
+                            fill: false,
+                            borderDash: [5, 5]
                         },
                         {
                             label: 'Season End SP',
                             data: stats.map(s => s.sp),
                             borderColor: '#ffcc00', // Gold (SP)
-                            backgroundColor: 'rgba(255, 204, 0, 0)',
+                            backgroundColor: 'rgba(255, 204, 0, 0.1)',
                             yAxisID: 'y1',
-                            tension: 0.2
+                            tension: 0.2,
+                            fill: true
                         }
                     ]
                 },
@@ -403,7 +414,7 @@
                             position: 'left',
                             reverse: true, // Rank 1 top
                             suggestedMin: 1,
-                            suggestedMax: 10,
+                            suggestedMax: 100,
                             title: { display: true, text: 'Rank', color: '#2196F3' },
                             grid: { color: '#333' },
                             ticks: { color: '#2196F3' }
@@ -434,23 +445,73 @@
                     // Check if chart exists
                     if (!seasonChartInstance) throw new Error("No chart to copy");
 
+                    // 1. Calculate Rank/SP Data FIRST to determine layout
+                    let rankText = null;
+                    let spText = null;
+
+                    const selectedVal = $('seasonSelect').value;
+                    if (selectedVal) {
+                        const [yearStr, monthStr] = selectedVal.split('-');
+                        const sYear = parseInt(yearStr);
+                        const sMonth0 = parseInt(monthStr) - 1;
+
+                        const now = new Date();
+                        const active = SnapUtils.getCurrentSeason(now);
+                        const activeKey = `${active.year}-${active.month}`;
+                        const isCurrentSeason = selectedVal === activeKey;
+
+                        const rawStats = seasonChartInstance.rawStats || [];
+
+                        // 1. Current Season Live Data
+                        if (isCurrentSeason) {
+                            const pRankBadge = $('pRankBadge');
+                            if (pRankBadge && pRankBadge.style.display !== 'none') {
+                                rankText = "Rank " + $('pRank').dataset.rank;
+                                const liveSP = $('pRank').dataset.sp;
+                                spText = liveSP ? `${parseInt(liveSP).toLocaleString()} SP` : null;
+                            }
+                        }
+                        // 2. Past Season Historical Data
+                        else if (rawStats.length > 0) {
+                            const lastEntry = rawStats[rawStats.length - 1];
+                            const lastRank = lastEntry.rank;
+                            const lastSP = lastEntry.sp;
+
+                            const seasonEndDate = SnapUtils.getSeasonEndForMonth(sYear, sMonth0);
+                            const seasonEndStr = seasonEndDate.toISOString().split('T')[0];
+
+                            // Also allow the day before (Monday) in case the Tuesday snapshot is missing/empty
+                            const prevDate = new Date(seasonEndDate);
+                            prevDate.setUTCDate(prevDate.getUTCDate() - 1);
+                            const prevDateStr = prevDate.toISOString().split('T')[0];
+
+                            // Check: Data is from Season End OR Day Before
+                            if ((lastEntry.date === seasonEndStr || lastEntry.date === prevDateStr) && lastRank) {
+                                rankText = "Rank " + lastRank;
+                                spText = lastSP ? `${lastSP.toLocaleString()} SP` : null;
+                            }
+                        }
+                    }
+
+                    // 2. Setup Layout
                     // Reduced from 1600x900 to be more screen friendly, but keeping 16:9
                     const width = 1200;
                     const height = 675;
                     const padding = 40;
-                    const headerHeight = 120;
+                    // Dynamic Header Height: 160 if we show rank, 120 (standard) if we don't
+                    const headerHeight = rankText ? 160 : 120;
 
-                    // 1. Setup Export Canvas
+                    // 3. Setup Export Canvas
                     const canvas = document.createElement('canvas');
                     canvas.width = width;
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
 
-                    // 2. Background
+                    // 4. Background
                     ctx.fillStyle = '#1e293b'; // Slate 800
                     ctx.fillRect(0, 0, width, height);
 
-                    // 3. Render High-Res Chart (Off-screen)
+                    // 5. Render High-Res Chart (Off-screen)
                     const tempCanvas = document.createElement('canvas');
                     tempCanvas.width = width - (padding * 2);
                     tempCanvas.height = height - headerHeight - padding;
@@ -502,18 +563,17 @@
                     tempChart.destroy();
                     tempCanvas.remove();
 
-                    // 4. Draw Custom Header Text
-                    const rawName = $('pName').innerText.replace('Loading Profile...', '').trim();
+                    // 6. Draw Custom Header Text
+                    const rawName = $('pName').dataset.rawName || $('pName').innerText.replace('Loading Profile...', '').trim();
                     const seasonName = $('seasonSelect').options[$('seasonSelect').selectedIndex].text;
 
-                    // Draw Text
                     ctx.textBaseline = 'top';
 
                     // Name
                     ctx.fillStyle = '#f8fafc';
                     ctx.font = 'bold 48px system-ui, -apple-system, sans-serif';
                     ctx.textAlign = 'left';
-                    ctx.fillText(rawName, padding, padding + 10); // Vertically centered
+                    ctx.fillText(rawName, padding, padding + 15);
 
                     // Season (Right)
                     ctx.fillStyle = '#94a3b8';
@@ -521,7 +581,24 @@
                     ctx.textAlign = 'right';
                     ctx.fillText(seasonName, width - padding, padding + 25);
 
-                    // 5. Finalize Blob
+                    // Rank & SP (Below Name, if exists)
+                    if (rankText) {
+                        ctx.textAlign = 'left';
+                        const rankY = padding + 75;
+
+                        ctx.fillStyle = '#2196F3'; // Blue
+                        ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+                        ctx.fillText(rankText, padding, rankY);
+
+                        if (spText) {
+                            const rankWidth = ctx.measureText(rankText).width;
+                            ctx.fillStyle = '#ffcc00'; // Gold
+                            ctx.font = 'bold 32px system-ui, -apple-system, sans-serif';
+                            ctx.fillText(spText, padding + rankWidth + 25, rankY);
+                        }
+                    }
+
+                    // 7. Finalize Blob
                     canvas.toBlob((blob) => {
                         if (blob) resolve(blob);
                         else reject(new Error("Blob failed"));

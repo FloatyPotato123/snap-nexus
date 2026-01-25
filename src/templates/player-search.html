@@ -15,12 +15,7 @@
     <main class="container">
         <!-- NAV -->
 
-        <h1 class="text-center text-gold fw-800 mb-40">Find Player</h1>
-
-        <div class="search-hero">
-            <input type="text" id="searchInput" placeholder="Enter Player Name" aria-label="Player Name">
-            <button onclick="searchPlayer()">Search</button>
-        </div>
+        <h1 class="text-center text-gold fw-800 mb-40">Search Players</h1>
 
         <div id="searchResults"></div>
 
@@ -48,7 +43,6 @@
                 const query = params.get('q');
 
                 if (query) {
-                    $('searchInput').value = query;
                     searchPlayer();
                 }
             });
@@ -58,7 +52,8 @@
             let isLoadingMore = false;
 
             async function searchPlayer(isLoadMore = false) {
-                const query = $('searchInput').value.trim();
+                const navSearch = document.getElementById('navSearchInput');
+                const query = navSearch ? navSearch.value.trim() : '';
                 const resDiv = $('searchResults');
                 const loadMoreBtn = $('loadMoreBtn');
                 const loadMoreContainer = $('loadMoreContainer');
@@ -164,7 +159,6 @@
                 }
             }
 
-            $('searchInput').addEventListener('keypress', (e) => { if (e.key === 'Enter') searchPlayer(); });
         </script>
 </body>
 

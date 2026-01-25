@@ -4,18 +4,67 @@
             <a href="/" class="logo-link"
                 style="color:inherit; text-decoration:none; display:flex; align-items:center; gap:0.4rem;">
                 <img src="/logo.png" class="header-logo">
-                <strong>Snap Nexus</strong>
+                <strong style="white-space: nowrap;">Snap Nexus</strong>
             </a>
         </li>
     </ul>
     <ul>
-        <li><a href="/">Home</a></li>
-        <li><a href="/player-search">Search</a></li>
-        <li><a href="/decks">Decks</a></li>
+        <li>
+            <div id="navSearchContainer" class="nav-search-container collapsed">
+                <button id="searchToggle" class="search-toggle-btn" aria-label="Toggle Search">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
+                <input type="search" id="navSearchInput" placeholder="Search Players..." aria-label="Search">
+            </div>
+        </li>
     </ul>
 </nav>
 
 <script>
+    // Navbar Search Logic
+    const navSearch = document.getElementById('navSearchInput');
+    const navSearchContainer = document.getElementById('navSearchContainer');
+    const searchToggle = document.getElementById('searchToggle');
+
+    if (searchToggle && navSearchContainer) {
+        searchToggle.addEventListener('click', () => {
+            navSearchContainer.classList.toggle('collapsed');
+            if (!navSearchContainer.classList.contains('collapsed')) {
+                navSearch.focus();
+            }
+        });
+
+        // Close when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!navSearchContainer.contains(e.target) && !navSearchContainer.classList.contains('collapsed') && !navSearch.value) {
+                navSearchContainer.classList.add('collapsed');
+            }
+        });
+    }
+
+    if (navSearch) {
+        navSearch.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                const query = navSearch.value.trim();
+                if (query) {
+                    window.location.href = `/player-search?q=${encodeURIComponent(query)}`;
+                }
+            }
+        });
+
+        // Sync with URL param
+        const params = new URLSearchParams(window.location.search);
+        const query = params.get('q') || params.get('back_q');
+        if (query) {
+            navSearch.value = query;
+            navSearchContainer.classList.remove('collapsed');
+        }
+    }
+
     // Auto-active link highlight
     (function () {
         try {

@@ -256,6 +256,75 @@ nav a:hover {
     color: var(--accent-gold) !important;
 }
 
+/* Leaderboard Rank Badges */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--accent-gold);
+    /* Gold for everyone */
+}
+
+/* Tiered Leaderboard Styling */
+tr[data-tier="top-10"] strong {
+    font-size: 1.05rem;
+}
+
+/* Sticky Leaderboard Header */
+.leaderboard-table-container thead th {
+    position: sticky;
+    top: 0;
+    background-color: var(--pico-background-color) !important;
+    z-index: 100;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    color: var(--pico-muted-color) !important;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    font-weight: 600;
+}
+
+/* Floating Back to Top Button */
+.back-to-top {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--pico-border-radius);
+    background: transparent;
+    color: var(--pico-muted-color);
+    border: 1px solid var(--pico-muted-border-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease-in-out;
+    z-index: 100;
+}
+
+.back-to-top.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    color: var(--pico-contrast-color);
+    border-color: var(--pico-muted-color);
+    transform: translateY(-2px);
+}
+
+/* Clickable Player Hover Effects */
+.card-clickable:hover strong,
+table td a[href^="/player/"]:hover {
+    color: var(--accent-gold) !important;
+    text-decoration: none;
+}
+
 .nav-search-container input {
     background: transparent !important;
     border: none !important;

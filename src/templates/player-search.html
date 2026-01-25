@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
     <link rel="stylesheet" href="/styles.css">
     <link rel="icon" type="image/png" href="/favicon.ico">
+    <script src="/client-utils.js"></script>
 </head>
 
 <body>
@@ -122,16 +123,18 @@
 
                         // Clickable Card -> Profile
                         const cardHTML = `
-                    <article onclick="window.location.href='${profileUrl}'" class="card-clickable border-purple card-slim">
-                        <div class="match-info">
-                            ${rankHtml}
-                            <div>
-                                <h3 class="text-gold mb-0">${match.name}</h3>
-                                ${akaStr ? akaStr.replace('<div class="text-muted text-small mt-10">', '<div class="aka-text">').replace('</div>', '</div>') : ''} 
+                    <a href="${profileUrl}" class="card-clickable border-purple card-slim" style="text-decoration:none; display:flex !important; color:inherit;">
+                        <article style="margin:0; background:transparent; border:none; padding:0; display:flex; width:100%; align-items:center; justify-content:space-between;">
+                            <div class="match-info">
+                                ${rankHtml}
+                                <div>
+                                    <h3 class="text-gold mb-0">${match.name}</h3>
+                                    ${akaStr ? akaStr.replace('<div class="text-muted text-small mt-10">', '<div class="aka-text">').replace('</div>', '</div>') : ''} 
+                                </div>
                             </div>
-                        </div>
-                        <div class="text-gold" style="font-size:1.5rem;">›</div>
-                    </article>`;
+                            <div class="text-gold" style="font-size:1.5rem;">›</div>
+                        </article>
+                    </a>`;
 
                         // Append to div
                         const tempDiv = document.createElement('div');

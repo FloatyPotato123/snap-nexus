@@ -13,7 +13,8 @@ import {
   handleHistoryRange,
   handleLeaderboardComparison,
   handleLegacyHistory,
-  handleAllianceProfile
+  handleAllianceProfile,
+  handleGetLiveLeaderboard
 } from "./handlers/leaderboard.js";
 import { runDailyScrape } from "./handlers/scraper.js";
 
@@ -22,6 +23,7 @@ import searchHtml from "./templates/player-search.html";
 import profileHtml from "./templates/player-profile.html";
 import decksHtml from "./templates/decks.html";
 import allianceHtml from "./templates/alliance.html";
+import leaderboardHtml from "./templates/leaderboard.html";
 import navbarHtml from "./templates/components/navbar.html";
 
 // Custom CSS
@@ -55,6 +57,7 @@ app.get("/player-search", (c) => c.html(render(searchHtml)));
 app.get("/player/:id", (c) => c.html(render(profileHtml)));
 app.get("/decks", (c) => c.html(render(decksHtml)));
 app.get("/alliance/:tag", (c) => c.html(render(allianceHtml)));
+app.get("/leaderboard", (c) => c.html(render(leaderboardHtml)));
 
 // --- API DATA ROUTES ---
 const api = new Hono();
@@ -69,6 +72,7 @@ api.get("/alliance/:tag", (c) => handleAllianceProfile(c));
 api.get("/cards/new-releases", (c) => getWeeklyCardReleases(c));
 api.get("/season/stats", (c) => handleHistoryRange(c));
 api.get("/leaderboard/daily", (c) => handleLeaderboard(c));
+api.get("/leaderboard/live", (c) => handleGetLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/legacy", (c) => handleLegacyHistory(c));
 

@@ -80,9 +80,10 @@ async function getLiveLeaderboardData() {
 
                 if (id) {
                     newMap.set(id, {
+                        id, // Include ID in the object
                         rank,
                         name: entry.playerName,
-                        score: entry.score // Capture SP
+                        score: entry.score
                     });
                 }
             });
@@ -656,4 +657,18 @@ export async function handleLeaderboardComparison(c) {
         date2: date2Str,
         totalInfinitePlayers: liveTotal
     });
+}
+
+export async function handleGetLiveLeaderboard(c) {
+    try {
+        const { map, total } = await getLiveLeaderboardData();
+        const results = Array.from(map.values()).sort((a, b) => a.rank - b.rank);
+
+        return c.json({
+            results,
+            total
+        });
+    } catch (e) {
+        return c.json({ error: "Failed to fetch live leaderboard." }, 500);
+    }
 }

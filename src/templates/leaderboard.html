@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Leaderboard - Snap Nexus</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.amber.min.css">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+
+<body>
+    <main class="container">
+        <!-- NAV -->
+        <header class="hero-header">
+            <h1 class="hero-title">Infinite Leaderboard</h1>
+        </header>
+
+        <article class="leaderboard-table-container">
+            <div>
+                <table class="striped">
+                    <thead>
+                        <tr>
+                            <th scope="col" style="width: 6rem;">Rank</th>
+                            <th scope="col">Name</th>
+                            <th scope="col" style="text-align: right;">Snap Points</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leaderboardBody">
+                        <!-- Loaded via JS -->
+                    </tbody>
+                </table>
+            </div>
+            <div id="loader" class="status-msg">
+                <span aria-busy="true">Loading leaderboard...</span>
+            </div>
+        </article>
+    </main>
+
+    <button id="backToTop" class="back-to-top" aria-label="Back to Top">
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"></polyline>
+        </svg>
+    </button>
+
+    <script src="/client-utils.js"></script>
+    <script>
+        const $ = id => document.getElementById(id);
+
+        async function fetchLeaderboard() {
+            const body = $('leaderboardBody');
+            const loader = $('loader');
+
+            try {
+                const res = await fetch('/api/leaderboard/live');
+                if (!res.ok) throw new Error('API Error');
+                const { results } = await res.json();
+
+                loader.style.display = 'none';
+
+                body.innerHTML = results.map(p => {
+                    const tier = p.rank <= 10 ? 'top-10' : (p.rank <= 100 ? 'top-100' : 'normal');
+                    return `
+                        <tr class="card-clickable" data-tier="${tier}" onclick="SnapUtils.navigateTo(event, '/player/${p.id}?ref=leaderboard')">
+                            <td>
+                                <span class="rank-badge">#${p.rank}</span>
+                            </td>
+                            <td>
+                                <a href="/player/${p.id}?ref=leaderboard" style="text-decoration:none; color:inherit;" onclick="event.stopPropagation()"><strong>${p.name}</strong></a>
+                            </td>
+                            <td style="text-align: right; font-variant-numeric: tabular-nums;">
+                                ${p.score.toLocaleString()}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                loader.innerHTML = '<span class="error-msg">Failed to load leaderboard. Please try again later.</span>';
+            }
+        }
+
+        // Back to Top Logic
+        const backToTopBtn = $('backToTop');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 500) {
+                backToTopBtn.classList.add('visible');
+            } else {
+                backToTopBtn.classList.remove('visible');
+            }
+        });
+
+        backToTopBtn.addEventListener('click', () => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        });
+
+        window.addEventListener('DOMContentLoaded', fetchLeaderboard);
+    </script>
+</body>
+
+</html>

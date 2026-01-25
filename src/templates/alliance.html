@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
     <!-- Custom CSS -->
     <link rel="stylesheet" href="/styles.css">
+    <script src="/client-utils.js"></script>
 </head>
 
 <body>
@@ -139,9 +140,9 @@
 
             const tbody = $('roster-table');
             tbody.innerHTML = slice.map(p => `
-                <tr>
+                <tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${p.id}')">
                     <td>#${p.rank}</td>
-                    <td><a href="/player/${p.id}" style="text-decoration:none; color:inherit;">${p.name}</a></td>
+                    <td><a href="/player/${p.id}" style="text-decoration:none; color:inherit;" onclick="event.stopPropagation()">${p.name}</a></td>
                     <td>${p.score.toLocaleString()}</td>
                 </tr>
             `).join('');

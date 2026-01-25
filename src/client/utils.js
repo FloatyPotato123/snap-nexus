@@ -34,3 +34,12 @@ window.SnapUtils.animateValue = function (obj, start, end, duration) {
     };
     window.requestAnimationFrame(step);
 };
+
+// Unified Navigation Helper (respects Command/Ctrl click for new tabs)
+window.SnapUtils.navigateTo = function (event, url) {
+    if (event.metaKey || event.ctrlKey) {
+        window.open(url, '_blank');
+    } else {
+        window.location.href = url;
+    }
+};

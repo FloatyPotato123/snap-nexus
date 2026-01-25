@@ -76,15 +76,24 @@
     <main class="container">
         <!-- NAV -->
 
-        <a href="/player-search" id="backLink" class="secondary">← Back to Search Results</a>
+        <a href="/" id="backLink" class="secondary">← Back to Home</a>
 
         <script>
-            // Check for back_q param to preserve search context
+            // Contextual Back Navigation
             const params = new URLSearchParams(window.location.search);
             const backQ = params.get('back_q');
+            const ref = params.get('ref');
+            const backBtn = document.getElementById('backLink');
+
             if (backQ) {
-                // Use 'q' param for search page
-                document.getElementById('backLink').href = `/player-search?q=${encodeURIComponent(backQ)}`;
+                backBtn.innerText = "← Back to Search Results";
+                backBtn.href = `/player-search?q=${encodeURIComponent(backQ)}`;
+            } else if (ref === 'leaderboard') {
+                backBtn.innerText = "← Back to Leaderboard";
+                backBtn.href = "/leaderboard";
+            } else if (ref === 'home') {
+                backBtn.innerText = "← Back to Home";
+                backBtn.href = "/";
             }
         </script>
 

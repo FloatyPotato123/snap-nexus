@@ -21,10 +21,7 @@
 
     <main class="container">
         <!-- NAV -->
-        <hgroup class="hero-header">
-            <h1 class="hero-title">Infinite Dashboard</h1>
-            <p class="text-muted fw-300">Tracking the Global Infinite Leaderboard</p>
-        </hgroup>
+        <h1 class="hero-title text-center mb-40">Infinite Dashboard</h1>
         <!-- SECTION 1: SEASON CHARTS -->
         <article style="position: relative;">
             <header class="grid">
@@ -618,8 +615,8 @@
                         const spContext = (p.spStart && p.spEnd)
                             ? `<span class="text-muted" style="font-size:0.8rem; margin-right:1rem;">${p.spStart} → ${p.spEnd} SP</span>`
                             : '';
-                        return `<tr>
-                            <td><a href="/player/${p.id}" style="color:inherit; text-decoration:none;">${p.name}</a></td>
+                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${p.id}?ref=home')">
+                            <td><a href="/player/${p.id}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${p.name}</a></td>
                             <td style="text-align:right;">
                                 ${spContext}
                                 <span class="${isGain ? 'gainer' : 'loser'}">${isGain ? '+' : ''}${p.change}</span>

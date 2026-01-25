@@ -13,7 +13,8 @@ import {
   handleHistoryRange,
   handleLeaderboardComparison,
   handleLegacyHistory,
-  handleGetLiveLeaderboard
+  handleGetLiveLeaderboard,
+  handleDebugSnapshot
 } from "./handlers/leaderboard.js";
 import { runDailyScrape } from "./handlers/scraper.js";
 
@@ -71,6 +72,7 @@ api.get("/leaderboard/daily", (c) => handleLeaderboard(c));
 api.get("/leaderboard/live", (c) => handleGetLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/legacy", (c) => handleLegacyHistory(c));
+api.get("/debug/snapshot", (c) => handleDebugSnapshot(c));
 
 // Mount API under /api
 app.route("/api", api);

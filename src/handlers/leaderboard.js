@@ -470,14 +470,66 @@ export async function handleLeaderboardComparison(c) {
 
 export async function handleGetLiveLeaderboard(c) {
     try {
+        // 1. Fetch Live Data
         const { map, total } = await getLiveLeaderboardData();
-        const results = Array.from(map.values()).sort((a, b) => a.rank - b.rank);
+
+        // 2. Fetch Yesterday's Snapshot for comparison
+        const yesterday = new Date();
+        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+        const yKey = getLeaderboardKey(yesterday);
+        const prevData = await c.env.MARVEL_SNAP_HUB.get(yKey, { type: 'json' });
+
+        // 3. Build Previous Rank Map
+        const prevRankMap = new Map();
+        if (prevData && prevData.results) {
+            // Guarantee sort order before using index as rank
+            const sortedPrev = [...prevData.results].sort((a, b) => b.score - a.score);
+
+            sortedPrev.forEach((p, i) => {
+                // Ensure ID is string for consistent lookup
+                const r = i + 1;
+                prevRankMap.set(String(p.playerId || p.id), r);
+            });
+        }
+
+        // 4. Calculate Deltas
+        const results = Array.from(map.values())
+            .map(p => {
+                const prevRank = prevRankMap.get(String(p.id));
+                // If we have a previous rank, delta = Prev - Curr.
+                // Example: Was 10, Now 5. Delta = 10 - 5 = +5 (Climbed).
+                // Example: Was 5, Now 10. Delta = 5 - 10 = -5 (Fell).
+                const delta = prevRank ? (prevRank - p.rank) : null;
+                const isNew = prevRank === undefined;
+
+                return { ...p, delta, isNew };
+            })
+            .sort((a, b) => a.rank - b.rank);
 
         return c.json({
             results,
             total
         });
     } catch (e) {
+        console.error("Leaderboard Error:", e);
         return c.json({ error: "Failed to fetch live leaderboard." }, 500);
     }
+}
+
+export async function handleDebugSnapshot(c) {
+    const yesterday = new Date();
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const yKey = getLeaderboardKey(yesterday);
+    const prevData = await c.env.MARVEL_SNAP_HUB.get(yKey, { type: 'json' });
+
+    if (!prevData) return c.json({ error: "No data for yesterday", key: yKey });
+
+    // Show top 5 raw entries
+    const sample = prevData.results ? prevData.results.slice(0, 5) : [];
+
+    return c.json({
+        key: yKey,
+        total: prevData.results ? prevData.results.length : 0,
+        sample: sample
+    });
 }

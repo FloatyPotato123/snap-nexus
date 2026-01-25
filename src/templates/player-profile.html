@@ -104,8 +104,14 @@
             <!-- HEADER -->
             <article class="text-center border-gold">
                 <!-- Current Rank Badge -->
-                <div id="pRankBadge" class="mt-10" style="display:none;">
+                <div id="pRankBadge" class="mt-10" style="display:none; display:inline-block; margin-right: 10px;">
                     <div class="tag-rank-lg">Rank <span id="pRank">--</span></div>
+                </div>
+                <div id="pSPBadge" class="mt-10" style="display:none; vertical-align:top;">
+                    <div class="tag-rank-lg"
+                        style="background: rgba(255, 204, 0, 0.15); color: var(--accent-gold); border: 1px solid rgba(255, 204, 0, 0.3);">
+                        <span id="pSP">--</span> SP
+                    </div>
                 </div>
 
                 <h1 id="pName" class="mt-10 mb-0" style="font-size:2.5rem;"></h1>
@@ -241,13 +247,18 @@
                 $('pName').innerText = data.name;
                 $('pId').innerText = data.id;
 
-                // Current Rank
+                // Current Rank & SP
                 if (data.currentRank) {
                     $('pRank').innerText = data.currentRank;
                     $('pRank').dataset.rank = data.currentRank;
-                    // Store Live SP for Image Gen
-                    $('pRank').dataset.sp = data.currentSP || '';
-                    $('pRankBadge').style.display = 'block';
+
+                    if (data.currentSP) {
+                        $('pRank').dataset.sp = data.currentSP;
+                        $('pSP').innerText = parseInt(data.currentSP).toLocaleString();
+                        $('pSPBadge').style.display = 'inline-block';
+                    }
+
+                    $('pRankBadge').style.display = 'inline-block';
                 } else {
                     $('pRankBadge').style.display = 'none';
                     $('pRank').dataset.sp = '';

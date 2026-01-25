@@ -6,9 +6,8 @@ A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflar
 
 ### 📊 Leaderboard & Profile Tracking
 - **Live Leaderboard**: Tracks Top 1000 Infinite players.
-- **Player Search**: Text-based search (`!whois`) with alias tracking.
-- **Vote & Movers**: Tracks daily rank changes and SP gains.
-- **Alliance Profiles**: Aggregated stats for Alliance tags (`/alliance/:tag`).
+- **Player Search**: Text-based search (`!whois`) with alias tracking and rank sorting.
+- **Gainers & Pumpers**: Tracks daily rank changes and SP gains (formerly Movers & Shakers).
 
 ### 🃏 Game Data
 - **Card Releases**: Tracks weekly card releases (`/api/cards/new-releases`).
@@ -18,7 +17,9 @@ A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflar
 ### 🛠 Tech Stack
 - **Framework**: [Hono](https://hono.dev) (Lightweight Edge standards)
 - **Platform**: Cloudflare Workers
-- **Database**: Cloudflare KV (Key-Value Storage)
+- **Database**: 
+    - **Cloudflare KV**: Snapshot storage.
+    - **Cloudflare D1**: SQL database for search indexing and history.
 - **Build Tool**: esbuild
 - **Styling**: Pico.css
 
@@ -27,17 +28,18 @@ A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflar
 | Path | Description |
 |------|-------------|
 | `/` | Main Dashboard (Leaderboard, Charts) |
+| `/leaderboard` | Infinite Leaderboard Page |
 | `/player-search` | Player Lookup Page |
 | `/player/:id` | Player Profile Page |
 | `/decks` | Deck Builder Page |
-| `/alliance/:tag` | Alliance Stats Page |
 
 ## API Endpoints
 
 | Endpoint | Description |
 |----------|-------------|
-| `/api/leaderboard/daily` | Current Top 1000 Leaderboard |
-| `/api/leaderboard/movers` | Daily Rank Changes (Movers & Shakers) |
+| `/api/leaderboard/live` | Live Top 1000 Leaderboard |
+| `/api/leaderboard/daily` | Current Top 1000 Leaderboard snapshot |
+| `/api/leaderboard/movers` | Daily Rank Changes (Gainers & Pumpers) |
 | `/api/players/search?q={name}` | Search player history |
 | `/api/player/:id` | Get specific player stats |
 | `/api/season/stats` | Season-wide historical stats |

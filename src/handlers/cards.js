@@ -82,61 +82,7 @@ export async function getWeeklyCardReleases(c) {
         const format = c.req.query('format') || 'json';
 
         if (format === 'text') {
-            // Format as Plain Text
-
-            // Helper to render a section (this week / next week) grouped by date
-            const renderSection = (cardList) => {
-                if (!cardList || cardList.length === 0) return "None";
-
-                // Group by Date string (YYYY-MM-DD for sorting)
-                const grouped = {};
-                cardList.forEach(c => {
-                    let d = "Unknown Date";
-                    try {
-                        d = new Date(c.releaseDate).toISOString().split('T')[0];
-                    } catch (e) { d = String(c.releaseDate); }
-
-                    if (!grouped[d]) grouped[d] = [];
-                    grouped[d].push(c);
-                });
-
-                // Sort dates
-                const sortedDates = Object.keys(grouped).sort();
-
-                let sectionOutput = "";
-                sortedDates.forEach(dateKey => {
-                    // Header: "Dec 30"
-                    const dObj = new Date(dateKey);
-                    const header = dObj.toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
-
-                    sectionOutput += `${header}\n`;
-
-                    // Cards
-                    grouped[dateKey].forEach(c => {
-                        // Clean HTML from description
-                        let cleanDesc = (c.description || "").replace(/<[^>]*>/g, "");
-
-                        // Truncate description for chat bots
-                        const MAX_DESC = 100;
-                        if (cleanDesc.length > MAX_DESC) {
-                            cleanDesc = cleanDesc.substring(0, MAX_DESC) + "...";
-                        }
-
-                        sectionOutput += `${c.name} | ${c.cost}/${c.power} | ${cleanDesc}\n`;
-                    });
-                    sectionOutput += "\n";
-                });
-
-                return sectionOutput.trim();
-            };
-
-            let output = "This week:\n";
-            output += renderSection(thisWeekCards);
-
-            output += "\n\nNext week:\n";
-            output += renderSection(nextWeekCards);
-
-            return c.text(output);
+            return c.text(formatCardScheduleText(thisWeekCards, nextWeekCards));
         }
 
         // Default: JSON Response
@@ -149,4 +95,83 @@ export async function getWeeklyCardReleases(c) {
     } catch (e) {
         return c.text(`Error: Failed to fetch card releases. (${e.message})`, 500);
     }
+}
+
+/**
+ * Formats the weekly card schedule into a Nightbot-safe text block (<400 chars).
+ */
+function formatCardScheduleText(thisWeek, nextWeek) {
+    const MAX_TOTAL_CHARS = 400;
+    const allCards = [];
+
+    // 1. Flatten and Prepare
+    const prep = (list) => {
+        if (!list) return;
+        list.forEach(c => {
+            let d = "Unknown";
+            try { d = new Date(c.releaseDate).toISOString().split('T')[0]; } catch (e) { }
+            allCards.push({ ...c, dateKey: d });
+        });
+    };
+    prep(thisWeek);
+    prep(nextWeek);
+
+    if (allCards.length === 0) return "No cards found.";
+
+    // 2. Calculate Overhead
+    // Unique Dates (8 chars each) + Fixed Card Data
+    const uniqueDates = new Set(allCards.map(c => c.dateKey));
+    let fixedCost = (uniqueDates.size * 8); // "Jan 06\n" is ~7-8 chars
+
+    allCards.forEach(c => {
+        // "Name | Cost/Power | \n" (+7 chars separation)
+        fixedCost += (c.name?.length || 0) + `${c.cost}/${c.power}`.length + 7;
+    });
+
+    // 3. Determine Budget
+    let descBudget = Math.max(0, MAX_TOTAL_CHARS - fixedCost);
+
+    // 4. Calculate Proportions
+    const totalDescLen = allCards.reduce((sum, c) => sum + cleanDesc(c.description).length, 0);
+
+    // 5. Render
+    const renderList = (list) => {
+        if (!list || list.length === 0) return "None";
+        const grouped = {};
+        list.forEach(c => {
+            let d = "Unknown";
+            try { d = new Date(c.releaseDate).toISOString().split('T')[0]; } catch (e) { }
+            if (!grouped[d]) grouped[d] = [];
+            grouped[d].push(c);
+        });
+
+        return Object.keys(grouped).sort().map(dateKey => {
+            const dateHeader = new Date(dateKey).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
+            const cardsStr = grouped[dateKey].map(c => {
+                let text = cleanDesc(c.description);
+
+                // Apply Truncation
+                if (totalDescLen > descBudget && descBudget > 0) {
+                    const ratio = text.length / totalDescLen;
+                    const allow = Math.floor(descBudget * ratio);
+                    if (text.length > allow) {
+                        text = text.substring(0, Math.max(0, allow - 3)) + "...";
+                    }
+                } else if (descBudget <= 0) {
+                    text = "";
+                }
+
+                // Clean up trailing separators if description is empty
+                return `${c.name} [${c.cost}/${c.power}]${text ? ': ' + text : ''}`;
+            }).join(" | ");
+
+            return `${dateHeader}: ${cardsStr}`;
+        }).join(" // ");
+    };
+
+    return `${renderList(thisWeek)} // ${renderList(nextWeek)}`.trim();
+}
+
+function cleanDesc(desc) {
+    return (desc || "").replace(/<[^>]*>/g, "");
 }

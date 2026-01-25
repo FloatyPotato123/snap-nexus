@@ -3,7 +3,7 @@ import { getLeaderboardKey } from '../utils/keys.js';
 import { searchPlayers, getPlayerHistory, batchGetPlayerHistories } from '../utils/db.js';
 
 // --- SHARED CONSTANTS ---
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 Minutes
+const CACHE_TTL_MS = 60 * 1000; // 1 Minute
 const ALLIANCE_API_URL = "https://quiet-mountain-519c.scottieofaberoth.workers.dev";
 
 // --- STATE/CACHE ---

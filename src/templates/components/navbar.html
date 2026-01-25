@@ -12,7 +12,7 @@
                 style="text-decoration:none; font-weight: 500; font-size: 0.9rem;">Leaderboard</a>
         </li>
     </ul>
-    <ul>
+    <ul id="searchNavList">
         <li>
             <div id="navSearchContainer" class="nav-search-container collapsed">
                 <button id="searchToggle" class="search-toggle-btn" aria-label="Toggle Search">
@@ -34,11 +34,14 @@
     // Navbar Search Logic
     const navSearch = document.getElementById('navSearchInput');
     const navSearchContainer = document.getElementById('navSearchContainer');
+    const navSearchList = document.getElementById('searchNavList');
     const searchToggle = document.getElementById('searchToggle');
 
     if (searchToggle && navSearchContainer) {
         searchToggle.addEventListener('click', () => {
             navSearchContainer.classList.toggle('collapsed');
+            if (navSearchList) navSearchList.classList.toggle('search-expanded');
+
             if (!navSearchContainer.classList.contains('collapsed')) {
                 navSearch.focus();
             }
@@ -47,10 +50,15 @@
         // Close when clicking outside
         document.addEventListener('click', (e) => {
             if (!navSearchContainer.contains(e.target) && !navSearchContainer.classList.contains('collapsed') && !navSearch.value) {
+                // If on mobile, we might NOT want to collapse? 
+                // Actually, for this hybrid approach, checking width match logic or simple class check is fine.
+                // But since mobile CSS overrides .collapsed, adding the class won't hide it on mobile, which is perfect.
                 navSearchContainer.classList.add('collapsed');
+                if (navSearchList) navSearchList.classList.remove('search-expanded');
             }
         });
     }
+
 
     if (navSearch) {
         const suggestionsBox = document.getElementById('searchSuggestions');
@@ -202,6 +210,7 @@
         if (query) {
             navSearch.value = query;
             navSearchContainer.classList.remove('collapsed');
+            if (navSearchList) navSearchList.classList.add('search-expanded');
         }
     }
 

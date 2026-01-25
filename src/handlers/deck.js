@@ -4,6 +4,9 @@ import { sampleSize } from "lodash-es";
 
 /**
  * Decodes a Marvel Snap deck code into a list of cards.
+ * 
+ * Twitch Command: !decode [code]
+ * Output Example: (1) Bast, (1) Squirrel Girl, (1) The Hood, (2) Havok, (2) Mysterio, (3) Beast, (3) Bishop, (3) Hit-Monkey, (3) Sage, (3) Shadow King, (5) Iron Man, (5) Valkyrie
  */
 export async function handleDecodeDeck(c) {
     const code = c.req.query("code");
@@ -48,6 +51,9 @@ export async function handleDecodeDeck(c) {
 
 /**
  * Returns a 12-card random deck code.
+ * 
+ * Twitch Command: !deckcode
+ * Output Example: UHRydDcsVGhuNSxTcjQsTWRzNixDbGxuV25nQixHcmduNixRazUsU3R0cjcsU2x2clNyZnJGcnN0U3RwczE2LEtkT21nOCxJcm5QdHJ0QixNcnBoNQ==
  */
 export async function handleRandomDeck() {
     const allCards = await getAllCards();
@@ -62,6 +68,9 @@ export async function handleRandomDeck() {
 
 /**
  * Returns 3 random card names for a "Stress" challenge.
+ * 
+ * Twitch Command: !stress
+ * Output Example: Gambit, Deafening Chord, Mister Negative
  */
 export async function handleStressDeck() {
     const allCards = await getAllCards();

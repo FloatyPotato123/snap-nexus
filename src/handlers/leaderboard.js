@@ -124,7 +124,12 @@ export async function handleLeaderboard(c) {
     }
 }
 
-// API: Search Player History
+/**
+ * API: Search Player History
+ * 
+ * Twitch Command: !whois [name]
+ * Output Example: #4 Awesome Andy (aka Dr.ShrimpPuertoRico, Smlz, Negative One-Trick), #10 Cougarrr (aka Cougarrr727, Negative One-Trick), #65 Denish (aka Denish727, Door Hinge (C3 Main), Negative One-Trick), #629 Tequila Pete (aka Guy Spelunky, Negative One-Trick)
+ */
 export async function handlePlayerHistory(c) {
     const url = new URL(c.req.url);
     const name = url.searchParams.get("name") || url.searchParams.get("q");

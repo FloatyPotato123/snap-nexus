@@ -99,6 +99,14 @@ export async function getWeeklyCardReleases(c) {
 
 /**
  * Formats the weekly card schedule into a Nightbot-safe text block (<400 chars).
+ * 
+ * Twitch Command: !newcards
+ * Output Example:
+ * Jan 20
+ * Fin Fang Foom | 7/12 | On Reveal: Gain the Power of front-row enemy cards here.
+ * 
+ * Jan 27
+ * Shang-Chi, Master of the Rings | 3/5 | Game Start: The Ten Rings starts in your hand.
  */
 function formatCardScheduleText(thisWeek, nextWeek) {
     const MAX_TOTAL_CHARS = 400;

@@ -12,6 +12,23 @@
         const navSearchContainer = document.getElementById('navSearchContainer');
         const navSearchList = document.getElementById('searchNavList');
         const searchToggle = document.getElementById('searchToggle');
+        const searchClear = document.getElementById('searchClear');
+
+        // Sync with URL param immediately
+        const params = new URLSearchParams(window.location.search);
+        const query = params.get('q') || params.get('back_q');
+        if (query && navSearch) {
+            navSearch.value = query;
+            if (navSearchContainer) navSearchContainer.classList.remove('collapsed');
+            if (navSearchList) navSearchList.classList.add('search-expanded');
+        }
+
+        // Helper to toggle clear button visibility
+        const toggleClearBtn = () => {
+            if (searchClear && navSearch) {
+                searchClear.style.display = navSearch.value.trim() ? 'flex' : 'none';
+            }
+        };
 
         if (searchToggle && navSearchContainer) {
             searchToggle.addEventListener('click', () => {
@@ -30,6 +47,24 @@
                     if (navSearchList) navSearchList.classList.remove('search-expanded');
                 }
             });
+        }
+
+        // Clear Button Logic
+        if (searchClear && navSearch) {
+            searchClear.addEventListener('click', () => {
+                navSearch.value = '';
+                navSearch.focus();
+                toggleClearBtn();
+                // Also hide suggestions
+                const suggestionsBox = document.getElementById('searchSuggestions');
+                if (suggestionsBox) suggestionsBox.style.display = 'none';
+            });
+
+            // Listen for input to toggle button
+            navSearch.addEventListener('input', toggleClearBtn);
+
+            // Initial check
+            toggleClearBtn();
         }
 
         // --- 2. AUTOCOMPLETE SUGGESTIONS ---
@@ -177,14 +212,8 @@
                 }
             });
 
-            // Sync with URL param
-            const params = new URLSearchParams(window.location.search);
-            const query = params.get('q') || params.get('back_q');
-            if (query) {
-                navSearch.value = query;
-                navSearchContainer.classList.remove('collapsed');
-                if (navSearchList) navSearchList.classList.add('search-expanded');
-            }
+
+
         }
 
         // --- 3. ACTIVE LINK HIGHLIGHT ---

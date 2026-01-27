@@ -932,3 +932,32 @@ header>div {
 .w-auto {
     width: auto !important;
 }
+
+/* Search Clear Button */
+.search-clear-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 0.5rem !important;
+    margin: 0 !important;
+    color: var(--pico-muted-color) !important;
+    cursor: pointer;
+    display: none;
+    /* Toggled by JS */
+    align-items: center;
+    justify-content: center;
+    height: 100% !important;
+    transition: color 0.2s;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.search-clear-btn:hover {
+    color: var(--pico-contrast-color) !important;
+}
+
+/* Ensure input doesn't overlap clear button */
+.nav-search-container input {
+    /* Existing styles are fine, flex layout handles spacing */
+    flex: 1;
+    /* Allow input to grow */
+}

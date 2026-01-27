@@ -80,7 +80,7 @@
                     : '';
 
                 // Pass params
-                const profileUrl = `/player/${match.playerId}?back_q=${encodeURIComponent(query)}`;
+                const profileUrl = `/player/${match.id}?back_q=${encodeURIComponent(query)}`;
 
                 // Rank Badge
                 let rankHtml = '';

@@ -6,8 +6,14 @@
   "type": "module",
   "scripts": {
     "build:client": "esbuild src/client/utils.js --bundle --outfile=dist/client-utils.js.txt --format=iife",
+    "build:profile": "esbuild src/client/profile.js --bundle --outfile=dist/client-profile.js.txt --format=iife",
+    "build:home": "esbuild src/client/home.js --bundle --outfile=dist/client-home.js.txt --format=iife",
+    "build:decks": "esbuild src/client/decks.js --bundle --outfile=dist/client-decks.js.txt --format=iife",
+    "build:search": "esbuild src/client/search.js --bundle --outfile=dist/client-search.js.txt --format=iife",
+    "build:leaderboard": "esbuild src/client/leaderboard.js --bundle --outfile=dist/client-leaderboard.js.txt --format=iife",
+    "build:navbar": "esbuild src/client/navbar.js --bundle --outfile=dist/client-navbar.js.txt --format=iife",
     "build:worker": "esbuild src/index.js --bundle --outfile=dist/index.js --format=esm --loader:.html=text --loader:.css=text --loader:.txt=text",
-    "build": "npm run build:client && npm run build:worker"
+    "build": "npm run build:client && npm run build:profile && npm run build:home && npm run build:decks && npm run build:search && npm run build:leaderboard && npm run build:navbar && npm run build:worker"
   },
   "repository": {
     "type": "git",

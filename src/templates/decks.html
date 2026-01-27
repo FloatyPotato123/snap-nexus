@@ -1,91 +1,27 @@
-<!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<h1 class="text-center text-gold fw-800 mb-40">Deck Generator</h1>
 
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Deck Generator - Snap Nexus</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.slate.min.css">
-    <link rel="stylesheet" href="/styles.css">
-    <link rel="icon" type="image/png" href="/favicon.ico">
-</head>
+<article class="text-center">
+    <p class="text-muted mb-20">Generate random decks or challenge yourself with a stress deck.</p>
 
-<body>
+    <div class="grid">
+        <div>
+            <button onclick="fetchDeck('random')" class="mb-10">Random Deck</button>
+            <small class="text-muted text-small d-block">
+                Get a completely random <strong>12-card</strong> deck.
+            </small>
+        </div>
+        <div>
+            <button class="secondary mb-10" onclick="fetchDeck('stress')">Stress Deck</button>
+            <small class="text-muted text-small d-block">
+                Get <strong>3 cards</strong>. Build the rest as fast as possible!
+            </small>
+        </div>
+    </div>
 
-    <main class="container">
-        <!-- NAV -->
-
-        <h1 class="text-center text-gold fw-800 mb-40">Deck Generator</h1>
-
-        <article class="text-center">
-            <p class="text-muted mb-20">Generate random decks or challenge yourself with a stress deck.</p>
-
-            <div class="grid">
-                <div>
-                    <button onclick="fetchDeck('random')" class="mb-10">Random Deck</button>
-                    <small class="text-muted text-small" style="display:block;">
-                        Get a completely random <strong>12-card</strong> deck.
-                    </small>
-                </div>
-                <div>
-                    <button class="secondary mb-10" onclick="fetchDeck('stress')">Stress Deck</button>
-                    <small class="text-muted text-small" style="display:block;">
-                        Get <strong>3 cards</strong>. Build the rest as fast as possible!
-                    </small>
-                </div>
-            </div>
-
-            <div class="mt-20" style="position: relative;">
-                <button id="copyBtn" onclick="copyDeck()" class="outline btn-small"
-                    style="position: absolute; top: 10px; right: 10px; z-index: 5;">
-                    📋 Copy
-                </button>
-                <pre id="deckResult"
-                    style="text-align:left; min-height:100px; padding:40px 20px 20px 20px; -webkit-user-select: all; user-select: all;">Click a button to generate...</pre>
-            </div>
-        </article>
-
-        <!-- Data Disclaimer -->
-
-    </main>
-
-    <script>
-        async function fetchDeck(type) {
-            // Updated to use /api prefix
-            const endpoint = type === 'random' ? '/api/decks/random' : '/api/decks/stress';
-            const el = document.getElementById('deckResult');
-            el.innerText = "Generating...";
-            el.style.color = "#aaa";
-
-            try {
-                const req = await fetch(endpoint);
-                const text = await req.text();
-                el.innerText = text;
-                el.style.color = "var(--accent-purple)";
-            } catch (e) {
-                el.innerText = "Error fetching deck.";
-                el.style.color = "#f44336";
-            }
-        }
-
-        function copyDeck() {
-            const el = document.getElementById('deckResult');
-            const btn = document.getElementById('copyBtn');
-            const text = el.innerText;
-
-            if (!text || text.includes("Click a button") || text.includes("Generating") || text.includes("Error")) {
-                return;
-            }
-
-            navigator.clipboard.writeText(text).then(() => {
-                const originalText = btn.innerHTML;
-                btn.innerHTML = "✅ Copied!";
-                setTimeout(() => btn.innerHTML = originalText, 2000);
-            }).catch(err => {
-                btn.innerText = "❌ Error";
-            });
-        }
-    </script>
-</body>
-
-</html>
+    <div class="mt-20 relative">
+        <button id="copyBtn" onclick="copyDeck()" class="outline btn-small copy-btn-abs">
+            📋 Copy
+        </button>
+        <pre id="deckResult" class="deck-pre">Click a button to generate...</pre>
+    </div>
+</article>

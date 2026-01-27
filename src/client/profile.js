@@ -161,6 +161,20 @@
         const ctx = $('seasonChart').getContext('2d');
         if (seasonChartInstance) seasonChartInstance.destroy();
 
+        // Calc SP Range
+        const spValues = stats.map(s => s.sp).filter(v => v > 0);
+        let minSP = undefined;
+        let maxSP = undefined;
+        if (spValues.length > 0) {
+            let dMin = Math.min(...spValues);
+            let dMax = Math.max(...spValues);
+            if ((dMax - dMin) < 1000) {
+                const mid = (dMax + dMin) / 2;
+                minSP = mid - 500;
+                maxSP = mid + 500;
+            }
+        }
+
         seasonChartInstance = new Chart(ctx, {
             type: 'line',
             data: {
@@ -212,6 +226,8 @@
                         display: true,
                         position: 'right',
                         title: { display: true, text: 'Snap Points', color: '#ffcc00' },
+                        suggestedMin: minSP,
+                        suggestedMax: maxSP,
                         grid: { drawOnChartArea: false },
                         ticks: { color: '#ffcc00' }
                     }
@@ -228,6 +244,20 @@
     function renderHistoricalChart(stats) {
         const ctx = $('historicalChart').getContext('2d');
         if (historicalChartInstance) historicalChartInstance.destroy();
+
+        // Calc SP Range
+        const spValues = stats.map(s => s.sp).filter(v => v > 0);
+        let minSP = undefined;
+        let maxSP = undefined;
+        if (spValues.length > 0) {
+            let dMin = Math.min(...spValues);
+            let dMax = Math.max(...spValues);
+            if ((dMax - dMin) < 1000) {
+                const mid = (dMax + dMin) / 2;
+                minSP = mid - 500;
+                maxSP = mid + 500;
+            }
+        }
 
         historicalChartInstance = new Chart(ctx, {
             type: 'line',
@@ -277,6 +307,8 @@
                         display: true,
                         position: 'right',
                         title: { display: true, text: 'Snap Points', color: '#ffcc00' },
+                        suggestedMin: minSP,
+                        suggestedMax: maxSP,
                         grid: { drawOnChartArea: false },
                         ticks: { color: '#ffcc00' }
                     }

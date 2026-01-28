@@ -264,7 +264,7 @@
 }
 
 /* Nav Polish */
-nav.container-fluid {
+nav.container {
     border-bottom: 1px solid var(--pico-muted-border-color);
     padding-bottom: 10px;
     margin-bottom: 40px !important;

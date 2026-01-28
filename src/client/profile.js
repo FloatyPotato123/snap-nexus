@@ -386,7 +386,7 @@
                 const headerHeight = (rankText ? 160 : 120) * layoutScale;
 
                 // 3. Setup Export Canvas (High-DPI)
-                const dpi = 3;
+                const dpi = 2; // "Retina" resolution for standard high-quality share image
                 const highResWidth = width * dpi;
                 const highResHeight = height * dpi;
                 const highResPadding = padding * dpi;
@@ -453,10 +453,20 @@
                 if (!newOptions.layout) newOptions.layout = {};
                 newOptions.layout.padding = 15 * dpi;
 
+                // Clone Data to adjust line thickness
+                const newData = JSON.parse(JSON.stringify(originalConfig.data));
+                newData.datasets.forEach(ds => {
+                    // Set line thickness (default is 3, using 3.5 for clarity in high-res)
+                    ds.borderWidth = 3.5 * dpi;
+                    if (ds.borderDash) {
+                        ds.borderDash = ds.borderDash.map(v => v * dpi);
+                    }
+                });
+
                 // Create Temp Chart
                 const tempChart = new Chart(tempCtx, {
                     type: 'line',
-                    data: originalConfig.data, // Shared data reference is fine
+                    data: newData,
                     options: newOptions
                 });
 

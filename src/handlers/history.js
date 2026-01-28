@@ -1,6 +1,7 @@
 import { getSeasonStart, getSeasonEnd } from '../utils/seasons.js';
 import { getLeaderboardKey } from '../utils/keys.js';
 import { HISTORICAL_DATA } from '../utils/legacy_data.js';
+import { getDailyTotalsRange } from '../utils/db.js';
 
 // --- HELPERS ---
 
@@ -73,30 +74,14 @@ export async function handleHistoryRange(c) {
         dates.push(new Date(d));
     }
 
-    // Limit range to prevent massive fetching
-    if (dates.length > 60) {
-        return c.json({ error: "Date range too large (max 60 days)" }, 400);
+    // Limit range to prevent massive fetching (though D1 is much more efficient)
+    if (dates.length > 90) {
+        return c.json({ error: "Date range too large (max 90 days)" }, 400);
     }
 
-    const results = await Promise.all(dates.map(async date => {
-        const y = date.getUTCFullYear();
-        const m = String(date.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(date.getUTCDate()).padStart(2, '0');
-        const key = getLeaderboardKey(date);
-
-        try {
-            const data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
-            return {
-                date: `${y}-${m}-${d}`,
-                total: data ? data.total : null
-            };
-        } catch (e) {
-            return { date: `${y}-${m}-${d}`, total: null };
-        }
-    }));
-
-    // Filter out nulls/future dates if needed, or return all
-    return c.json(results.filter(r => r.total !== null));
+    // D1 Path
+    const results = await getDailyTotalsRange(c.env.DB, start, end);
+    return c.json(results);
 }
 
 export function handleLegacyHistory(c) {

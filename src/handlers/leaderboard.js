@@ -1,5 +1,5 @@
-import { getCurrentSeason } from '../utils/seasons.js';
 import { getLeaderboardKey } from '../utils/keys.js';
+import { getCurrentSeason } from '../utils/seasons.js';
 
 // --- SHARED CONSTANTS ---
 const CACHE_TTL_MS = 60 * 1000; // 1 Minute
@@ -89,7 +89,7 @@ export async function handleLeaderboardComparison(c) {
     }
 
     // Parallel fetch: Leaderboards + Live Data
-    const [d1, d2, { map: liveRankMap, total: liveTotal }] = await Promise.all([
+    const [d1, d2, { total: liveTotal }] = await Promise.all([
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
         c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
         getLiveLeaderboardData()
@@ -100,31 +100,29 @@ export async function handleLeaderboardComparison(c) {
     }
 
     // Process Momentum
-    // 1. Build map of Day 2 (Yesterday)
     const prevMap = new Map();
-    d2.results.forEach(p => prevMap.set(p.playerId, p.score));
+    if (d2.results) d2.results.forEach(p => prevMap.set(p.playerId || p.id, p.score));
 
     const movers = [];
-
-    // We strictly use d1 (Snapshot) for Movers to ensure consistency with the "24h Change" logic
-    d1.results.forEach(curr => {
-        const prevScore = prevMap.get(curr.playerId);
-        if (prevScore !== undefined) {
-            const diff = curr.score - prevScore;
-            movers.push({
-                name: curr.playerName,
-                id: curr.playerId,
-                change: diff,
-                spStart: prevScore,
-                spEnd: curr.score,
-                rank: curr.rank || 0
-            });
-        }
-    });
+    if (d1.results) {
+        d1.results.forEach(curr => {
+            const pid = curr.playerId || curr.id;
+            const prevScore = prevMap.get(pid);
+            if (prevScore !== undefined) {
+                const diff = curr.score - prevScore;
+                movers.push({
+                    name: curr.playerName || curr.name,
+                    id: pid,
+                    change: diff,
+                    spStart: prevScore,
+                    spEnd: curr.score,
+                    rank: curr.rank || 0
+                });
+            }
+        });
+    }
 
     movers.sort((a, b) => b.change - a.change);
-
-    // Explicitly filter to avoid crossover
     const gainers = movers.filter(m => m.change > 0);
     const losers = movers.filter(m => m.change < 0);
 
@@ -142,7 +140,7 @@ export async function handleGetLiveLeaderboard(c) {
         // 1. Fetch Live Data
         const { map, total } = await getLiveLeaderboardData();
 
-        // 2. Fetch Yesterday's Snapshot for comparison
+        // 2. Fetch Yesterday's Snapshot for comparison from KV (Most efficient for full 1k list)
         const yesterday = new Date();
         yesterday.setUTCDate(yesterday.getUTCDate() - 1);
         const yKey = getLeaderboardKey(yesterday);
@@ -155,7 +153,6 @@ export async function handleGetLiveLeaderboard(c) {
             const sortedPrev = [...prevData.results].sort((a, b) => b.score - a.score);
 
             sortedPrev.forEach((p, i) => {
-                // Ensure ID is string for consistent lookup
                 const r = i + 1;
                 prevRankMap.set(String(p.playerId || p.id), r);
             });
@@ -165,9 +162,6 @@ export async function handleGetLiveLeaderboard(c) {
         const results = Array.from(map.values())
             .map(p => {
                 const prevRank = prevRankMap.get(String(p.id));
-                // If we have a previous rank, delta = Prev - Curr.
-                // Example: Was 10, Now 5. Delta = 10 - 5 = +5 (Climbed).
-                // Example: Was 5, Now 10. Delta = 5 - 10 = -5 (Fell).
                 const delta = prevRank ? (prevRank - p.rank) : null;
                 const isNew = prevRank === undefined;
 

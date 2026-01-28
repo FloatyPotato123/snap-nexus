@@ -1,6 +1,7 @@
-import { searchPlayers, getPlayerHistory } from '../utils/db.js';
-import { getCurrentSeason } from '../utils/seasons.js';
+import { searchPlayers, getPlayerHistory, getPlayerStatsRange, batchGetPlayerHistories, getPlayerHistoricalRanks } from '../utils/db.js';
+import { getCurrentSeason, getSeasonStart, getSeasonEnd } from '../utils/seasons.js';
 import { getSeasonDailyKeys, getHistoricalSeasonEndKeys } from './history.js';
+import { getLiveLeaderboardData } from './leaderboard.js';
 
 // --- HELPERS ---
 
@@ -86,14 +87,15 @@ export async function handlePlayerHistory(c) {
     }
 
     // 2. Fetch Live Data for cross-reference
-    // Dynamic import to avoid circular dependency issues if any, though standard import works if careful.
-    // referencing the same file structure as handleGetPlayerProfile
-    const { map: liveMap } = await import('./leaderboard.js').then(m => m.getLiveLeaderboardData());
+    const { map: liveMap } = await getLiveLeaderboardData();
 
     // 3. Hydrate with History & Live Data
+    const playerIds = uniqueResults.map(p => p.id);
+    const historyMap = await batchGetPlayerHistories(db, playerIds);
+
     const enrichedResults = [];
     for (const p of uniqueResults) {
-        const history = await getPlayerHistory(db, p.id);
+        const history = historyMap[p.id] || [];
         let currentName = getCurrentNameFromHistory(history) || p.name;
         let currentRank = null;
 
@@ -107,7 +109,7 @@ export async function handlePlayerHistory(c) {
         enrichedResults.push({
             id: p.id,
             name: currentName,
-            currentRank: currentRank, // API clients like search.js use this
+            currentRank: currentRank,
             history: history
         });
     }
@@ -142,62 +144,58 @@ export async function handleGetPlayerProfile(c) {
     // 1. Fetch History (Names) from D1
     const historyPromise = getPlayerHistory(db, id);
 
-    // 2. Fetch Season Stats (Daily)
-    const seasonKeys = getSeasonDailyKeys(targetDate);
-    // Use c.env.MARVEL_SNAP_HUB directly for KV
-    const seasonPromises = seasonKeys.map(k => c.env.MARVEL_SNAP_HUB.get(k.key, { type: 'json' }).then(data => ({ date: k.date, data })));
+    // 2. Fetch Season Stats from D1 (New Table)
+    // Calculate season boundaries
+    const seasonStart = getSeasonStart(targetDate);
+    const seasonEnd = getSeasonEnd(seasonStart);
 
-    // 3. Fetch Historical Season Ends
+    // Skip the first Tuesday (Reset Day) in the chart, as it belongs to the previous season's final data.
+    const chartStart = new Date(seasonStart);
+    chartStart.setUTCDate(chartStart.getUTCDate() + 1);
+
+    const startDateStr = chartStart.toISOString().split('T')[0];
+    const endDateStr = seasonEnd.toISOString().split('T')[0];
+
+    // Fetch stats from D1
+    const d1StatsPromise = getPlayerStatsRange(db, id, startDateStr, endDateStr);
+
+    // 3. Historical Season Ends
+    // We now fetch these from D1 in one batch!
     const historicalKeys = getHistoricalSeasonEndKeys();
-    const historyRankPromises = historicalKeys.map(k => c.env.MARVEL_SNAP_HUB.get(k.key, { type: 'json' }).then(data => ({ date: k.date, label: k.seasonName, data })));
+    const historicalDates = historicalKeys.map(k => k.date);
 
-    const [history, ...allResults] = await Promise.all([historyPromise, ...seasonPromises, ...historyRankPromises]);
+    // Parallel fetch: everything needed for the profile
+    const [history, d1Stats, d1HistoricalResults, { map: liveMap }] = await Promise.all([
+        historyPromise,
+        d1StatsPromise,
+        getPlayerHistoricalRanks(db, id, historicalDates),
+        getLiveLeaderboardData()
+    ]);
 
-    // Split results back out
-    const seasonResults = allResults.slice(0, seasonKeys.length);
-    const historyRankResults = allResults.slice(seasonKeys.length);
+    // Format D1 stats for the frontend
+    const currentSeasonStats = d1Stats.map(s => ({
+        date: s.date,
+        rank: s.rank,
+        sp: s.score
+    }));
 
-    if (!history || history.length === 0) {
-        // Fallback: If no history in D1, try to find in current leaderboard
-        // This can happen if scraper hasn't run or indexing is slightly behind live
-    }
-
-    // Process Current Season Stats
-    const currentSeasonStats = seasonResults
-        .filter(r => r.data && r.data.results)
-        .map(r => {
-            const entry = r.data.results.find(p => p.playerId === id || p.id === id);
-            if (!entry) return null;
-            return {
-                date: r.date,
-                rank: entry.rank + 1,
-                sp: entry.score
-            };
-        })
-        .filter(s => s !== null);
-
-    // Process Historical Ranks
-    const historicalRanks = historyRankResults
-        .map(r => {
-            if (!r.data || !r.data.results) return null;
-            const entry = r.data.results.find(p => p.playerId === id || p.id === id);
-            if (!entry) return null;
-            return {
-                season: r.label,
-                rank: entry.rank + 1,
-                sp: entry.score
-            };
-        })
-        .filter(s => s !== null);
+    // Process Historical Ranks from D1
+    const historicalRanks = d1HistoricalResults.map(r => {
+        const keyInfo = historicalKeys.find(k => k.date === r.date);
+        return {
+            season: keyInfo ? keyInfo.seasonName : r.date,
+            rank: r.rank,
+            sp: r.sp
+        };
+    });
 
 
     const currentName = getCurrentNameFromHistory(history);
 
-    // Get Live Stats (Rank/SP) if available
-    const { map: liveMap } = await import('./leaderboard.js').then(m => m.getLiveLeaderboardData());
+    // 4. Get Live Stats (Rank/SP) if available
     let currentRank = null;
     let currentSP = null;
-    let finalName = currentName; // Default
+    let finalName = currentName;
 
     if (liveMap.has(id)) {
         const liveData = liveMap.get(id);

@@ -66,20 +66,25 @@ export async function upsertPlayer(db, id, name, seenAt) {
     `;
 
     const history = await getPlayerHistory(db, id);
-    let shouldInsert = true;
+    let nameChanged = true;
     if (history && history.length > 0) {
         const latest = history[history.length - 1];
         if (latest.name === name) {
-            shouldInsert = false;
+            nameChanged = false;
         }
     }
 
     try {
-        const batch = [db.prepare(sqlMain).bind(id, name, normalized, now)];
-        if (shouldInsert) {
+        const batch = [];
+        // Only update identity if name actually changed
+        if (nameChanged) {
+            batch.push(db.prepare(sqlMain).bind(id, name, normalized, now));
             batch.push(db.prepare(sqlAlias).bind(id, name, normalized, date));
         }
-        await db.batch(batch);
+
+        if (batch.length > 0) {
+            await db.batch(batch);
+        }
     } catch (e) {
         console.error("DB Upsert Error:", id, name, e);
         throw e;
@@ -129,7 +134,6 @@ export async function batchUpsertPlayers(db, players, seenAt) {
             historyMap = await batchGetPlayerHistories(db, playerIds);
         } catch (e) {
             console.error(`Batch History Fetch Error (Chunk ${i}):`, e);
-            // Continue with empty history (safe fallback, might duplicate aliases but won't crash)
         }
 
         const statements = [];
@@ -138,21 +142,20 @@ export async function batchUpsertPlayers(db, players, seenAt) {
             if (!p.id || !p.name) continue;
             const normalized = p.name.toLowerCase();
 
-            // Update Master Table (Always updates "Current Name")
-            statements.push(stmtMain.bind(p.id, p.name, normalized, now));
-
-            // Logic: Should we insert a new history entry?
+            // Logic: Periodic Identity Update (Write Optimization)
+            // Only update history AND master record if name actually changed.
             const history = historyMap[p.id];
-            let shouldInsert = true;
+            let nameChanged = true;
 
             if (history && history.length > 0) {
                 const latest = history[history.length - 1];
                 if (latest.name === p.name) {
-                    shouldInsert = false;
+                    nameChanged = false;
                 }
             }
 
-            if (shouldInsert) {
+            if (nameChanged) {
+                statements.push(stmtMain.bind(p.id, p.name, normalized, now));
                 statements.push(stmtAlias.bind(p.id, p.name, normalized, date));
             }
         }
@@ -223,5 +226,104 @@ export async function batchGetPlayerHistories(db, playerIds) {
     } catch (e) {
         console.error("DB Batch History Error:", e);
         return {};
+    }
+}
+
+/**
+ * Get player stats for a specific set of dates (e.g. season ends)
+ * @param {D1Database} db 
+ * @param {string} playerId 
+ * @param {Array<string>} dates 
+ */
+export async function getPlayerHistoricalRanks(db, playerId, dates) {
+    if (!dates || dates.length === 0) return [];
+
+    const placeholders = dates.map(() => '?').join(',');
+    const sql = `
+        SELECT date, rank, score as sp
+        FROM PlayerStats
+        WHERE player_id = ? AND date IN (${placeholders})
+        ORDER BY date ASC
+    `;
+
+    try {
+        const { results } = await db.prepare(sql).bind(playerId, ...dates).all();
+        return results || [];
+    } catch (e) {
+        console.error("DB Historical Ranks Error:", e);
+        return [];
+    }
+}
+
+
+/**
+ * Record daily total infinite player count
+ */
+export async function recordDailyTotal(db, date, total) {
+    const sql = `INSERT OR REPLACE INTO DailyTotals (date, total) VALUES (?, ?)`;
+    try {
+        await db.prepare(sql).bind(date, total).run();
+    } catch (e) {
+        console.error("DB DailyTotal Error:", e);
+    }
+}
+
+/**
+ * Record daily player ranking/score stats in bulk
+ */
+export async function recordPlayerStats(db, date, entries) {
+    if (!entries || entries.length === 0) return;
+
+    const sql = `INSERT OR REPLACE INTO PlayerStats (player_id, date, rank, score) VALUES (?, ?, ?, ?)`;
+    const stmt = db.prepare(sql);
+
+    // Process in larger chunks to stay under the 1000 sub-request limit per Worker invocation
+    const CHUNK_SIZE = 500;
+    for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
+        const chunk = entries.slice(i, i + CHUNK_SIZE);
+        const statements = chunk.map(p => stmt.bind(p.playerId || p.id, date, p.rank, p.score));
+        try {
+            await db.batch(statements);
+        } catch (e) {
+            console.error("DB PlayerStats Error:", e);
+        }
+    }
+}
+
+/**
+ * Get historical stats for a single player
+ */
+export async function getPlayerStatsRange(db, playerId, start, end) {
+    const sql = `
+        SELECT date, rank, score 
+        FROM PlayerStats 
+        WHERE player_id = ? AND date BETWEEN ? AND ?
+        ORDER BY date ASC
+    `;
+    try {
+        const { results } = await db.prepare(sql).bind(playerId, start, end).all();
+        return results || [];
+    } catch (e) {
+        console.error("DB GetStats Error:", e);
+        return [];
+    }
+}
+
+/**
+ * Get historical daily totals for a range
+ */
+export async function getDailyTotalsRange(db, start, end) {
+    const sql = `
+        SELECT date, total 
+        FROM DailyTotals 
+        WHERE date BETWEEN ? AND ?
+        ORDER BY date ASC
+    `;
+    try {
+        const { results } = await db.prepare(sql).bind(start, end).all();
+        return results || [];
+    } catch (e) {
+        console.error("DB GetTotals Error:", e);
+        return [];
     }
 }

@@ -1,6 +1,6 @@
 import { getCurrentSeason, getSeasonStartForMonth } from '../utils/seasons.js';
 import { getLeaderboardKey } from '../utils/keys.js';
-import { batchUpsertPlayers } from "../utils/db.js";
+import { batchUpsertPlayers, recordDailyTotal, recordPlayerStats } from "../utils/db.js";
 
 const SEASON_ROLLOVER_BUFFER_MINUTES = 15;
 
@@ -46,6 +46,22 @@ export async function runDailyScrape(env) {
         if (playersToSync.length > 0) {
             await batchUpsertPlayers(env.DB, playersToSync, seenAt);
         }
+
+        // 4. Record Daily Stats
+        // Record Global Total
+        await recordDailyTotal(env.DB, seenAt, data.total || 0);
+
+        // Record Top 1000 Player Stats for charts
+        const statsEntries = leaderboard.map((p, index) => ({
+            playerId: String(p.id || p.playerId),
+            rank: index + 1,
+            score: p.score
+        })).filter(s => s.playerId);
+
+        if (statsEntries.length > 0) {
+            await recordPlayerStats(env.DB, seenAt, statsEntries);
+        }
+
     } catch (e) {
         console.error("[Scraper] Error:", e.message);
     }

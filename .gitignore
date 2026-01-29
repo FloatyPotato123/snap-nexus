@@ -3,8 +3,7 @@
 
 # Build output
 dist/
-app/public/_worker.js
-app/public/client/*.js
+app/public/
 scraper/dist/
 
 # Installed npm dependencies

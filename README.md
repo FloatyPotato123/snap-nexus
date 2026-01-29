@@ -41,11 +41,21 @@ The project is split into two main components:
    npm install
    ```
 
-2. **Run Locally**
+## 💻 Local Development Workflow
+
+The development environment is fully automated. You only need one command:
+
+1. **Run Dev Server**:
    ```bash
    npm run dev
    ```
-   *Note: This command uses unified remote bindings, connecting your local server to live Cloudflare D1/KV data.*
+   This command automatically:
+   - Performs an initial build of all assets.
+   - **Watches** for changes in both frontend (`app/src/client/`) and backend (`app/src/handlers/`, templates, etc.).
+   - Connects to your live Cloudflare D1/KV data automatically (configured in `wrangler.toml`).
+
+2. **Save and Refresh**:
+   Just edit any file in `app/src/` and hit save. The watcher will re-bundle the change in the background. Simply refresh your browser to see the result.
 
 3. **Build**
    ```bash

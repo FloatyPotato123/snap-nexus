@@ -5,17 +5,13 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "npm run build:worker && npx wrangler pages dev app/public --persist-to=production",
-    "build:client": "esbuild app/src/client/utils.js --bundle --outfile=app/public/client/utils.js --format=iife",
-    "build:profile": "esbuild app/src/client/profile.js --bundle --outfile=app/public/client/profile.js --format=iife",
-    "build:home": "esbuild app/src/client/home.js --bundle --outfile=app/public/client/home.js --format=iife",
-    "build:decks": "esbuild app/src/client/decks.js --bundle --outfile=app/public/client/decks.js --format=iife",
-    "build:search": "esbuild app/src/client/search.js --bundle --outfile=app/public/client/search.js --format=iife",
-    "build:leaderboard": "esbuild app/src/client/leaderboard.js --bundle --outfile=app/public/client/leaderboard.js --format=iife",
-    "build:navbar": "esbuild app/src/client/navbar.js --bundle --outfile=app/public/client/navbar.js --format=iife",
+    "dev": "npm run build && (npm run build:client -- --watch & npm run build:worker -- --watch & npm run build:css -- --watch & npx wrangler pages dev app/public)",
+    "build:client": "esbuild app/src/client/*.js --bundle --outdir=app/public/client --format=iife",
+    "build:assets": "cp app/src/assets/* app/public/",
+    "build:css": "esbuild app/src/styles/custom.css --outfile=app/public/styles.css --bundle",
     "build:worker": "esbuild app/functions/[[path]].js --bundle --outfile=app/public/_worker.js --format=esm --loader:.html=text --loader:.css=text",
     "build:scraper": "esbuild scraper/src/index.js --bundle --outfile=scraper/dist/index.js --format=esm",
-    "build": "npm run build:client && npm run build:profile && npm run build:home && npm run build:decks && npm run build:search && npm run build:leaderboard && npm run build:navbar && npm run build:worker && npm run build:scraper"
+    "build": "npm run build:css && npm run build:assets && npm run build:client && npm run build:worker && npm run build:scraper"
   },
   "repository": {
     "type": "git",

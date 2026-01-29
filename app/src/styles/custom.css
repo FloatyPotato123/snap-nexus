@@ -1,0 +1,1196 @@
+/* Custom Overrides for Marvel Snap Hub (Pico.css) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+    --pico-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --pico-border-radius: 8px;
+    --pico-form-element-spacing-vertical: 0.75rem;
+    --pico-form-element-spacing-horizontal: 1.25rem;
+
+    /* Marvel Snap Branding */
+    --accent-gold: #ffce2b;
+    --accent-purple: #bb86fc;
+}
+
+/* Rank Badges (Gradients not in Pico) */
+.tag-rank {
+    background: linear-gradient(135deg, var(--accent-gold), #ffaa00);
+    color: #000;
+    font-weight: 800;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    display: inline-block;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.tag-rank-lg {
+    background: linear-gradient(135deg, var(--accent-gold), #ffaa00);
+    color: #000;
+    font-weight: 800;
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-size: 1.2rem;
+    display: inline-block;
+    margin-bottom: 12px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+}
+
+
+/* Text Colors */
+.text-gold {
+    color: var(--accent-gold) !important;
+}
+
+.text-purple {
+    color: var(--accent-purple) !important;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-muted {
+    color: var(--pico-muted-color);
+}
+
+.text-small {
+    font-size: 0.85rem;
+}
+
+.mt-10 {
+    margin-top: 10px;
+}
+
+.mt-15 {
+    margin-top: 15px;
+}
+
+.mt-20 {
+    margin-top: 20px;
+}
+
+.mt-40 {
+    margin-top: 40px !important;
+}
+
+.mt-60 {
+    margin-top: 60px;
+}
+
+.mb-0 {
+    margin-bottom: 0 !important;
+}
+
+.mb-10 {
+    margin-bottom: 10px;
+}
+
+.mb-15 {
+    margin-bottom: 15px;
+}
+
+.mb-20 {
+    margin-bottom: 20px;
+}
+
+.mb-40 {
+    margin-bottom: 40px !important;
+}
+
+.mb-60 {
+    margin-bottom: 60px;
+}
+
+.fw-300 {
+    font-weight: 300;
+}
+
+.fw-800 {
+    font-weight: 800;
+}
+
+
+.gainer {
+    color: #4caf50;
+    font-weight: 400;
+}
+
+.loser {
+    color: #f44336;
+    font-weight: 400;
+}
+
+.header-logo {
+    height: 40px;
+    width: 40px;
+    vertical-align: middle;
+    margin-right: 12px;
+    border-radius: 8px;
+}
+
+/* Search Suggestions */
+.search-suggestions {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: 0;
+    background: var(--pico-card-background-color);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: var(--pico-border-radius);
+    z-index: 1000;
+    box-shadow: var(--pico-card-box-shadow);
+    display: none;
+    max-height: 350px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.search-suggestion-item {
+    padding: calc(var(--pico-spacing) * 0.5) var(--pico-spacing);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.2s;
+}
+
+.suggestion-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.suggestion-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.suggestion-name {
+    font-size: 0.95rem;
+    font-weight: 400;
+}
+
+.suggestion-name strong,
+.suggestion-aka strong {
+    font-weight: 700;
+    color: var(--pico-contrast);
+}
+
+.suggestion-aka {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    font-style: italic;
+}
+
+.search-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.search-suggestion-item:hover,
+.search-suggestion-item.selected {
+    background: var(--pico-dropdown-hover-background-color, rgba(255, 204, 0, 0.08));
+}
+
+.suggestion-name {
+    font-weight: 500;
+}
+
+.suggestion-rank {
+    font-size: 0.75rem;
+    color: var(--accent-gold);
+    background: rgba(255, 204, 0, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.search-suggestion-footer {
+    padding: calc(var(--pico-spacing) * 0.75) var(--pico-spacing);
+    text-align: center;
+    background: var(--pico-card-sectioning-background-color, rgba(255, 255, 255, 0.03));
+    border-top: 1px solid var(--pico-card-border-color);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--accent-gold);
+}
+
+/* Components */
+.chart-container {
+    position: relative;
+    height: 350px;
+    width: 100%;
+}
+
+.chart-container canvas {
+    height: 100% !important;
+    width: 100% !important;
+}
+
+/* Header Logo */
+.header-logo {
+    height: 2rem;
+    width: auto;
+    margin-right: 0 !important;
+    vertical-align: middle;
+}
+
+/* Infinite Player Count */
+.infinite-stat-box {
+    text-align: center;
+    /* margin handled by utility classes per location */
+}
+
+.infinite-stat-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+}
+
+.infinite-stat-label {
+    font-size: 1rem;
+    /* Same size as value */
+    font-weight: 500;
+    color: var(--pico-color);
+    opacity: 0.9;
+    margin-left: 4px;
+}
+
+/* Nav Polish */
+nav.container {
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    padding-bottom: 10px;
+    margin-bottom: 40px !important;
+    position: relative;
+    /* Anchor for absolute search overlay */
+}
+
+nav a.active {
+    color: var(--accent-gold);
+    text-shadow: 0 0 10px rgba(255, 206, 43, 0.3);
+}
+
+nav a:hover {
+    text-decoration: none;
+}
+
+/* Navbar Search Bar */
+/* Expanding Navbar Search */
+.nav-search-container {
+    display: flex;
+    align-items: center;
+    background: var(--pico-form-element-background-color);
+    border: 1px solid var(--pico-form-element-border-color);
+    border-radius: 6.25rem;
+    position: relative;
+    padding: 0 0.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 25rem;
+    max-width: 100%;
+    /* overflow: hidden; -- Removed to allow suggestions dropdown */
+    height: calc(var(--pico-form-element-height, 2.5rem) * 0.85);
+}
+
+@media (min-width: 1025px) {
+    .nav-search-container.collapsed {
+        width: 2.625rem;
+        background: transparent;
+        border-color: transparent;
+        padding: 0;
+    }
+}
+
+.search-toggle-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: var(--pico-muted-color) !important;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    width: 2.625rem !important;
+    height: 100% !important;
+    flex-shrink: 0;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.search-toggle-btn:hover {
+    color: var(--accent-gold) !important;
+}
+
+@media (max-width: 1024px) {
+
+    /* Allow main nav to wrap rows */
+    nav {
+        flex-wrap: wrap;
+    }
+
+    /* DEFAULT (Expanded) State on Mobile */
+    .nav-search-container:not(.collapsed) {
+        width: 100%;
+        height: 2.25rem;
+        background: var(--pico-form-element-background-color);
+        border: 1px solid var(--pico-form-element-border-color);
+        padding: 0 0.5rem;
+    }
+
+    /* Target the PARENT LIST to force line break */
+    #searchNavList.search-expanded {
+        width: 100%;
+        order: 99;
+        /* Drop to bottom */
+        margin-top: -10px;
+        /* Pull up tight against the row above */
+        margin-bottom: 0.5rem;
+    }
+
+    #searchNavList li {
+        width: 100%;
+        /* Ensure li takes full width of ul */
+    }
+
+    /* COLLAPSED State on Mobile */
+    .nav-search-container.collapsed {
+        width: 2.625rem;
+        background: transparent;
+        border-color: transparent;
+        padding: 0;
+        margin-top: 0;
+        order: unset;
+    }
+
+    .search-toggle-btn {
+        display: flex !important;
+        /* Always show toggle on mobile */
+    }
+}
+
+/* Leaderboard Rank Badges */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--accent-gold);
+    /* Gold for everyone */
+}
+
+/* Tiered Leaderboard Styling */
+tr[data-tier="top-10"] strong {
+    font-size: 1.05rem;
+}
+
+/* Sticky Leaderboard Header */
+.leaderboard-table-container thead th {
+    position: sticky;
+    top: 0;
+    background-color: var(--pico-background-color) !important;
+    z-index: 100;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    color: var(--pico-muted-color) !important;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    font-weight: 600;
+}
+
+/* Floating Back to Top Button */
+.back-to-top {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--pico-border-radius);
+    background: transparent;
+    color: var(--pico-muted-color);
+    border: 1px solid var(--pico-muted-border-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease-in-out;
+    z-index: 100;
+}
+
+.back-to-top.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    color: var(--pico-contrast-color);
+    border-color: var(--pico-muted-color);
+    transform: translateY(-2px);
+}
+
+/* Clickable Player Hover Effects */
+.card-clickable:hover strong,
+table td a[href^="/player/"]:hover {
+    color: var(--accent-gold) !important;
+    text-decoration: none;
+}
+
+.nav-search-container input {
+    background: transparent !important;
+    border: none !important;
+    margin-bottom: 0 !important;
+    padding: 0 0.25rem !important;
+    font-size: 0.9rem !important;
+    box-shadow: none !important;
+    transition: opacity 0.3s;
+    width: 100%;
+}
+
+.nav-search-container.collapsed input {
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+}
+
+
+/* Disclaimer Footer */
+.disclaimer-box {
+    margin-top: 40px;
+    padding: 15px;
+    background: rgba(255, 204, 0, 0.1);
+    border-left: 4px solid var(--accent-gold);
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+}
+
+/* Search Input Hero */
+.search-hero {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 8px;
+    margin-bottom: 40px;
+}
+
+.search-hero input {
+    border-radius: 8px 0 0 8px !important;
+    border: none;
+    margin-bottom: 0;
+    background: transparent;
+}
+
+.search-hero button {
+    border-radius: 0 8px 8px 0 !important;
+    width: auto;
+    margin-bottom: 0;
+    background-color: var(--pico-primary-background);
+    border: none;
+    color: var(--pico-primary-inverse);
+    font-weight: 600;
+}
+
+/* Table Density */
+table td,
+table th {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+}
+
+table th {
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-weight: 500;
+    color: var(--pico-muted-color);
+}
+
+/* Movers Grid Visual Refinement */
+.mover-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 12px;
+    padding: 20px;
+    height: 100%;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.mover-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.mover-card table {
+    margin-bottom: 0;
+    --pico-background-color: transparent;
+}
+
+/* New Clean Containers */
+.hero-header {
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.hero-title {
+    font-size: 2.8rem;
+    color: var(--accent-gold);
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 30px rgba(255, 204, 0, 0.15);
+}
+
+.fake-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--pico-form-element-background-color);
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+    border-radius: var(--pico-border-radius);
+    color: var(--pico-color);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: var(--pico-font-weight);
+    padding: 2px 10px;
+    padding-right: 1.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(113, 128, 150)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-position: center right 0.4rem;
+    background-size: 1rem auto;
+    background-repeat: no-repeat;
+    display: inline-block;
+    width: auto;
+    min-width: 140px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: border-color var(--pico-transition), box-shadow var(--pico-transition);
+}
+
+.fake-select:focus {
+    border-color: var(--pico-form-element-focus-color);
+    box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-form-element-focus-color);
+    outline: none;
+}
+
+.status-msg {
+    padding: 40px;
+    text-align: center;
+    color: var(--pico-muted-color);
+}
+
+.error-msg {
+    color: #f44336;
+}
+
+.success-msg {
+    color: #4caf50;
+}
+
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.d-none {
+    display: none !important;
+}
+
+.btn-small {
+    padding: 2px 10px !important;
+    font-size: 0.8rem !important;
+    width: auto !important;
+}
+
+.card-clickable {
+    cursor: pointer;
+    transition: background 0.2s ease;
+}
+
+/* Ghost Button for Native Feel */
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--pico-muted-border-color);
+    color: var(--pico-muted-color);
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.btn-ghost:hover {
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+    background: rgba(255, 206, 43, 0.05);
+    text-decoration: none;
+}
+
+.border-gold {
+    border-top: 4px solid var(--accent-gold);
+}
+
+.border-purple {
+    border-left: 4px solid var(--accent-purple);
+}
+
+.border-blue {
+    border-top: 4px solid var(--accent-blue);
+}
+
+
+/* Slim Row for Search Results */
+.card-slim {
+    padding: 12px 20px !important;
+    margin-bottom: 15px !important;
+    display: flex !important;
+    /* Force flex row */
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card-slim .match-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.card-slim h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0 !important;
+}
+
+.card-slim .tag-rank {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    margin-bottom: 0;
+    /* No bottom margin in row */
+    margin-right: 0;
+    min-width: 70px;
+    /* Fixed width for alignment */
+    text-align: center;
+}
+
+.card-slim .aka-text {
+    display: block;
+    /* Ensure it breaks to new line if needed, or stays tight */
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    margin-top: 4px;
+    /* Increased from 2px */
+    margin-left: 0;
+    /* Align with name */
+    font-style: italic;
+    line-height: 1.2;
+}
+
+/* No-results UI */
+.no-results {
+    padding: 20px;
+    margin: 20px 0;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 8px;
+    text-align: center;
+    color: var(--pico-muted-color);
+    font-size: 1rem;
+}
+
+.no-results .icon {
+    display: block;
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+/* Infinite Player Count Badge */
+.infinite-badge {
+    display: none;
+    /* Controlled by JS */
+    align-items: center;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 15px;
+    background: rgba(255, 206, 43, 0.1);
+    border: 1px solid rgba(255, 206, 43, 0.4);
+    padding: 4px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.infinite-badge .count {
+    font-weight: 800;
+    font-size: 0.95rem;
+    text-shadow: 0 0 5px rgba(255, 206, 43, 0.3);
+}
+
+.infinite-badge .label {
+    font-size: 0.75rem;
+    margin-left: 6px;
+    font-weight: 500;
+}
+
+/* Pulse Animation for Live Dot */
+@keyframes pulse-gold {
+    0% {
+        box-shadow: 0 0 0 0 rgba(255, 206, 43, 0.7);
+    }
+
+    70% {
+        box-shadow: 0 0 0 4px rgba(255, 206, 43, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 206, 43, 0);
+    }
+}
+
+.live-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    background-color: #ffce2b;
+    border-radius: 50%;
+    margin-right: 8px;
+    animation: pulse-gold 2s infinite;
+}
+
+header hgroup h1,
+header hgroup h2,
+header>div {
+    white-space: nowrap;
+}
+
+/* Timeline Component */
+.timeline {
+    position: relative;
+    border-left: 2px solid rgba(255, 255, 255, 0.1);
+    margin-left: 10px;
+    padding-left: 25px;
+    padding-top: 10px;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 25px;
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+/* The Dot */
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -31px;
+    top: 5px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--accent-gold);
+    border: 2px solid #1e293b;
+    /* Match bg to create 'gap' effect */
+    box-shadow: 0 0 0 2px rgba(255, 204, 0, 0.2);
+}
+
+/* Different color for past names if wanted, or keep uniform */
+.timeline-item.past::before {
+    background: #64748b;
+    box-shadow: none;
+}
+
+.timeline-date {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-bottom: 4px;
+    font-family: monospace;
+}
+
+.timeline-name {
+    font-size: 1.1rem;
+    font-weight: bold;
+    color: #f8fafc;
+}
+
+/* --- Phase 4 Refactor: Utilities --- */
+.relative {
+    position: relative;
+}
+
+.flex-center {
+    display: flex;
+    align-items: center;
+}
+
+.flex-end {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.h-250 {
+    height: 250px;
+}
+
+.font-1rem {
+    font-size: 1rem;
+}
+
+.subtitle-small {
+    font-weight: normal;
+    float: right;
+}
+
+.season-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 5px;
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    width: 240px;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+
+    padding: 8px;
+    text-align: left;
+}
+
+/* --- Profile & Decks Utilities --- */
+.d-block {
+    display: block;
+}
+
+.d-inline-block {
+    display: inline-block;
+}
+
+.mr-10 {
+    margin-right: 10px;
+}
+
+.valign-top {
+    vertical-align: top;
+}
+
+.font-2-5rem {
+    font-size: 2.5rem;
+}
+
+.sp-badge {
+    background: rgba(255, 204, 0, 0.15);
+    color: var(--accent-gold);
+    border: 1px solid rgba(255, 204, 0, 0.3);
+}
+
+.flex-end-gap {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    align-items: center;
+}
+
+.season-select {
+    margin-bottom: 0 !important;
+    width: auto !important;
+}
+
+.copy-btn-abs {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 5;
+}
+
+.deck-pre {
+    text-align: left;
+    min-height: 100px;
+    padding: 40px 20px 20px 20px;
+    -webkit-user-select: all;
+    user-select: all;
+}
+
+.w-6rem {
+    width: 6rem;
+}
+
+.w-auto {
+    width: auto !important;
+}
+
+/* Search Clear Button */
+.search-clear-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 0.5rem !important;
+    margin: 0 !important;
+    color: var(--pico-muted-color) !important;
+    cursor: pointer;
+    display: none;
+    /* Toggled by JS */
+    align-items: center;
+    justify-content: center;
+    height: 100% !important;
+    transition: color 0.2s;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.search-clear-btn:hover {
+    color: var(--pico-contrast-color) !important;
+}
+
+/* Ensure input doesn't overlap clear button */
+.nav-search-container input {
+    /* Existing styles are fine, flex layout handles spacing */
+    flex: 1;
+    /* Allow input to grow */
+}
+
+/* --- Profile Page: Compare UI & Dropdown --- */
+
+/* Season Dropdown Items (Profile Only) */
+.season-dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+    color: var(--pico-color);
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+}
+
+.season-dropdown-item:hover {
+    background-color: var(--pico-dropdown-hover-background-color, rgba(255, 255, 255, 0.05));
+}
+
+.season-dropdown-item label {
+    cursor: pointer;
+    width: 100%;
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.season-dropdown-item input[type="radio"] {
+    margin: 0;
+    margin-right: 10px;
+    cursor: pointer;
+}
+
+/* Fix Profile Season Dropdown Height & Style to match other buttons */
+#seasonTrigger.fake-select {
+    height: 32px !important;
+    display: inline-flex;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* Compare Search Container */
+.compare-search-container {
+    position: absolute;
+    right: 0;
+    top: 45px;
+    z-index: 110;
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: var(--pico-card-box-shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    gap: 8px;
+    width: 320px;
+    max-width: 90vw;
+    flex-direction: column;
+}
+
+.compare-search-header {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--pico-muted-color);
+    margin-bottom: 4px;
+    padding: 0 4px;
+}
+
+.compare-search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.compare-search-container input {
+    margin-bottom: 0 !important;
+    background: var(--pico-form-element-background-color) !important;
+    border: 1px solid var(--pico-form-element-border-color) !important;
+    color: var(--pico-color) !important;
+    height: 36px !important;
+    font-size: 0.9rem !important;
+    padding-left: 32px !important;
+    /* Space for icon */
+    border-radius: 6px !important;
+}
+
+.compare-search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--pico-muted-color);
+    pointer-events: none;
+}
+
+/* Ensure suggestions list sits nicely */
+.small-suggestions {
+    width: 100% !important;
+    top: calc(100% + 4px) !important;
+    left: 0 !important;
+    margin-top: 0 !important;
+    z-index: 1000 !important;
+}
+
+/* Compare Toggle Button Style (matches Season Trigger) */
+.btn-compare-toggle {
+    background-color: var(--pico-form-element-background-color) !important;
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color) !important;
+    color: var(--pico-color) !important;
+    padding: 0 12px !important;
+    height: 32px !important;
+    font-size: 0.85rem !important;
+    border-radius: var(--pico-border-radius) !important;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 0 !important;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    gap: 6px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.btn-compare-toggle:hover {
+    border-color: var(--pico-form-element-focus-color) !important;
+    box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-form-element-focus-color);
+}
+
+/* Comparison Tag Styles */
+#comparedPlayersList {
+    padding-right: 15px;
+    /* Visual alignment with chart grid */
+}
+
+.flex-wrap-gap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.comparison-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #1e293b;
+    border: 1px solid #334155;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #e2e8f0;
+    gap: 6px;
+}
+
+.comparison-tag .color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.comparison-tag .remove-btn {
+    cursor: pointer;
+    font-weight: bold;
+    color: #94a3b8;
+    margin-left: 2px;
+}
+
+.comparison-tag .remove-btn:hover {
+    color: #f87171;
+}
+
+/* Comparison Tray Positioning */
+.compare-tray {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-icon-only {
+    background-color: var(--pico-form-element-background-color) !important;
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color) !important;
+    padding: 0 8px !important;
+    font-size: 1.1rem !important;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px !important;
+    border-radius: var(--pico-border-radius) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.btn-icon-only:hover {
+    background: rgba(30, 41, 59, 0.7) !important;
+    border-color: rgba(71, 85, 105, 0.5) !important;
+}
+
+.btn-icon-only.success {
+    color: #4caf50 !important;
+    border-color: #4caf50 !important;
+}
+
+.btn-icon-only.error {
+    color: #f87171 !important;
+    border-color: #f87171 !important;
+}
+
+/* SVG Icons - common styles to reduce HTML clutter */
+.icon-svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.2s;
+}
+
+.compare-search-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.btn-icon-only:active .icon-svg,
+.btn-compare-toggle:active .icon-svg {
+    transform: scale(0.9);
+}

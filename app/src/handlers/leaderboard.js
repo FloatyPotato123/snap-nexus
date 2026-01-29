@@ -30,12 +30,11 @@ export async function getLiveLeaderboardData() {
         if (data?.results) {
             data.results.forEach((entry, index) => {
                 const rank = index + 1;
-                // Force String ID for consistency with KV
                 const id = String(entry.id || entry.playerId);
 
                 if (id) {
                     newMap.set(id, {
-                        id, // Include ID in the object
+                        id,
                         rank,
                         name: entry.playerName,
                         score: entry.score

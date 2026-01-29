@@ -1,7 +1,10 @@
-name = "snapnexus"
-pages_build_output_dir = "app/public"
+name = "snapnexus-scraper"
+main = "dist/index.js"
 compatibility_date = "2025-10-08"
 compatibility_flags = ["nodejs_compat"]
+
+[triggers]
+crons = ["0 19 * * *"]
 
 [[kv_namespaces]]
 binding = "MARVEL_SNAP_HUB"

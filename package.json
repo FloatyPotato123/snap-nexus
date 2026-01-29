@@ -5,15 +5,17 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "build:client": "esbuild src/client/utils.js --bundle --outfile=dist/client-utils.js.txt --format=iife",
-    "build:profile": "esbuild src/client/profile.js --bundle --outfile=dist/client-profile.js.txt --format=iife",
-    "build:home": "esbuild src/client/home.js --bundle --outfile=dist/client-home.js.txt --format=iife",
-    "build:decks": "esbuild src/client/decks.js --bundle --outfile=dist/client-decks.js.txt --format=iife",
-    "build:search": "esbuild src/client/search.js --bundle --outfile=dist/client-search.js.txt --format=iife",
-    "build:leaderboard": "esbuild src/client/leaderboard.js --bundle --outfile=dist/client-leaderboard.js.txt --format=iife",
-    "build:navbar": "esbuild src/client/navbar.js --bundle --outfile=dist/client-navbar.js.txt --format=iife",
-    "build:worker": "esbuild src/index.js --bundle --outfile=dist/index.js --format=esm --loader:.html=text --loader:.css=text --loader:.txt=text",
-    "build": "npm run build:client && npm run build:profile && npm run build:home && npm run build:decks && npm run build:search && npm run build:leaderboard && npm run build:navbar && npm run build:worker"
+    "dev": "npm run build:worker && npx wrangler pages dev app/public --persist-to=production",
+    "build:client": "esbuild app/src/client/utils.js --bundle --outfile=app/public/client/utils.js --format=iife",
+    "build:profile": "esbuild app/src/client/profile.js --bundle --outfile=app/public/client/profile.js --format=iife",
+    "build:home": "esbuild app/src/client/home.js --bundle --outfile=app/public/client/home.js --format=iife",
+    "build:decks": "esbuild app/src/client/decks.js --bundle --outfile=app/public/client/decks.js --format=iife",
+    "build:search": "esbuild app/src/client/search.js --bundle --outfile=app/public/client/search.js --format=iife",
+    "build:leaderboard": "esbuild app/src/client/leaderboard.js --bundle --outfile=app/public/client/leaderboard.js --format=iife",
+    "build:navbar": "esbuild app/src/client/navbar.js --bundle --outfile=app/public/client/navbar.js --format=iife",
+    "build:worker": "esbuild app/functions/[[path]].js --bundle --outfile=app/public/_worker.js --format=esm --loader:.html=text --loader:.css=text",
+    "build:scraper": "esbuild scraper/src/index.js --bundle --outfile=scraper/dist/index.js --format=esm",
+    "build": "npm run build:client && npm run build:profile && npm run build:home && npm run build:decks && npm run build:search && npm run build:leaderboard && npm run build:navbar && npm run build:worker && npm run build:scraper"
   },
   "repository": {
     "type": "git",
@@ -33,6 +35,7 @@
     "snapdeck": "^2.4.6"
   },
   "devDependencies": {
-    "esbuild": "^0.18.19"
+    "esbuild": "^0.18.19",
+    "wrangler": "^4.61.0"
   }
 }

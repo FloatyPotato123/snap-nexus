@@ -1,58 +1,40 @@
-# Marvel Snap Hub (Cloudflare Worker)
+# Snap Nexus (Cloudflare Pages)
 
-A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflare Workers, Hono, and KV.
+A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflare Pages (Advanced Mode), Hono, and D1.
 
-## Features
+## 🏗 Architecture
+
+The project is split into two main components:
+- **App (`/app`)**: A Cloudflare Pages application serving the web UI and API via a single `_worker.js` (Advanced Mode).
+- **Scraper (`/scraper`)**: A Cloudflare Worker that handles background data collection and updates the D1 database.
+
+## 🚀 Features
 
 ### 📊 Leaderboard & Profile Tracking
 - **Live Leaderboard**: Tracks Top 1000 Infinite players.
-- **Player Search**: Text-based search (`!whois`) with alias tracking and rank sorting.
-- **Gainers & Pumpers**: Tracks daily rank changes and SP gains (formerly Movers & Shakers).
+- **Player Search**: Text-based search with alias tracking and rank sorting.
+- **Gainers & Pumpers**: Tracks daily rank changes and SP gains.
 
 ### 🃏 Game Data
-- **Card Releases**: Tracks weekly card releases (`/api/cards/new-releases`).
-- **Deck Generator**: Random deck builder for challenges (`/api/decks/random`).
-- **Stress Decks**: Generates specific challenge decks (`/api/decks/stress`).
+- **Card Releases**: Tracks weekly card releases.
+- **Deck Generator**: Random deck builder for challenges.
 
 ### 🛠 Tech Stack
-- **Framework**: [Hono](https://hono.dev) (Lightweight Edge standards)
-- **Platform**: Cloudflare Workers
+- **Framework**: [Hono](https://hono.dev)
+- **Platform**: Cloudflare Pages + Cloudflare Workers
 - **Database**: 
-    - **Cloudflare KV**: Snapshot storage.
-    - **Cloudflare D1**: SQL database for search indexing and history.
+    - **Cloudflare D1**: Main SQL database for search indexing and history tracking.
+    - **Cloudflare KV**: Snapshot and metadata storage.
 - **Build Tool**: esbuild
-- **Styling**: Pico.css
 
-## UI Routes
+## 📂 Project Structure
 
-| Path | Description |
-|------|-------------|
-| `/` | Main Dashboard (Leaderboard, Charts) |
-| `/leaderboard` | Infinite Leaderboard Page |
-| `/player-search` | Player Lookup Page |
-| `/player/:id` | Player Profile Page |
-| `/decks` | Deck Builder Page |
+- `app/src/`: Core logic, handlers, and templates.
+- `app/public/`: Static assets and build output for the Pages app.
+- `app/functions/`: Entry point for Pages Advanced Mode.
+- `scraper/`: Background worker for data collection.
 
-## API Endpoints
-
-| Endpoint | Description |
-|----------|-------------|
-| `/api/leaderboard/live` | Live Top 1000 Leaderboard |
-| `/api/leaderboard/daily` | Current Top 1000 Leaderboard snapshot |
-| `/api/leaderboard/movers` | Daily Rank Changes (Gainers & Pumpers) |
-| `/api/players/search?q={name}` | Search player history |
-| `/api/player/:id` | Get specific player stats |
-| `/api/season/stats` | Season-wide historical stats |
-| `/api/cards/new-releases` | Weekly card release schedule |
-| `/api/decks/random` | Generate a random deck |
-| `/api/decks/stress` | Generate a stress-test deck |
-| `/api/history/legacy` | Legacy data archival access |
-
-## Automation
-
-- **Daily Scraper**: Runs at 19:00 UTC via Cloudflare Cron Triggers to archive leaderboard positions.
-
-## Setup & Development
+## 🛠 Setup & Development
 
 1. **Install Dependencies**
    ```bash
@@ -61,11 +43,14 @@ A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflar
 
 2. **Run Locally**
    ```bash
-   npx wrangler dev
+   npm run dev
    ```
+   *Note: This command uses unified remote bindings, connecting your local server to live Cloudflare D1/KV data.*
 
-3. **Deploy**
+3. **Build**
    ```bash
    npm run build
-   npx wrangler deploy
    ```
+
+4. **Deploy**
+   Deployment is handled automatically via GitHub Actions on push to `main`.

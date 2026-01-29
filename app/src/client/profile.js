@@ -143,11 +143,14 @@
                 if (data.currentSP) {
                     $('pRank').dataset.sp = data.currentSP;
                     $('pSP').innerText = parseInt(data.currentSP).toLocaleString();
+                    $('pSPBadge').classList.toggle('d-none', false);
                     $('pSPBadge').style.display = 'inline-block';
                 }
+                $('pRankBadge').classList.toggle('d-none', false);
                 $('pRankBadge').style.display = 'inline-block';
             } else {
-                $('pRankBadge').style.display = 'none';
+                $('pRankBadge').classList.toggle('d-none', true);
+                $('pSPBadge').classList.toggle('d-none', true);
             }
         },
 

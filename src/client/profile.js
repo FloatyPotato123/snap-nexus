@@ -664,7 +664,9 @@
             }
 
             newConfig.data.datasets.forEach(ds => {
-                ds.borderWidth = 3.5 * dpi;
+                ds.borderWidth = 2.5 * dpi;
+                if (ds.pointRadius) ds.pointRadius *= dpi;
+                ds.pointBorderWidth = (ds.pointBorderWidth || 1) * dpi;
                 if (ds.borderDash) ds.borderDash = ds.borderDash.map(v => v * dpi);
             });
 

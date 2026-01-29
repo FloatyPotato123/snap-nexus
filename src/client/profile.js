@@ -3,551 +3,704 @@
  * Logic for the Player Profile page.
  */
 (function () {
-    const $ = SnapUtils.$;
     const pathParts = window.location.pathname.split('/');
     const playerId = pathParts[pathParts.length - 1];
+    let $; // Define $ in closure but init later
 
-    // Initialize Chart Defaults
-    SnapUtils.initChartDefaults();
+    // --- CONSTANTS ---
+    const DATA_START_YEAR = 2025;
+    const DATA_START_MONTH = 9; // October (0-indexed)
 
-    // Chart Instances
-    let seasonChartInstance = null;
-    let historicalChartInstance = null;
+    // --- STATE ---
+    const State = {
+        playerId,
+        primaryPlayerStats: [],
+        comparedPlayers: [], // Array of { id, name, stats: [] }
+        seasonChartInstance: null,
+        historicalChartInstance: null,
+        debounceTimer: null,
+        isComparing: false
+    };
 
-    function populateSeasonSelector() {
-        const select = $('seasonSelect');
-        const now = new Date();
-        const startYear = 2025;
-        const startMonth = 9; // October index (0-11)
+    // --- INITIALIZATION ---
+    function init() {
+        try {
+            // Initialize helpers safely
+            if (typeof SnapUtils === 'undefined') throw new Error("SnapUtils library not loaded");
+            $ = SnapUtils.$;
 
-        // Loop from current date down to Nov 2025
-        let y = now.getFullYear();
-        let m = now.getMonth();
+            SnapUtils.initChartDefaults();
+            loadProfile();
+            initCompareSearch();
 
-        // Marvel Snap Season Logic: Starts first Tuesday
-        const activeSeason = SnapUtils.getCurrentSeason(now);
-        y = activeSeason.year;
-        m = activeSeason.month - 1; // 0-indexed for loop
+            // ... global listeners ...
+            // Global close for dropdowns
+            document.addEventListener('click', (e) => {
+                const searchContainer = $('compareSearchContainer');
+                const searchToggle = $('toggleCompareBtn');
+                const seasonDropdown = $('seasonDropdown');
+                const seasonTrigger = $('seasonTrigger');
 
-        // Loop backwards to startYear
-        while (y > startYear || (y === startYear && m >= startMonth)) {
+                // Search Tray
+                if (searchContainer && !searchContainer.classList.contains('d-none')) {
+                    if (!searchContainer.contains(e.target) && !searchToggle.contains(e.target)) {
+                        SnapProfile.toggleCompareSearch(false);
+                    }
+                }
 
-            const opt = document.createElement('option');
-            opt.value = `${y}-${m + 1}`; // 2026-1 for Jan
-            const monthName = new Date(y, m).toLocaleString('default', { month: 'long' });
-            opt.text = `${monthName} ${y}`;
-            select.appendChild(opt);
+                // Season Dropdown
+                if (seasonDropdown && seasonDropdown.style.display === 'block') {
+                    if (!seasonDropdown.contains(e.target) && !seasonTrigger.contains(e.target)) {
+                        seasonDropdown.style.display = 'none';
+                    }
+                }
+            });
 
-            m--;
-            if (m < 0) { m = 11; y--; }
+        } catch (e) {
+            console.error("[Profile] Init failed:", e);
+            document.getElementById('loading').innerHTML = `<div class="error-msg">Init Crash: ${e.message}</div>`;
         }
+    }
 
-        // Handle loading new data on change
-        select.addEventListener('change', async () => {
-            const [year, month] = select.value.split('-');
-            await loadSeasonData(year, month);
-        });
+    // --- API / DATA ---
+    async function loadProfile() {
+        try {
+            populateSeasonSelector();
+
+            const req = await fetch(`/api/player/${State.playerId}`);
+            if (!req.ok) throw new Error("Player not found");
+            const data = await req.json();
+
+            UI.renderBasicInfo(data);
+            UI.renderHistory(data.history || []);
+
+            if (data.currentSeasonStats?.length > 0) {
+                State.primaryPlayerStats = data.currentSeasonStats;
+                UI.updateSeasonChartUI();
+            } else {
+                UI.toggleChartDisplay('season', false);
+            }
+
+            if (data.historicalSeasonRanks?.length > 0) {
+                UI.toggleChartDisplay('historical', true);
+                Charts.renderHistoricalChart(data.historicalSeasonRanks);
+            } else {
+                UI.toggleChartDisplay('historical', false);
+            }
+
+            $('loading').style.display = 'none';
+            $('content').classList.remove('d-none');
+        } catch (e) {
+            $('loading').innerText = ""; // Clear
+            $('loading').innerHTML = `<div class="error-msg">Load Error: ${e.message}</div>`;
+            console.error(e);
+        }
     }
 
     async function loadSeasonData(year, month) {
         try {
-            // If loading specific season, re-fetch profile with params
-            // Note: This fetches everything again, but allows us to reuse the robust API logic
-            const req = await fetch(`/api/player/${playerId}?month=${month}&year=${year}`);
+            const req = await fetch(`/api/player/${State.playerId}?month=${month}&year=${year}`);
             if (!req.ok) throw new Error("Failed to load season");
             const data = await req.json();
+            State.primaryPlayerStats = data.currentSeasonStats || [];
 
-            if (data.currentSeasonStats && data.currentSeasonStats.length > 0) {
-                $('seasonChart').style.display = 'block';
-                $('noSeasonStats').style.display = 'none';
-                $('seasonChartContainer').style.height = '350px';
-                renderSeasonChart(data.currentSeasonStats);
-            } else {
-                $('seasonChart').style.display = 'none';
-                $('noSeasonStats').style.display = 'block';
-                $('seasonChartContainer').style.height = 'auto'; // Collapse
-            }
+            // Refresh comparisons for the new month
+            await refreshComparisonData(year, month);
+            UI.updateSeasonChartUI();
         } catch (e) {
             console.warn("[Profile] Error loading season data:", e);
         }
     }
 
-    async function loadProfile() {
-        try {
-            populateSeasonSelector();
+    async function refreshComparisonData(year, month) {
+        if (State.comparedPlayers.length === 0) return;
 
-            const req = await fetch(`/api/player/${playerId}`);
-            if (!req.ok) throw new Error("Player not found");
-            const data = await req.json();
+        const promises = State.comparedPlayers.map(async p => {
+            try {
+                const res = await fetch(`/api/player/${p.id}?month=${month}&year=${year}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    p.stats = data.currentSeasonStats || [];
+                }
+            } catch (e) {
+                console.warn(`[Profile] Failed to fetch comparison for ${p.name}`, e);
+            }
+        });
+        await Promise.all(promises);
+    }
 
+    // --- UI HELPERS ---
+    const UI = {
+        renderBasicInfo(data) {
             $('pName').innerText = data.name;
+            $('pName').dataset.rawName = data.name;
             $('pId').innerText = data.id;
+            document.title = `${data.name} | Snap Nexus`;
 
-            // Current Rank & SP
             if (data.currentRank) {
                 $('pRank').innerText = data.currentRank;
                 $('pRank').dataset.rank = data.currentRank;
-
                 if (data.currentSP) {
                     $('pRank').dataset.sp = data.currentSP;
                     $('pSP').innerText = parseInt(data.currentSP).toLocaleString();
                     $('pSPBadge').style.display = 'inline-block';
                 }
-
                 $('pRankBadge').style.display = 'inline-block';
             } else {
                 $('pRankBadge').style.display = 'none';
-                $('pRank').dataset.sp = '';
-                $('pRank').dataset.rank = '';
             }
+        },
 
-            $('pName').innerText = data.name;
-            $('pName').dataset.rawName = data.name;
-            document.title = `${data.name} | Snap Nexus`;
+        renderHistory(history) {
+            const historyList = [...history].sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
+            let html = historyList.map((h, i) => {
+                const isCurrent = i === 0;
+                const isOldest = i === historyList.length - 1;
+                return `
+                    <div class="timeline-item ${isCurrent ? '' : 'past'}">
+                        <div class="timeline-name">${h.name}</div>
+                        <div class="timeline-date">${isOldest ? '' : h.seenAt}</div>
+                    </div>
+                `;
+            }).join('');
+            $('historyTimeline').innerHTML = html || '<div class="status-msg">No history found</div>';
+        },
 
-            // History Timeline
-            let timelineHtml = '';
-            // Sort history desc (newest first) explicitly
-            const historyList = (data.history || []).sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
+        toggleChartDisplay(type, visible) {
+            const chart = $(`${type}Chart`);
+            const msg = $(`no${type.charAt(0).toUpperCase() + type.slice(1)}Stats`);
+            const container = $(`${type}ChartContainer`);
+            if (!chart || !msg || !container) return;
 
-            historyList.forEach((h, index) => {
-                const isCurrent = index === 0;
-                const isOldest = index === historyList.length - 1;
-                const dateClass = isCurrent ? 'timeline-date' : 'timeline-date';
-                const dotClass = isCurrent ? '' : 'past';
-                const label = isOldest ? '' : h.seenAt;
+            if (visible) {
+                chart.style.display = 'block';
+                msg.classList.add('d-none');
+                container.style.height = '350px';
+            } else {
+                chart.style.display = 'none';
+                msg.classList.remove('d-none');
+                container.style.height = 'auto';
+            }
+        },
 
-                timelineHtml += `
-                        <div class="timeline-item ${dotClass}">
-                            <div class="timeline-name">${h.name}</div>
-                            <div class="${dateClass}">${label}</div>
-                        </div>
-                    `;
+        updateSeasonChartUI() {
+            if (State.primaryPlayerStats.length > 0) {
+                this.toggleChartDisplay('season', true);
+                Charts.renderSeasonChart(State.primaryPlayerStats);
+            } else {
+                this.toggleChartDisplay('season', false);
+            }
+        },
+
+        updateSeasonTriggerText() {
+            const checked = document.querySelector('.season-check:checked');
+            const btnText = $('seasonTriggerText');
+            if (btnText && checked) {
+                btnText.innerText = checked.parentElement.querySelector('span').innerText;
+            }
+        },
+
+        renderComparedPlayersList() {
+            const list = $('comparedPlayersList');
+            if (!list) return;
+
+            list.innerHTML = State.comparedPlayers.map((p, i) => {
+                const color = SnapUtils.CHART_PALETTE[(i + 1) % SnapUtils.CHART_PALETTE.length];
+                return `
+                    <div class="comparison-tag">
+                        <span class="color-dot" style="background-color: ${color.border}"></span>
+                        ${p.name}
+                        <span class="remove-btn" onclick="SnapProfile.removeComparedPlayer('${p.id}')">×</span>
+                    </div>
+                `;
+            }).join('');
+        }
+    };
+
+    // --- CHARTS ---
+    const Charts = {
+        renderSeasonChart(stats) {
+            const ctx = $('seasonChart').getContext('2d');
+            if (State.seasonChartInstance) State.seasonChartInstance.destroy();
+
+            // 1. Unified Timeline
+            const dateMap = new Set();
+            stats.forEach(s => dateMap.add(s.date));
+            State.comparedPlayers.forEach(p => (p.stats || []).forEach(s => dateMap.add(s.date)));
+            const sortedDates = Array.from(dateMap).sort();
+
+            const labels = sortedDates.map(dStr => {
+                const [y, m, d] = dStr.split('-');
+                return `${parseInt(m)}/${parseInt(d)}`;
             });
-            $('historyTimeline').innerHTML = timelineHtml || '<div class="status-msg">No history found</div>';
 
-            // Charts & Stats
-            if (data.currentSeasonStats && data.currentSeasonStats.length > 0) {
-                $('seasonChart').style.display = 'block';
-                $('noSeasonStats').style.display = 'none';
-                $('seasonChartContainer').style.height = '350px';
-                renderSeasonChart(data.currentSeasonStats);
-            } else {
-                $('seasonChart').style.display = 'none';
-                $('noSeasonStats').style.display = 'block';
-                $('seasonChartContainer').style.height = 'auto'; // Collapse
-            }
+            const alignData = (sList, key) => sortedDates.map(dStr => sList.find(s => s.date === dStr)?.[key] || null);
 
-            if (data.historicalSeasonRanks && data.historicalSeasonRanks.length > 0) {
-                $('historicalChart').style.display = 'block';
-                $('noHistoricalStats').style.display = 'none';
-                $('historicalChartContainer').style.height = '350px';
-                renderHistoricalChart(data.historicalSeasonRanks);
-            } else {
-                $('historicalChart').style.display = 'none';
-                $('noHistoricalStats').style.display = 'block';
-                $('historicalChartContainer').style.height = 'auto'; // Collapse
-            }
+            // 2. Datasets
+            State.isComparing = State.comparedPlayers.length > 0;
+            let datasets = [];
 
-            $('loading').style.display = 'none';
-            $('content').style.display = 'block';
-        } catch (e) {
-            $('loading').innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
-            console.error(e);
-        }
-    }
-
-    function renderSeasonChart(stats) {
-        const ctx = $('seasonChart').getContext('2d');
-        if (seasonChartInstance) seasonChartInstance.destroy();
-
-        // Calc SP Range
-        const spValues = stats.map(s => s.sp).filter(v => v > 0);
-        let minSP = undefined;
-        let maxSP = undefined;
-        if (spValues.length > 0) {
-            let dMin = Math.min(...spValues);
-            let dMax = Math.max(...spValues);
-            if ((dMax - dMin) < 1000) {
-                const mid = (dMax + dMin) / 2;
-                minSP = mid - 500;
-                maxSP = mid + 500;
-            }
-        }
-
-        seasonChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: stats.map(s => {
-                    const d = new Date(s.date);
-                    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
-                }),
-                datasets: [
+            if (!State.isComparing) {
+                datasets = [
                     {
                         label: 'Rank',
-                        data: stats.map(s => s.rank),
-                        borderColor: '#2196F3', // Blue
-                        backgroundColor: 'rgba(33, 150, 243, 0)', // Transparent
-                        yAxisID: 'y',
-                        tension: 0.2,
-                        fill: false,
-                        borderDash: [5, 5]
+                        data: alignData(stats, 'rank'),
+                        borderColor: '#2196F3',
+                        pointBackgroundColor: '#1e293b',
+                        yAxisID: 'yRank',
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        borderDash: [5, 5],
+                        clip: false
                     },
                     {
                         label: 'SP',
-                        data: stats.map(s => s.sp),
-                        borderColor: '#ffcc00', // Gold
-                        backgroundColor: 'rgba(255, 204, 0, 0.1)', // Gold Fill
-                        yAxisID: 'y1',
-                        tension: 0.2,
-                        fill: true
-                    }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        reverse: true, // Rank 1 top
-                        min: 1,
-                        suggestedMax: 100,
-                        title: { display: true, text: 'Rank', color: '#2196F3' },
-                        grid: { color: '#333' },
-                        ticks: { color: '#2196F3' }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: { display: true, text: 'Snap Points', color: '#ffcc00' },
-                        suggestedMin: minSP,
-                        suggestedMax: maxSP,
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: '#ffcc00' }
-                    }
-                },
-                plugins: {
-                    legend: { labels: { color: '#fff' } }
-                }
-            }
-        });
-        // 6. Attach raw stats for image generation
-        seasonChartInstance.rawStats = stats;
-    }
-
-    function renderHistoricalChart(stats) {
-        const ctx = $('historicalChart').getContext('2d');
-        if (historicalChartInstance) historicalChartInstance.destroy();
-
-        // Calc SP Range
-        const spValues = stats.map(s => s.sp).filter(v => v > 0);
-        let minSP = undefined;
-        let maxSP = undefined;
-        if (spValues.length > 0) {
-            let dMin = Math.min(...spValues);
-            let dMax = Math.max(...spValues);
-            if ((dMax - dMin) < 1000) {
-                const mid = (dMax + dMin) / 2;
-                minSP = mid - 500;
-                maxSP = mid + 500;
-            }
-        }
-
-        historicalChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: stats.map(s => s.season),
-                datasets: [
-                    {
-                        label: 'Season End Rank',
-                        data: stats.map(s => s.rank),
-                        borderColor: '#2196F3', // Blue (Rank)
-                        backgroundColor: 'rgba(33, 150, 243, 0)',
-                        yAxisID: 'y',
-                        tension: 0.2,
-                        fill: false,
-                        borderDash: [5, 5]
-                    },
-                    {
-                        label: 'Season End SP',
-                        data: stats.map(s => s.sp),
-                        borderColor: '#ffcc00', // Gold (SP)
+                        data: alignData(stats, 'sp'),
+                        borderColor: '#ffcc00',
                         backgroundColor: 'rgba(255, 204, 0, 0.1)',
-                        yAxisID: 'y1',
-                        tension: 0.2,
+                        pointBackgroundColor: '#ffcc00',
+                        yAxisID: 'ySP',
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 3,
                         fill: true
                     }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: { mode: 'index', intersect: false },
-                scales: {
-                    x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        reverse: true, // Rank 1 top
-                        min: 1, // Always show "Best" as 1
-                        suggestedMax: 100,
-                        title: { display: true, text: 'Rank', color: '#2196F3' },
-                        grid: { color: '#333' },
-                        ticks: { color: '#2196F3' }
+                ];
+            } else {
+                const primaryName = $('pName').dataset.rawName;
+                datasets.push({
+                    label: primaryName,
+                    data: alignData(stats, 'sp'),
+                    borderColor: '#ffcc00',
+                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
+                    pointBackgroundColor: '#ffcc00',
+                    yAxisID: 'ySP',
+                    tension: 0.3,
+                    borderWidth: 2,
+                    pointRadius: 3,
+                    fill: true
+                });
+
+                State.comparedPlayers.forEach((p, i) => {
+                    const color = SnapUtils.CHART_PALETTE[(i + 1) % SnapUtils.CHART_PALETTE.length];
+                    datasets.push({
+                        label: p.name,
+                        data: alignData(p.stats || [], 'sp'),
+                        borderColor: color.border,
+                        backgroundColor: color.bg.replace('0.2)', '0.05)'), // Lighter for comparison
+                        pointBackgroundColor: color.border,
+                        yAxisID: 'ySP',
+                        tension: 0.3,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        fill: true
+                    });
+                });
+            }
+
+            // 3. SP Range
+            let allSPs = [].concat(...datasets.filter(ds => ds.yAxisID === 'ySP').map(ds => ds.data)).filter(v => v > 0);
+            let minSP, maxSP;
+            if (allSPs.length > 0) {
+                let dMin = Math.min(...allSPs), dMax = Math.max(...allSPs);
+                if ((dMax - dMin) < 1000) { minSP = (dMax + dMin) / 2 - 500; maxSP = (dMax + dMin) / 2 + 500; }
+            }
+
+            State.seasonChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: { labels, datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { top: 10 } },
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
+                        yRank: { type: 'linear', display: !State.isComparing, position: 'left', reverse: true, min: 1, suggestedMax: 100, title: { display: true, text: 'Rank', color: '#2196F3' }, grid: { color: '#333' }, ticks: { color: '#2196F3' } },
+                        ySP: { type: 'linear', display: true, position: State.isComparing ? 'left' : 'right', title: { display: true, text: 'Snap Points', color: '#ffcc00' }, suggestedMin: minSP, suggestedMax: maxSP, grid: { drawOnChartArea: State.isComparing, color: '#333' }, ticks: { color: '#ffcc00' } }
                     },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        title: { display: true, text: 'Snap Points', color: '#ffcc00' },
-                        suggestedMin: minSP,
-                        suggestedMax: maxSP,
-                        grid: { drawOnChartArea: false },
-                        ticks: { color: '#ffcc00' }
-                    }
+                    plugins: { legend: { labels: { color: '#fff' } } }
                 }
+            });
+            State.seasonChartInstance.rawStats = stats;
+        },
+
+        renderHistoricalChart(stats) {
+            const ctx = $('historicalChart').getContext('2d');
+            if (State.historicalChartInstance) State.historicalChartInstance.destroy();
+
+            const spValues = stats.map(s => s.sp).filter(v => v > 0);
+            let minSP, maxSP;
+            if (spValues.length > 0) {
+                let dMin = Math.min(...spValues), dMax = Math.max(...spValues);
+                if ((dMax - dMin) < 1000) { minSP = (dMax + dMin) / 2 - 500; maxSP = (dMax + dMin) / 2 + 500; }
             }
-        });
-    }
 
-    // Exported for onclick handler
-    window.copySeasonGraphImage = function () {
-        const btn = $('shareSeasonGraphBtn');
-        const originalText = btn.innerText;
-        btn.innerText = "Generating...";
-        btn.setAttribute('aria-busy', 'true');
-
-        // We wrap the entire generation in the ClipboardItem Promise
-        const blobPromise = new Promise(async (resolve, reject) => {
-            try {
-                // Check if chart exists
-                if (!seasonChartInstance) throw new Error("No chart to copy");
-
-                // 1. Calculate Rank/SP Data FIRST to determine layout
-                let rankText = null;
-                let spText = null;
-
-                const selectedVal = $('seasonSelect').value;
-                if (selectedVal) {
-                    const [yearStr, monthStr] = selectedVal.split('-');
-                    const sYear = parseInt(yearStr);
-                    const sMonth0 = parseInt(monthStr) - 1;
-
-                    const now = new Date();
-                    const active = SnapUtils.getCurrentSeason(now);
-                    const activeKey = `${active.year}-${active.month}`;
-                    const isCurrentSeason = selectedVal === activeKey;
-
-                    const rawStats = seasonChartInstance.rawStats || [];
-
-                    // 1. Current Season Live Data
-                    if (isCurrentSeason) {
-                        const pRankBadge = $('pRankBadge');
-                        if (pRankBadge && pRankBadge.style.display !== 'none') {
-                            rankText = "Rank " + $('pRank').dataset.rank;
-                            const liveSP = $('pRank').dataset.sp;
-                            spText = liveSP ? `${parseInt(liveSP).toLocaleString()} SP` : null;
-                        }
-                    }
-                    // 2. Past Season Historical Data
-                    else if (rawStats.length > 0) {
-                        const lastEntry = rawStats[rawStats.length - 1];
-                        const lastRank = lastEntry.rank;
-                        const lastSP = lastEntry.sp;
-
-                        const seasonEndDate = SnapUtils.getSeasonEndForMonth(sYear, sMonth0);
-                        const seasonEndStr = seasonEndDate.toISOString().split('T')[0];
-
-                        // Also allow the day before (Monday) in case the Tuesday snapshot is missing/empty
-                        const prevDate = new Date(seasonEndDate);
-                        prevDate.setUTCDate(prevDate.getUTCDate() - 1);
-                        const prevDateStr = prevDate.toISOString().split('T')[0];
-
-                        // Check: Data is from Season End OR Day Before
-                        if ((lastEntry.date === seasonEndStr || lastEntry.date === prevDateStr) && lastRank) {
-                            rankText = "Rank " + lastRank;
-                            spText = lastSP ? `${lastSP.toLocaleString()} SP` : null;
-                        }
+            State.historicalChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: stats.map(s => s.season),
+                    datasets: [
+                        { label: 'Season End Rank', data: stats.map(s => s.rank), borderColor: '#2196F3', yAxisID: 'y', tension: 0.2, borderDash: [5, 5], clip: false },
+                        { label: 'Season End SP', data: stats.map(s => s.sp), borderColor: '#ffcc00', backgroundColor: 'rgba(255, 204, 0, 0.1)', yAxisID: 'y1', tension: 0.2, fill: true }
+                    ]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    layout: { padding: { top: 10 } },
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
+                        y: { type: 'linear', display: true, position: 'left', reverse: true, min: 1, suggestedMax: 100, title: { display: true, text: 'Rank', color: '#2196F3' }, grid: { color: '#333' }, ticks: { color: '#2196F3' } },
+                        y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Snap Points', color: '#ffcc00' }, suggestedMin: minSP, suggestedMax: maxSP, grid: { drawOnChartArea: false }, ticks: { color: '#ffcc00' } }
                     }
                 }
-
-                // 2. Setup Layout
-                const layoutScale = 1.0;
-                const width = 1200 * layoutScale;
-                const height = 675 * layoutScale;
-                const padding = 30 * layoutScale;
-                const headerHeight = (rankText ? 160 : 120) * layoutScale;
-
-                // 3. Setup Export Canvas (High-DPI)
-                const dpi = 2; // "Retina" resolution for standard high-quality share image
-                const highResWidth = width * dpi;
-                const highResHeight = height * dpi;
-                const highResPadding = padding * dpi;
-                const highResHeaderHeight = headerHeight * dpi;
-
-                const canvas = document.createElement('canvas');
-                canvas.width = highResWidth;
-                canvas.height = highResHeight;
-                const ctx = canvas.getContext('2d');
-
-                // Quality settings
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-
-                // 4. Background
-                ctx.fillStyle = '#1e293b'; // Slate 800
-                ctx.fillRect(0, 0, highResWidth, highResHeight);
-
-                // 5. Render High-Res Chart (Off-screen)
-                const tempCanvas = document.createElement('canvas');
-                tempCanvas.width = highResWidth - (highResPadding * 2);
-                tempCanvas.height = highResHeight - highResHeaderHeight - highResPadding;
-                const tempCtx = tempCanvas.getContext('2d');
-
-                // Clone Config & Scale Fonts
-                const originalConfig = seasonChartInstance.config;
-                const newOptions = JSON.parse(JSON.stringify(originalConfig.options));
-
-                newOptions.animation = false;
-                newOptions.responsive = false;
-                newOptions.maintainAspectRatio = false;
-                newOptions.devicePixelRatio = dpi;
-
-                // Helper to safely set font size and padding
-                const setFont = (obj, size) => {
-                    if (!obj.font) obj.font = {};
-                    obj.font.size = size * dpi;
-                    obj.font.family = "'Inter', system-ui, sans-serif";
-                };
-
-                const adjustAxis = (axis, fontSize, titleSize) => {
-                    if (!axis) return;
-                    if (!axis.ticks) axis.ticks = {};
-                    setFont(axis.ticks, fontSize);
-                    axis.ticks.padding = 10 * dpi;
-
-                    if (!axis.title) axis.title = {};
-                    setFont(axis.title, titleSize);
-                    axis.title.padding = { top: 10 * dpi, bottom: 0 };
-                };
-
-                adjustAxis(newOptions.scales.x, 14, 16);
-                adjustAxis(newOptions.scales.y, 14, 16);
-                adjustAxis(newOptions.scales.y1, 14, 16);
-
-                // Scale Legend
-                if (newOptions.plugins && newOptions.plugins.legend && newOptions.plugins.legend.labels) {
-                    setFont(newOptions.plugins.legend.labels, 14);
-                    newOptions.plugins.legend.labels.boxWidth = 40 * dpi;
-                    newOptions.plugins.legend.labels.padding = 20 * dpi;
-                }
-
-                // Add global chart padding
-                if (!newOptions.layout) newOptions.layout = {};
-                newOptions.layout.padding = 15 * dpi;
-
-                // Clone Data to adjust line thickness
-                const newData = JSON.parse(JSON.stringify(originalConfig.data));
-                newData.datasets.forEach(ds => {
-                    // Set line thickness (default is 3, using 3.5 for clarity in high-res)
-                    ds.borderWidth = 3.5 * dpi;
-                    if (ds.borderDash) {
-                        ds.borderDash = ds.borderDash.map(v => v * dpi);
-                    }
-                });
-
-                // Create Temp Chart
-                const tempChart = new Chart(tempCtx, {
-                    type: 'line',
-                    data: newData,
-                    options: newOptions
-                });
-
-                // Wait for render
-                await new Promise(r => setTimeout(r, 50));
-
-                // Draw the high‑DPI temp chart onto the main high‑DPI canvas
-                ctx.drawImage(
-                    tempCanvas,
-                    0, 0, tempCanvas.width, tempCanvas.height,
-                    highResPadding, highResHeaderHeight,
-                    highResWidth - (highResPadding * 2),
-                    highResHeight - highResHeaderHeight - highResPadding
-                );
-
-                // Clean up
-                tempChart.destroy();
-                tempCanvas.remove();
-
-                // 6. Draw Custom Header Text
-                const rawName = $('pName').dataset.rawName || $('pName').innerText.replace('Loading Profile...', '').trim();
-                const seasonName = $('seasonSelect').options[$('seasonSelect').selectedIndex].text;
-
-                ctx.textBaseline = 'top';
-
-                // Name
-                ctx.fillStyle = '#f8fafc';
-                ctx.font = `bold ${48 * dpi}px system-ui, -apple-system, sans-serif`;
-                ctx.textAlign = 'left';
-                ctx.fillText(rawName, highResPadding, highResPadding + (15 * dpi));
-
-                // Season (Right)
-                ctx.fillStyle = '#94a3b8';
-                ctx.font = `${30 * dpi}px system-ui, -apple-system, sans-serif`;
-                ctx.textAlign = 'right';
-                ctx.fillText(seasonName, highResWidth - highResPadding, highResPadding + (25 * dpi));
-
-                // Rank & SP (Below Name, if exists)
-                if (rankText) {
-                    ctx.textAlign = 'left';
-                    const rankY = highResPadding + (75 * dpi);
-
-                    ctx.fillStyle = '#2196F3'; // Blue
-                    ctx.font = `bold ${32 * dpi}px system-ui, -apple-system, sans-serif`;
-                    ctx.fillText(rankText, highResPadding, rankY);
-
-                    if (spText) {
-                        const rankWidth = ctx.measureText(rankText).width;
-                        ctx.fillStyle = '#ffcc00'; // Gold
-                        ctx.font = `bold ${32 * dpi}px system-ui, -apple-system, sans-serif`;
-                        ctx.fillText(spText, highResPadding + rankWidth + (25 * dpi), rankY);
-                    }
-                }
-
-                // 7. Finalize Blob
-                canvas.toBlob((blob) => {
-                    if (blob) resolve(blob);
-                    else reject(new Error("Blob failed"));
-                }, 'image/png');
-
-            } catch (e) {
-                reject(e);
-            }
-        });
-
-        // Trigger Copy
-        navigator.clipboard.write([
-            new ClipboardItem({ 'image/png': blobPromise })
-        ]).then(() => {
-            btn.removeAttribute('aria-busy');
-            btn.innerText = "✓ Copied";
-            setTimeout(() => btn.innerText = originalText, 2500);
-        }).catch((err) => {
-            console.error("Clipboard write failed:", err);
-            btn.removeAttribute('aria-busy');
-            btn.innerText = "✕ Failed";
-            alert("Could not copy: " + (err.name === 'NotAllowedError' ? 'Clipboard permission denied.' : (err.message || err)));
-            setTimeout(() => btn.innerText = originalText, 2500);
-        });
+            });
+        }
     };
 
-    // Load Data
-    loadProfile();
+    // --- SEARCH / COMPARE ---
+    function initCompareSearch() {
+        const input = $('compareSearchInput');
+        const box = $('compareSuggestions');
+        if (!input || !box) return;
+
+        const hide = () => { box.style.display = 'none'; };
+
+        input.addEventListener('input', () => {
+            clearTimeout(State.debounceTimer);
+            const query = input.value.trim();
+            if (query.length < 3) return hide();
+
+            State.debounceTimer = setTimeout(async () => {
+                try {
+                    const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&limit=5&format=json`);
+                    const data = await res.json();
+                    if (data.matches?.length > 0) {
+                        box.innerHTML = data.matches.filter(m => m.id !== State.playerId).map(m => `
+                            <div class="search-suggestion-item" data-id="${m.id}" data-name="${m.name}">
+                                <div class="suggestion-content">
+                                    <div class="suggestion-main">
+                                        <span class="suggestion-name">${m.name}</span>
+                                        ${m.currentRank ? `<span class="suggestion-rank">#${m.currentRank}</span>` : ''}
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('');
+                        box.style.display = 'block';
+                    } else hide();
+                } catch (e) { hide(); }
+            }, 250);
+        });
+
+        box.addEventListener('click', async (e) => {
+            const item = e.target.closest('.search-suggestion-item');
+            if (item) {
+                await SnapProfile.addComparedPlayer(item.dataset.id, item.dataset.name);
+                input.value = '';
+                hide();
+                SnapProfile.toggleCompareSearch(false);
+            }
+        });
+
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                hide();
+                SnapProfile.toggleCompareSearch(false);
+            }
+        });
+    }
+
+    function populateSeasonSelector() {
+        const container = $('seasonDropdown');
+        if (!container || container.children.length > 0) return;
+
+        const now = new Date();
+        const active = SnapUtils.getCurrentSeason(now);
+        const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+        const addItem = (val, text, isDefault) => {
+            const div = document.createElement('div');
+            div.className = 'season-dropdown-item';
+            div.innerHTML = `
+                <label>
+                    <input type="radio" name="season-group" value="${val}" class="season-check" ${isDefault ? 'checked' : ''} onchange="SnapProfile.handleSeasonChange()">
+                    <span>${text}</span>
+                </label>
+            `;
+            container.appendChild(div);
+        };
+
+        let y = active.year, m = active.month - 1;
+        addItem(`${y}-${m + 1}`, `${months[m]} ${y}`, true);
+
+        // Previous months
+        if (--m < 0) { m = 11; y--; }
+        while (y > DATA_START_YEAR || (y === DATA_START_YEAR && m >= DATA_START_MONTH)) {
+            addItem(`${y}-${m + 1}`, `${months[m]} ${y}`, false);
+            if (--m < 0) { m = 11; y--; }
+        }
+
+        UI.updateSeasonTriggerText();
+    }
+
+    // --- PUBLIC API ---
+    window.SnapProfile = {
+        async addComparedPlayer(id, name) {
+            if (State.comparedPlayers.some(p => p.id === id)) return;
+            if (State.comparedPlayers.length >= 5) return alert("Maximum 5 players.");
+
+            const player = { id, name, stats: [] };
+            State.comparedPlayers.push(player);
+
+            const checked = document.querySelector('.season-check:checked');
+            const [year, month] = (checked ? checked.value : `${new Date().getFullYear()}-${new Date().getMonth() + 1}`).split('-');
+            try {
+                const res = await fetch(`/api/player/${id}?month=${month}&year=${year}`);
+                if (res.ok) player.stats = (await res.json()).currentSeasonStats || [];
+            } catch (e) { }
+
+            UI.renderComparedPlayersList();
+            UI.updateSeasonChartUI();
+        },
+
+        removeComparedPlayer(id) {
+            State.comparedPlayers = State.comparedPlayers.filter(p => p.id !== id);
+            UI.renderComparedPlayersList();
+            UI.updateSeasonChartUI();
+        },
+
+        toggleCompareSearch(show) {
+            const container = $('compareSearchContainer');
+            const toggleBtn = $('toggleCompareBtn');
+            const input = $('compareSearchInput');
+            if (!container || !toggleBtn) return;
+
+            const isHidden = container.classList.contains('d-none');
+            const shouldShow = show !== undefined ? show : isHidden;
+
+            if (shouldShow) {
+                container.classList.remove('d-none');
+                toggleBtn.querySelector('span').innerText = 'Close';
+                toggleBtn.querySelector('svg').innerHTML = '<line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line>';
+                if (input) input.focus();
+            } else {
+                container.classList.add('d-none');
+                toggleBtn.querySelector('span').innerText = 'Compare';
+                toggleBtn.querySelector('svg').innerHTML = '<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>';
+            }
+        },
+
+        toggleSeasonDropdown() {
+            const dd = $('seasonDropdown');
+            const isOpen = dd.style.display === 'block';
+            dd.style.display = isOpen ? 'none' : 'block';
+            if (!isOpen) { SnapProfile.toggleCompareSearch(false); }
+        },
+
+        handleSeasonChange() {
+            const checked = document.querySelector('.season-check:checked');
+            if (checked) {
+                UI.updateSeasonTriggerText();
+                loadSeasonData(...checked.value.split('-'));
+                $('seasonDropdown').style.display = 'none';
+            }
+        },
+
+        copySeasonGraphImage() {
+            Exporter.exportChart(State, State.seasonChartInstance);
+        }
+    };
+
+    // --- EXPORTER (High-Res Share Image) ---
+    const Exporter = {
+        async exportChart(State, chartInstance) {
+            const btn = $('shareSeasonGraphBtn');
+            const icon = $('copyIcon');
+            const successIcon = $('copySuccessIcon');
+            const errorIcon = $('copyErrorIcon');
+
+            if (!btn || !icon) return;
+
+            btn.setAttribute('aria-busy', 'true');
+            btn.disabled = true;
+
+            const showIcon = (type) => {
+                icon.classList.add('d-none');
+                if (successIcon) successIcon.classList.add('d-none');
+                if (errorIcon) errorIcon.classList.add('d-none');
+
+                if (type === 'success' && successIcon) successIcon.classList.remove('d-none');
+                else if (type === 'error' && errorIcon) errorIcon.classList.remove('d-none');
+                else icon.classList.remove('d-none');
+            };
+
+            try {
+                if (!chartInstance) throw new Error("No chart to copy");
+                const blob = await this.generateBlob(State, chartInstance);
+                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+
+                // Success
+                showIcon('success');
+                btn.classList.add('success');
+                setTimeout(() => {
+                    showIcon('default');
+                    btn.classList.remove('success');
+                }, 2500);
+            } catch (e) {
+                console.error("Export failed:", e);
+                // Error
+                showIcon('error');
+                btn.classList.add('error');
+                alert("Could not copy: " + (e.message || "Unknown error"));
+                setTimeout(() => {
+                    showIcon('default');
+                    btn.classList.remove('error');
+                }, 2500);
+            } finally {
+                btn.removeAttribute('aria-busy');
+                btn.disabled = false;
+            }
+        },
+
+        async generateBlob(State, chartInstance) {
+            const { rankText, spText } = this.getHeaderStats(State, chartInstance);
+            const { width, height, dpi, padding, headerHeight } = { width: 1200, height: 675, dpi: 2, padding: 30, headerHeight: rankText ? 160 : 120 };
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width * dpi; canvas.height = height * dpi;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+
+            ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const chartCanvas = await this.renderHighResChart(chartInstance, width, height, headerHeight, padding, dpi);
+            ctx.drawImage(chartCanvas, padding * dpi, headerHeight * dpi);
+            this.drawHeader(ctx, State, rankText, spText, padding, dpi);
+
+            return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        },
+
+        getHeaderStats(State, chartInstance) {
+            // Updated to fallback to first checked if radio
+            const sSelect = document.querySelector('.season-check:checked');
+            const selectedVal = sSelect ? sSelect.value : '';
+            if (!selectedVal) return { rankText: null, spText: null };
+
+            const [year, month] = selectedVal.split('-').map(Number);
+            const active = SnapUtils.getCurrentSeason(new Date());
+            const isCurrent = selectedVal === `${active.year}-${active.month}`;
+            let rankText = null, spText = null;
+            const rawStats = chartInstance.rawStats || [];
+
+            if (isCurrent) {
+                const pRank = $('pRank');
+                if (pRank?.dataset.rank) {
+                    rankText = "Rank " + pRank.dataset.rank;
+                    if (pRank.dataset.sp) spText = parseInt(pRank.dataset.sp).toLocaleString() + " SP";
+                }
+            } else if (rawStats.length > 0) {
+                const last = rawStats[rawStats.length - 1];
+                const end = SnapUtils.getSeasonEndForMonth(year, month - 1), endStr = end.toISOString().split('T')[0];
+                const prev = new Date(end); prev.setUTCDate(prev.getUTCDate() - 1);
+                const prevStr = prev.toISOString().split('T')[0];
+                if ((last.date === endStr || last.date === prevStr) && last.rank) {
+                    rankText = "Rank " + last.rank;
+                    if (last.sp) spText = last.sp.toLocaleString() + " SP";
+                }
+            }
+            return { rankText, spText };
+        },
+
+        async renderHighResChart(chartInstance, width, height, headerHeight, padding, dpi) {
+            const tempCanvas = document.createElement('canvas');
+            const cWidth = width - (padding * 2), cHeight = height - headerHeight - padding;
+            tempCanvas.width = cWidth * dpi; tempCanvas.height = cHeight * dpi;
+
+            // Robust Config Cloning
+            const originalConfig = chartInstance.config;
+            const newConfig = {
+                type: originalConfig.type,
+                data: JSON.parse(JSON.stringify(originalConfig.data)), // Deep copy data
+                options: {
+                    ...(originalConfig.options || {}),
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    devicePixelRatio: 1, // Fix: Prevent double scaling (we manually scale fonts/layout by dpi)
+                    // Use onComplete callback for rendering
+                    animation: {
+                        duration: 0,
+                        onComplete: () => { /* Handled by promise */ }
+                    },
+                    plugins: {
+                        ...(originalConfig.options?.plugins || {}),
+                        legend: {
+                            ...(originalConfig.options?.plugins?.legend || {}),
+                            labels: { ...(originalConfig.options?.plugins?.legend?.labels || {}) }
+                        }
+                    },
+                    scales: { ...(originalConfig.options?.scales || {}) }
+                }
+            };
+
+            const scale = (obj, size) => {
+                if (!obj) return;
+                if (!obj.font) obj.font = {};
+                obj.font.size = size * dpi; obj.font.family = "'Inter', system-ui, sans-serif";
+            };
+
+            const opt = newConfig.options;
+            Object.values(opt.scales || {}).forEach(s => {
+                if (s.ticks) {
+                    scale(s.ticks, 14);
+                    s.ticks.padding = 10 * dpi;
+                }
+                if (s.title) scale(s.title, 16);
+            });
+
+            if (opt.plugins?.legend?.labels) {
+                scale(opt.plugins.legend.labels, 14);
+                opt.plugins.legend.labels.boxWidth = 40 * dpi;
+                opt.plugins.legend.labels.padding = 20 * dpi;
+            }
+
+            newConfig.data.datasets.forEach(ds => {
+                ds.borderWidth = 3.5 * dpi;
+                if (ds.borderDash) ds.borderDash = ds.borderDash.map(v => v * dpi);
+            });
+
+            // Promisify the rendering
+            return new Promise((resolve) => {
+                newConfig.options.animation.onComplete = () => {
+                    resolve(tempCanvas);
+                };
+                const tempChart = new Chart(tempCanvas.getContext('2d'), newConfig);
+                // Safety timeout in case onComplete doesn't fire (e.g. if no data)
+                setTimeout(() => resolve(tempCanvas), 2000);
+            });
+        },
+
+        drawHeader(ctx, State, rankText, spText, padding, dpi) {
+            const name = $('pName').dataset.rawName || $('pName').innerText, season = document.querySelector('.season-check:checked')?.parentElement.querySelector('span').innerText || 'Season';
+
+            ctx.textBaseline = 'top'; ctx.fillStyle = '#f8fafc'; ctx.font = `bold ${48 * dpi}px system-ui, sans-serif`; ctx.textAlign = 'left';
+            ctx.fillText(name, padding * dpi, padding * dpi + (15 * dpi));
+            ctx.fillStyle = '#94a3b8'; ctx.font = `${30 * dpi}px system-ui, sans-serif`; ctx.textAlign = 'right';
+            ctx.fillText(season, (1200 - padding) * dpi, padding * dpi + (25 * dpi));
+
+            if (rankText || spText) {
+                ctx.textAlign = 'left'; let curX = padding * dpi; const y = padding * dpi + (75 * dpi);
+                if (rankText) {
+                    ctx.fillStyle = '#2196F3'; ctx.font = `bold ${32 * dpi}px system-ui, sans-serif`;
+                    ctx.fillText(rankText, curX, y); curX += ctx.measureText(rankText).width + (25 * dpi);
+                }
+                if (spText) { ctx.fillStyle = '#ffcc00'; ctx.font = `bold ${32 * dpi}px system-ui, sans-serif`; ctx.fillText(spText, curX, y); }
+            }
+        }
+    };
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();

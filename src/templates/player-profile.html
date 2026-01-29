@@ -52,12 +52,57 @@
         <header class="grid">
             <div>Season Performance</div>
             <div class="text-right flex-end-gap">
-                <button id="shareSeasonGraphBtn" class="btn-ghost" onclick="copySeasonGraphImage()">
-                    📸 Copy
+                <button id="shareSeasonGraphBtn" class="btn-icon-only" onclick="SnapProfile.copySeasonGraphImage()"
+                    title="Copy Image">
+                    <!-- Default: Copy/Camera -->
+                    <svg id="copyIcon" class="icon-svg" viewBox="0 0 24 24">
+                        <path
+                            d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                        <circle cx="12" cy="13" r="3" />
+                    </svg>
+                    <!-- Success: Check -->
+                    <svg id="copySuccessIcon" class="icon-svg d-none" viewBox="0 0 24 24">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    <!-- Error: X -->
+                    <svg id="copyErrorIcon" class="icon-svg d-none" viewBox="0 0 24 24">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
                 </button>
-                <select id="seasonSelect" class="small-select season-select"></select>
+
+                <div id="compareUI" class="compare-tray">
+                    <button id="toggleCompareBtn" class="btn-compare-toggle"
+                        onclick="SnapProfile.toggleCompareSearch()">
+                        <svg class="icon-svg" viewBox="0 0 24 24">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        <span>Compare</span>
+                    </button>
+                    <div id="compareSearchContainer" class="compare-search-container d-none">
+                        <div class="compare-search-input-wrapper">
+                            <svg class="icon-svg compare-search-icon" viewBox="0 0 24 24">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                            <input type="text" id="compareSearchInput" class="small-input"
+                                placeholder="Search player..." autocomplete="off">
+                        </div>
+                        <div id="compareSuggestions" class="search-suggestions contrast small-suggestions"></div>
+                    </div>
+                </div>
+
+                <div class="text-right relative flex-end">
+                    <button id="seasonTrigger" onclick="SnapProfile.toggleSeasonDropdown()" class="fake-select">
+                        <span id="seasonTriggerText">Loading...</span>
+                    </button>
+                    <div id="seasonDropdown" class="season-dropdown"></div>
+                </div>
             </div>
         </header>
+
+        <div id="comparedPlayersList" class="flex-wrap-gap mb-10 flex-end"></div>
         <div id="seasonChartContainer" class="chart-container">
             <canvas id="seasonChart"></canvas>
             <div id="noSeasonStats" class="status-msg d-none">No ranked data for this season.

@@ -27,10 +27,10 @@ function formatSearchTextOutput(players) {
     const MAX_LENGTH = 400;
 
     for (const p of players) {
-        // Basic Info: "#Rank Name" (Rank is not stored in search index, so just Name)
-        // If we want rank, we'd need to fetch live leaderboard comparison, but this is simple search.
-
         let nameStr = p.name;
+        if (p.currentRank) {
+            nameStr = `#${p.currentRank} ${nameStr}`;
+        }
 
         // Add Aliases if available
         if (p.history && p.history.length > 1) {

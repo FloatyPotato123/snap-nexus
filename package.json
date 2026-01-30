@@ -5,9 +5,10 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "npm run build && (npm run build:client -- --watch & npm run build:worker -- --watch & npm run build:css -- --watch & npx wrangler pages dev app/public)",
+    "dev": "npm run build && (npm run build:client -- --watch & npm run build:worker -- --watch & npm run build:css -- --watch & npm run watch:assets & npx wrangler pages dev app/public)",
+    "watch:assets": "node scripts/watch-assets.js",
     "build:client": "esbuild app/src/client/*.js --bundle --outdir=app/public/client --format=iife",
-    "build:assets": "cp app/src/assets/* app/public/",
+    "build:assets": "cp app/src/assets/* app/public/ && cp app/src/_routes.json app/public/",
     "build:css": "esbuild app/src/styles/custom.css --outfile=app/public/styles.css --bundle",
     "build:worker": "esbuild app/functions/[[path]].js --bundle --outfile=app/public/_worker.js --format=esm --loader:.html=text --loader:.css=text",
     "build:scraper": "esbuild scraper/src/index.js --bundle --outfile=scraper/dist/index.js --format=esm",

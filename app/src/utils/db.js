@@ -37,61 +37,6 @@ export async function searchPlayers(db, query, limit = 10) {
 }
 
 /**
- * Upsert (Insert or Replace) a player in the index
- * Updates the main Players table AND adds to PlayerAliases.
- * @param {D1Database} db 
- * @param {string} id 
- * @param {string} name 
- * @param {string} seenAt Optional date string
- */
-export async function upsertPlayer(db, id, name, seenAt) {
-    if (!id || !name) return;
-
-    const normalized = name.toLowerCase();
-    const now = Date.now();
-    const date = seenAt || new Date().toISOString().split('T')[0];
-
-    const sqlMain = `
-        INSERT INTO Players (id, name, normalized_name, updated_at) 
-        VALUES (?, ?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET 
-            name = excluded.name,
-            normalized_name = excluded.normalized_name,
-            updated_at = excluded.updated_at
-    `;
-
-    const sqlAlias = `
-        INSERT INTO PlayerAliases (player_id, name, normalized_name, first_seen_at)
-        VALUES (?, ?, ?, ?)
-    `;
-
-    const history = await getPlayerHistory(db, id);
-    let nameChanged = true;
-    if (history && history.length > 0) {
-        const latest = history[history.length - 1];
-        if (latest.name === name) {
-            nameChanged = false;
-        }
-    }
-
-    try {
-        const batch = [];
-        // Only update identity if name actually changed
-        if (nameChanged) {
-            batch.push(db.prepare(sqlMain).bind(id, name, normalized, now));
-            batch.push(db.prepare(sqlAlias).bind(id, name, normalized, date));
-        }
-
-        if (batch.length > 0) {
-            await db.batch(batch);
-        }
-    } catch (e) {
-        console.error("DB Upsert Error:", id, name, e);
-        throw e;
-    }
-}
-
-/**
  * Batch Upsert (For Scraper/Live Sync or Snapshot Migration)
  * Updates Master Name and intelligent history insertion (A -> B -> A support).
  * @param {D1Database} db 

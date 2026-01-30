@@ -1,6 +1,6 @@
 import { searchPlayers, getPlayerHistory, getPlayerStatsRange, batchGetPlayerHistories, getPlayerHistoricalRanks } from '../utils/db.js';
 import { getCurrentSeason, getSeasonStart, getSeasonEnd } from '../utils/seasons.js';
-import { getSeasonDailyKeys, getHistoricalSeasonEndKeys } from './history.js';
+import { getHistoricalSeasonEndKeys } from './history.js';
 import { getLiveLeaderboardData } from './leaderboard.js';
 
 // --- HELPERS ---

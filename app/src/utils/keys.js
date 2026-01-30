@@ -16,23 +16,3 @@ export function getLeaderboardKey(date) {
     const day = String(d.getUTCDate()).padStart(2, '0');
     return `leaderboard_${year}-${month}-${day}`;
 }
-
-/**
- * Returns the KV key for a player's history list.
- * Format: history:PLAYER_ID
- * @param {string} id - Player ID
- * @returns {string} e.g. "history:12345"
- */
-export function getPlayerHistoryKey(id) {
-    return `history:${id}`;
-}
-
-/**
- * Returns the KV key for the name-to-ID map.
- * Format: map:LOWERCASE_NAME
- * @param {string} name - Player Name
- * @returns {string} e.g. "map:specimen"
- */
-export function getPlayerMapKey(name) {
-    return `map:${name.trim().toLowerCase()}`;
-}

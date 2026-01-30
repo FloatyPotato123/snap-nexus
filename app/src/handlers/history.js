@@ -5,37 +5,6 @@ import { getDailyTotalsRange } from '../utils/db.js';
 
 // --- HELPERS ---
 
-// Helper: Get daily keys for a specific season
-// targetDate: A date within the desired API month/year
-export function getSeasonDailyKeys(targetDate) {
-    const seasonStart = getSeasonStart(targetDate);
-
-    // Calculate Season End using helper
-    const seasonEnd = getSeasonEnd(seasonStart);
-
-    // Limit to Today if displaying current/future season
-    const now = new Date();
-    const end = (now < seasonEnd && now >= seasonStart) ? now : seasonEnd;
-
-    const keys = [];
-    const cur = new Date(seasonStart);
-    cur.setUTCDate(cur.getUTCDate() + 1); // Skip Day 1 (Reset Day) as it contains Old Season Final Data
-    while (cur <= end) {
-        const y = cur.getUTCFullYear();
-        const m = String(cur.getUTCMonth() + 1).padStart(2, '0');
-        const d = String(cur.getUTCDate()).padStart(2, '0');
-
-        // Note: we need the date string separately too for the chart
-        const dateStr = `${y}-${m}-${d}`;
-        keys.push({
-            key: getLeaderboardKey(cur),
-            date: dateStr
-        });
-        cur.setUTCDate(cur.getUTCDate() + 1);
-    }
-    return keys;
-}
-
 // Helper: Get keys for End of Past Seasons (Last ~6 months)
 export function getHistoricalSeasonEndKeys() {
     const keys = [];

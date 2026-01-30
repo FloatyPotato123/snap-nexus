@@ -1,7 +1,14 @@
-name = "snapnexus"
-pages_build_output_dir = "app/public"
+name = "marvelsnap"
+main = "app/dist/index.js"
 compatibility_date = "2025-10-08"
 compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[triggers]
+crons = ["0 19 * * *"]
+
+[assets]
+directory = "app/public"
 
 [[kv_namespaces]]
 binding = "MARVEL_SNAP_HUB"

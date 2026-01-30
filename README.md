@@ -1,12 +1,12 @@
-# Snap Nexus (Cloudflare Pages)
+# Snap Nexus (Cloudflare Workers)
 
-A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflare Pages (Advanced Mode), Hono, and D1.
+A comprehensive backend and frontend for Marvel Snap stats, powered by Cloudflare Workers, Hono, and D1.
 
 ## 🏗 Architecture
 
-The project is split into two main components:
-- **App (`/app`)**: A Cloudflare Pages application serving the web UI and API via a single `_worker.js` (Advanced Mode).
-- **Scraper (`/scraper`)**: A Cloudflare Worker that handles background data collection and updates the D1 database.
+A single Cloudflare Worker serving:
+- **Web UI and API**: HTML templates, REST endpoints, and static assets
+- **Background Scraper**: Daily cron job (7 PM UTC) to fetch and store leaderboard data
 
 ## 🚀 Features
 
@@ -21,7 +21,7 @@ The project is split into two main components:
 
 ### 🛠 Tech Stack
 - **Framework**: [Hono](https://hono.dev)
-- **Platform**: Cloudflare Pages + Cloudflare Workers
+- **Platform**: Cloudflare Workers (with Static Assets)
 - **Database**: 
     - **Cloudflare D1**: Main SQL database for search indexing and history tracking.
     - **Cloudflare KV**: Snapshot and metadata storage.
@@ -29,10 +29,9 @@ The project is split into two main components:
 
 ## 📂 Project Structure
 
-- `app/src/`: Core logic, handlers, and templates.
-- `app/public/`: Static assets and build output for the Pages app.
-- `app/functions/`: Entry point for Pages Advanced Mode.
-- `scraper/`: Background worker for data collection.
+- `app/src/`: Core logic, handlers, templates, and worker entry point
+- `app/public/`: Static assets (CSS, JS, images)
+- `app/dist/`: Compiled worker output
 
 ## 🛠 Setup & Development
 

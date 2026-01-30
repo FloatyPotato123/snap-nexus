@@ -3,6 +3,7 @@
 
 # Build output
 dist/
+app/dist/
 app/public/
 scraper/dist/
 

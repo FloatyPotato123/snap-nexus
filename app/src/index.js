@@ -5,31 +5,32 @@ import { Buffer } from "buffer";
 
 globalThis.Buffer = Buffer;
 
-import { handleRandomDeck, handleStressDeck, handleDecodeDeck } from "../src/handlers/deck.js";
+import { handleRandomDeck, handleStressDeck, handleDecodeDeck } from "./handlers/deck.js";
 import {
     handleLeaderboard,
     handleLeaderboardComparison,
     handleGetLiveLeaderboard,
     handleDebugSnapshot
-} from "../src/handlers/leaderboard.js";
+} from "./handlers/leaderboard.js";
 import {
     handlePlayerHistory,
     handleGetPlayerProfile
-} from "../src/handlers/players.js";
+} from "./handlers/players.js";
 import {
     handleHistoryRange,
     handleSeasonHistory
-} from "../src/handlers/history.js";
+} from "./handlers/history.js";
 
-import indexHtml from "../src/templates/index.html";
-import searchHtml from "../src/templates/player-search.html";
-import profileHtml from "../src/templates/player-profile.html";
-import decksHtml from "../src/templates/decks.html";
-import leaderboardHtml from "../src/templates/leaderboard.html";
-import navbarHtml from "../src/templates/components/navbar.html";
-import layoutHtml from "../src/templates/layout.html";
+import indexHtml from "./templates/index.html";
+import searchHtml from "./templates/player-search.html";
+import profileHtml from "./templates/player-profile.html";
+import decksHtml from "./templates/decks.html";
+import leaderboardHtml from "./templates/leaderboard.html";
+import navbarHtml from "./templates/components/navbar.html";
+import layoutHtml from "./templates/layout.html";
 
-import { getWeeklyCardReleases } from "../src/handlers/cards.js";
+import { getWeeklyCardReleases } from "./handlers/cards.js";
+import { runDailyScrape } from "./handlers/scraper.js";
 
 const app = new Hono();
 
@@ -68,27 +69,11 @@ api.get("/history/seasons", (c) => handleSeasonHistory(c));
 api.get("/debug/snapshot", (c) => handleDebugSnapshot(c));
 
 // Mount API under /api
-// Mount API under /api
 app.route("/api", api);
 
 export default {
-    async fetch(request, env, ctx) {
-
-
-        // 1. Try to handle the request with the Hono App
-        const response = await app.fetch(request, env, ctx);
-
-        // 2. If Hono returns 404, fallback to Pages Static Assets
-        if (response.status === 404) {
-            if (env.ASSETS) {
-                return env.ASSETS.fetch(request);
-            }
-            // In local 'wrangler dev' mode, we just let the request through
-            // provided it's handled by the --site proxy.
-            return new Response("Not Found", { status: 404 });
-        }
-
-        // 3. Otherwise return the Hono response
-        return response;
-    }
+    fetch: app.fetch,
+    async scheduled(event, env, ctx) {
+        ctx.waitUntil(runDailyScrape(env));
+    },
 };

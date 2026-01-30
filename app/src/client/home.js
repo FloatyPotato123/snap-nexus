@@ -287,65 +287,18 @@
         async function loadHistoryChart() {
             try {
                 if (!cachedHistory) {
-                    // 1. Fetch Legacy Data
-                    // 1. Fetch Legacy Data
-                    const legacyReq = await fetch('/api/history/legacy');
-                    if (!legacyReq.ok) throw new Error("Legacy history fetch failed");
-                    const legacyData = await legacyReq.json();
-
-                    // 2. Determine Missing Seasons (Dec 2025 onwards)
-                    const dynamicData = [];
-                    const now = new Date();
-
-                    // Start checking from Dec 2025 (Month 11)
-                    // We only want COMPLETED seasons.
-                    let checkY = 2025;
-                    let checkM = 11; // 0-indexed Dec
-
-                    while (true) {
-                        // Calculate Season End for this month
-                        const seasonEnd = SnapUtils.getSeasonEndForMonth(checkY, checkM);
-
-                        // If season hasn't ended yet, stop  
-
-                        const graceTime = new Date(seasonEnd);
-                        graceTime.setUTCHours(19);
-
-                        if (graceTime > now) break;
-
-                        // If it's a valid past season, fetch its end-date data
-                        const dateStr = seasonEnd.toISOString().split('T')[0];
-                        try {
-                            // Use range with same start/end to get that specific day's total efficiently
-                            const r = await fetch(`/api/season/stats?start=${dateStr}&end=${dateStr}`);
-                            if (r.ok) {
-                                const json = await r.json();
-                                if (json && json.length > 0 && json[0].total) {
-                                    const monthName = seasonEnd.toLocaleString('default', { month: 'long' });
-                                    dynamicData.push({
-                                        label: monthName,
-                                        total: json[0].total,
-                                        month: checkM + 1,
-                                        year: checkY
-                                    });
-                                }
-                            }
-                        } catch (e) {
-                        }
-
-                        // Increment
-                        checkM++;
-                        if (checkM > 11) { checkM = 0; checkY++; }
-                    }
-
-                    cachedHistory = [...legacyData, ...dynamicData];
+                    // Fetch Unified History (Legacy + D1)
+                    const req = await fetch('/api/history/seasons');
+                    if (!req.ok) throw new Error("History fetch failed");
+                    cachedHistory = await req.json();
                 }
 
                 // Standardize Labels: "Jan '25"
                 cachedHistory = cachedHistory.map(d => {
                     const date = new Date(d.year, d.month - 1, 1);
                     const shortMonth = date.toLocaleString('default', { month: 'short' });
-                    const shortYear = date.getFullYear().toString().slice(-2); // Use getFullYear for consistency
+                    // Use getFullYear for consistency
+                    const shortYear = date.getFullYear().toString().slice(-2);
                     return { ...d, label: `${shortMonth} '${shortYear}` };
                 });
 

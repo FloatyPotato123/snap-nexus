@@ -18,7 +18,7 @@ import {
 } from "../src/handlers/players.js";
 import {
     handleHistoryRange,
-    handleLegacyHistory
+    handleSeasonHistory
 } from "../src/handlers/history.js";
 
 import indexHtml from "../src/templates/index.html";
@@ -64,7 +64,7 @@ api.get("/season/stats", (c) => handleHistoryRange(c));
 api.get("/leaderboard/daily", (c) => handleLeaderboard(c));
 api.get("/leaderboard/live", (c) => handleGetLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
-api.get("/history/legacy", (c) => handleLegacyHistory(c));
+api.get("/history/seasons", (c) => handleSeasonHistory(c));
 api.get("/debug/snapshot", (c) => handleDebugSnapshot(c));
 
 // Mount API under /api

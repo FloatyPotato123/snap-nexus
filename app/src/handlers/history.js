@@ -49,7 +49,9 @@ export function getHistoricalSeasonEndKeys() {
         keys.push({
             key: getLeaderboardKey(seasonEnd),
             date: seasonEnd.toISOString().split('T')[0],
-            seasonName: d.toLocaleString('default', { month: 'short', year: '2-digit' }) // E.g. "Dec 25" (based on the season month, not end date)
+            seasonName: d.toLocaleString('default', { month: 'short', year: '2-digit' }),
+            seasonMonth: d.getUTCMonth() + 1,
+            seasonYear: d.getUTCFullYear()
         });
     }
     return keys.reverse(); // Chronological
@@ -84,6 +86,54 @@ export async function handleHistoryRange(c) {
     return c.json(results);
 }
 
-export function handleLegacyHistory(c) {
-    return c.json(HISTORICAL_DATA);
+export async function handleSeasonHistory(c) {
+    // 1. Start with Hardcoded Legacy Data (May - Nov 2025)
+    let fullHistory = [...HISTORICAL_DATA];
+
+    // 2. Fetch Completed Seasons from D1
+    const historicalKeys = getHistoricalSeasonEndKeys();
+
+    // We want the Total Player Count for the *End Date* of each season.
+    const promises = historicalKeys.map(k =>
+        getDailyTotalsRange(c.env.DB, k.date, k.date)
+            .then(res => ({ key: k, data: res[0] }))
+    );
+
+    const d1Results = await Promise.all(promises);
+
+    // 3. Merge D1 Results into History
+    d1Results.forEach(r => {
+        if (r.data && r.data.total) {
+            // Use the Season Month/Year from the key, not the specific End Date
+            const monthName = new Date(Date.UTC(r.key.seasonYear, r.key.seasonMonth - 1, 1))
+                .toLocaleString('default', { month: 'long' });
+
+            fullHistory.push({
+                label: monthName,
+                total: r.data.total,
+                month: r.key.seasonMonth,
+                year: r.key.seasonYear
+            });
+        }
+    });
+
+    // 4. Deduplicate (Case: logic overlap with legacy)
+    const seen = new Set();
+    const uniqueHistory = [];
+    fullHistory.forEach(item => {
+        const id = `${item.year}-${item.month}`;
+        if (!seen.has(id)) {
+            seen.add(id);
+            uniqueHistory.push(item);
+        }
+    });
+
+    // 5. Sort Chronologically
+    uniqueHistory.sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.month - b.month;
+    });
+
+    return c.json(uniqueHistory);
 }
+

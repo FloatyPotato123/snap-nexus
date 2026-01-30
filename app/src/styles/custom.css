@@ -318,7 +318,7 @@ nav a:hover {
     align-items: center;
     justify-content: center;
     transition: color 0.2s;
-    width: 2.625rem !important;
+    width: 2rem !important;
     height: 100% !important;
     flex-shrink: 0;
     box-shadow: none !important;
@@ -1024,7 +1024,21 @@ header>div {
     flex-direction: column;
 }
 
+/* Movers Table Responsive Cell */
+.mover-cell-right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+}
+
 @media (max-width: 992px) {
+    .mover-cell-right {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0;
+    }
+
     .compare-search-container {
         right: auto;
         left: 50%;
@@ -1234,4 +1248,96 @@ header>div {
 
 .back-btn:hover .back-arrow {
     transform: translateX(-4px);
+}
+
+/* --- TAB UI --- */
+
+/* Tab Container */
+.tab-container {
+    width: 100%;
+}
+
+/* Tab Navigation (Buttons Row) */
+/* Tab Navigation (Buttons Row) */
+.tab-nav {
+    display: flex;
+    gap: 15px;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    margin-bottom: 20px;
+    overflow-x: auto;
+    /* Allow scroll on tiny screens */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE 10+ */
+}
+
+.tab-nav::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari/Webkit */
+}
+
+/* Tab Button */
+.tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--pico-muted-color);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 10px 15px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    border-radius: 4px 4px 0 0;
+    /* Rounded top corners only */
+    margin-bottom: -1px;
+    /* Sit on the line */
+}
+
+.tab-btn:hover {
+    color: var(--pico-contrast-color);
+}
+
+.tab-btn.active {
+    color: var(--accent-gold);
+    border-bottom-color: var(--accent-gold);
+}
+
+.tab-btn:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Tab Content Areas */
+.tab-content {
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.d-none {
+    display: none;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Flex Utilities */
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.search-suggestion-item.no-hover:hover {
+    background: transparent;
+    cursor: default;
 }

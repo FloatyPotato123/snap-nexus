@@ -18,6 +18,7 @@
         // --- UTILS ---
 
         SnapUtils.initChartDefaults();
+        SnapUtils.initTabs();
         populateSeasonSelector();
 
         // Run independently (parallel) to prevent blocking
@@ -367,6 +368,16 @@
             const date1 = d1.toISOString().split('T')[0];
             const date2 = d2.toISOString().split('T')[0];
 
+            // Render Date Range (e.g. "Jan 28 → Jan 29")
+            // Note: d2 is the older date (origin), d1 is newer (target)
+            const fmt = d => d.toLocaleString('default', { month: 'short', day: 'numeric' });
+            const dateRangeStr = `${fmt(d2)} → ${fmt(d1)}`;
+
+            const dateSpanG = document.getElementById('movers-date-gainers');
+            const dateSpanL = document.getElementById('movers-date-losers');
+            if (dateSpanG) dateSpanG.innerText = dateRangeStr;
+            if (dateSpanL) dateSpanL.innerText = dateRangeStr;
+
             // Static subtitles as requested
             $('subtitle-gainers').innerText = "24 Hour Gain";
             $('subtitle-losers').innerText = "24 Hour Drop";
@@ -383,15 +394,20 @@
                 const data = await req.json();
                 const renderRows = (list, isGain) => {
                     if (!list || !list.length) return "<tr><td>No data</td></tr>";
-                    return list.slice(0, 10).map(p => {
+                    return list.slice(0, 10).map((p, i) => {
                         const spContext = (p.spStart && p.spEnd)
-                            ? `<span class="text-muted" style="font-size:0.8rem; margin-right:1rem;">${p.spStart} → ${p.spEnd} SP</span>`
+                            ? `<span class="text-muted" style="font-size:0.8rem;">${p.spStart} → ${p.spEnd} SP</span>`
                             : '';
                         return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${p.id}?ref=home')">
-                        <td><a href="/player/${p.id}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${p.name}</a></td>
+                        <td>
+                            <span class="text-muted" style="margin-right:8px; font-size:0.9em;">${i + 1}</span>
+                            <a href="/player/${p.id}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${p.name}</a>
+                        </td>
                         <td style="text-align:right;">
-                            ${spContext}
-                            <span class="${isGain ? 'gainer' : 'loser'}">${isGain ? '+' : ''}${p.change}</span>
+                            <div class="mover-cell-right">
+                                ${spContext}
+                                <span class="${isGain ? 'gainer' : 'loser'}">${isGain ? '+' : ''}${p.change}</span>
+                            </div>
                         </td>
                     </tr>`;
                     }).join('');

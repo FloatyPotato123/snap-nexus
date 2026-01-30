@@ -80,3 +80,36 @@ window.SnapUtils.getSeasonColor = function (year, month) {
     const index = Math.abs(totalMonthDiff) % window.SnapUtils.CHART_PALETTE.length;
     return window.SnapUtils.CHART_PALETTE[index];
 };
+
+/**
+ * Initialize Tab Logic
+ * Usage: Button must have class 'tab-btn' and 'data-target="someId"'
+ * Target Content must have id="someId" and class 'tab-content'
+ */
+window.SnapUtils.initTabs = function () {
+    const tabs = document.querySelectorAll('.tab-btn');
+    tabs.forEach(tab => {
+        tab.addEventListener('click', (e) => {
+            e.preventDefault();
+            const tabBtn = e.currentTarget;
+            const targetId = tabBtn.dataset.target;
+            const container = tabBtn.closest('.tab-container');
+
+            if (!container || !targetId) return;
+
+            // 1. Deactivate all buttons in this container
+            container.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            // 2. Hide all content in this container
+            container.querySelectorAll('.tab-content').forEach(content => content.classList.add('d-none'));
+
+            // 3. Activate Clicked Button
+            tabBtn.classList.add('active');
+            // 4. Show Target Content
+            const target = document.getElementById(targetId);
+            if (target) target.classList.remove('d-none');
+        });
+    });
+};
+
+
+

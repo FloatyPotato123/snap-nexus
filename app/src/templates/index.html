@@ -1,49 +1,57 @@
 <h1 class="hero-title text-center mb-40">Infinite Dashboard</h1>
 <!-- SECTION 1: SEASON CHARTS -->
-<article class="relative">
-    <header class="grid">
-        <div class="flex-center">
-            <strong>📈 Season Trajectory</strong>
+<div class="tab-container mt-40">
+    <div class="tab-nav">
+        <button class="tab-btn active" data-target="tab-current">Season Trajectory</button>
+        <button class="tab-btn" data-target="tab-history">Historical Totals</button>
+    </div>
 
-            <span id="infinite-header-container" class="infinite-badge">
-                <span class="live-dot"></span>
-                <span class="text-gold count" id="infinite-count-header">0</span>
-                <span class="text-muted label">Infinite Players</span>
-            </span>
-        </div>
-        <div class="text-right relative flex-end">
-            <button id="seasonTrigger" onclick="toggleSeasonDropdown()" class="fake-select">
-                <span id="seasonTriggerText">Loading...</span>
-            </button>
+    <!-- Tab 1: Current Season -->
+    <div id="tab-current" class="tab-content">
+        <article class="relative">
+            <header class="grid">
+                <div class="flex-center">
+                    <span id="infinite-header-container" class="infinite-badge" style="margin-left: 0;">
+                        <span class="live-dot"></span>
+                        <span class="text-gold count" id="infinite-count-header">0</span>
+                        <span class="text-muted label">Infinite Players</span>
+                    </span>
+                </div>
+                <div class="text-right relative flex-end">
+                    <button id="seasonTrigger" onclick="toggleSeasonDropdown()" class="fake-select">
+                        <span id="seasonTriggerText">Loading...</span>
+                    </button>
 
-            <div id="seasonDropdown" class="season-dropdown">
+                    <div id="seasonDropdown" class="season-dropdown">
 
+                    </div>
+                </div>
+            </header>
+
+            <div id="seasonChartContainer" class="chart-container">
+                <canvas id="seasonChart"></canvas>
+                <div id="noSeasonData" class="status-msg" style="display:none;">No data available for this season yet
+                </div>
             </div>
-        </div>
-    </header>
-
-    <div id="seasonChartContainer" class="chart-container">
-        <canvas id="seasonChart"></canvas>
-        <div id="noSeasonData" class="status-msg" style="display:none;">No data available for this season yet
-        </div>
+        </article>
     </div>
-</article>
 
-<article>
-    <header class="grid">
-        <div><strong>📊 Previous Season Totals</strong></div>
-    </header>
-    <div id="history-chart-container" class="chart-container h-250">
-        <canvas id="historyChart"></canvas>
+    <!-- Tab 2: History -->
+    <div id="tab-history" class="tab-content d-none">
+        <article>
+            <div id="history-chart-container" class="chart-container h-250">
+                <canvas id="historyChart"></canvas>
+            </div>
+        </article>
     </div>
-</article>
+</div>
 
 
 <!-- SECTION 2: MOVERS -->
 <section class="mt-40">
     <div class="grid">
         <div class="mover-card">
-            <h3 class="mb-15 success-msg font-1rem">🔥 Meta Abusers <small id="subtitle-gainers"
+            <h3 class="mb-15 font-1rem">🔥 Meta Abusers <small id="subtitle-gainers"
                     class="text-muted subtitle-small">Loading...</small></h3>
             <table id="gainers-table">
                 <tbody>
@@ -54,7 +62,7 @@
             </table>
         </div>
         <div class="mover-card">
-            <h3 class="mb-15 error-msg font-1rem">❄️ Biggest Pumpers <small id="subtitle-losers"
+            <h3 class="mb-15 font-1rem">❄️ Biggest Pumpers <small id="subtitle-losers"
                     class="text-muted subtitle-small">Loading...</small></h3>
             <table id="losers-table">
                 <tbody>

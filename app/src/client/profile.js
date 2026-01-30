@@ -30,6 +30,7 @@
             $ = SnapUtils.$;
 
             SnapUtils.initChartDefaults();
+            SnapUtils.initTabs();
             loadProfile();
             initCompareSearch();
 
@@ -381,7 +382,14 @@
                             </div>
                         `).join('');
                         box.style.display = 'block';
-                    } else hide();
+                    } else {
+                        box.innerHTML = `
+                            <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color);">
+                                No players found
+                            </div>
+                        `;
+                        box.style.display = 'block';
+                    }
                 } catch (e) { hide(); }
             }, 250);
         });

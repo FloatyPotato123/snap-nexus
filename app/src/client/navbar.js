@@ -141,7 +141,13 @@
                             suggestionsBox.style.display = 'block';
                             selectedIndex = -1;
                         } else {
-                            hideSuggestions();
+                            suggestionsBox.innerHTML = `
+                                <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color);">
+                                    No players found
+                                </div>
+                            `;
+                            suggestionsBox.style.display = 'block';
+                            selectedIndex = -1;
                         }
                     } catch (e) {
                         hideSuggestions();

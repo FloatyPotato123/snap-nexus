@@ -222,11 +222,44 @@
 
     // --- CHARTS ---
     const Charts = {
+        // Shared logic to ensure Rank 1 label is always visible
+        forceRankOneTick(axis) {
+            axis.ticks = axis.ticks.filter(t => t.value >= 1);
+            if (!axis.ticks.find(t => t.value === 1)) {
+                axis.ticks.push({ value: 1, label: '1' });
+                axis.ticks.sort((a, b) => a.value - b.value);
+            }
+        },
+
+        getRankAxis(display = true) {
+            return {
+                type: 'linear', display, position: 'left', reverse: true,
+                min: 0, suggestedMax: 100,
+                title: { display: true, text: 'Rank', color: '#2196F3' },
+                grid: { color: '#333' },
+                ticks: {
+                    color: '#2196F3',
+                    // Let Chart.js decide optimal step size, but hide 0 and decimals
+                    callback: (val) => (val <= 0 || val % 1 !== 0) ? null : val
+                },
+                afterBuildTicks: (axis) => this.forceRankOneTick(axis)
+            };
+        },
+
+        getSPAxis(min, max, position = 'right', drawGrid = false) {
+            return {
+                type: 'linear', display: true, position,
+                title: { display: true, text: 'Snap Points', color: '#ffcc00' },
+                suggestedMin: min, suggestedMax: max,
+                grid: { drawOnChartArea: drawGrid, color: '#333' },
+                ticks: { color: '#ffcc00' }
+            };
+        },
+
         renderSeasonChart(stats) {
             const ctx = $('seasonChart').getContext('2d');
             if (State.seasonChartInstance) State.seasonChartInstance.destroy();
 
-            // 1. Unified Timeline
             const dateMap = new Set();
             stats.forEach(s => dateMap.add(s.date));
             State.comparedPlayers.forEach(p => (p.stats || []).forEach(s => dateMap.add(s.date)));
@@ -239,70 +272,26 @@
 
             const alignData = (sList, key) => sortedDates.map(dStr => sList.find(s => s.date === dStr)?.[key] || null);
 
-            // 2. Datasets
             State.isComparing = State.comparedPlayers.length > 0;
             let datasets = [];
 
             if (!State.isComparing) {
+                const common = { tension: 0.3, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#1e293b' };
                 datasets = [
-                    {
-                        label: 'Rank',
-                        data: alignData(stats, 'rank'),
-                        borderColor: '#2196F3',
-                        pointBackgroundColor: '#1e293b',
-                        yAxisID: 'yRank',
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        borderDash: [5, 5],
-                        clip: false
-                    },
-                    {
-                        label: 'SP',
-                        data: alignData(stats, 'sp'),
-                        borderColor: '#ffcc00',
-                        backgroundColor: 'rgba(255, 204, 0, 0.1)',
-                        pointBackgroundColor: '#ffcc00',
-                        yAxisID: 'ySP',
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        fill: true
-                    }
+                    { ...common, label: 'Rank', data: alignData(stats, 'rank'), borderColor: '#2196F3', yAxisID: 'yRank', borderDash: [5, 5], clip: false },
+                    { ...common, label: 'SP', data: alignData(stats, 'sp'), borderColor: '#ffcc00', backgroundColor: 'rgba(255, 204, 0, 0.1)', pointBackgroundColor: '#ffcc00', yAxisID: 'ySP', fill: true }
                 ];
             } else {
                 const primaryName = $('pName').dataset.rawName;
-                datasets.push({
-                    label: primaryName,
-                    data: alignData(stats, 'sp'),
-                    borderColor: '#ffcc00',
-                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
-                    pointBackgroundColor: '#ffcc00',
-                    yAxisID: 'ySP',
-                    tension: 0.3,
-                    borderWidth: 2,
-                    pointRadius: 3,
-                    fill: true
-                });
+                const common = { tension: 0.3, borderWidth: 2, pointRadius: 3, fill: true };
+                datasets.push({ ...common, label: primaryName, data: alignData(stats, 'sp'), borderColor: '#ffcc00', backgroundColor: 'rgba(255, 204, 0, 0.1)', pointBackgroundColor: '#ffcc00', yAxisID: 'ySP' });
 
                 State.comparedPlayers.forEach((p, i) => {
                     const color = SnapUtils.CHART_PALETTE[(i + 1) % SnapUtils.CHART_PALETTE.length];
-                    datasets.push({
-                        label: p.name,
-                        data: alignData(p.stats || [], 'sp'),
-                        borderColor: color.border,
-                        backgroundColor: color.bg.replace('0.2)', '0.05)'), // Lighter for comparison
-                        pointBackgroundColor: color.border,
-                        yAxisID: 'ySP',
-                        tension: 0.3,
-                        borderWidth: 2,
-                        pointRadius: 3,
-                        fill: true
-                    });
+                    datasets.push({ ...common, label: p.name, data: alignData(p.stats || [], 'sp'), borderColor: color.border, backgroundColor: color.bg.replace('0.2)', '0.05)'), pointBackgroundColor: color.border, yAxisID: 'ySP' });
                 });
             }
 
-            // 3. SP Range
             let allSPs = [].concat(...datasets.filter(ds => ds.yAxisID === 'ySP').map(ds => ds.data)).filter(v => v > 0);
             let minSP, maxSP;
             if (allSPs.length > 0) {
@@ -315,12 +304,12 @@
                 data: { labels, datasets },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    layout: { padding: { top: 10 } },
+                    layout: { padding: { top: 0 } },
                     interaction: { mode: 'index', intersect: false },
                     scales: {
                         x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
-                        yRank: { type: 'linear', display: !State.isComparing, position: 'left', reverse: true, min: 1, suggestedMax: 100, title: { display: true, text: 'Rank', color: '#2196F3' }, grid: { color: '#333' }, ticks: { color: '#2196F3' } },
-                        ySP: { type: 'linear', display: true, position: State.isComparing ? 'left' : 'right', title: { display: true, text: 'Snap Points', color: '#ffcc00' }, suggestedMin: minSP, suggestedMax: maxSP, grid: { drawOnChartArea: State.isComparing, color: '#333' }, ticks: { color: '#ffcc00' } }
+                        yRank: this.getRankAxis(!State.isComparing),
+                        ySP: this.getSPAxis(minSP, maxSP, State.isComparing ? 'left' : 'right', State.isComparing)
                     },
                     plugins: { legend: { labels: { color: '#fff' } } }
                 }
@@ -339,23 +328,24 @@
                 if ((dMax - dMin) < 1000) { minSP = (dMax + dMin) / 2 - 500; maxSP = (dMax + dMin) / 2 + 500; }
             }
 
+            const common = { tension: 0.2, clip: false };
             State.historicalChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
                     labels: stats.map(s => s.season),
                     datasets: [
-                        { label: 'Season End Rank', data: stats.map(s => s.rank), borderColor: '#2196F3', yAxisID: 'y', tension: 0.2, borderDash: [5, 5], clip: false },
-                        { label: 'Season End SP', data: stats.map(s => s.sp), borderColor: '#ffcc00', backgroundColor: 'rgba(255, 204, 0, 0.1)', yAxisID: 'y1', tension: 0.2, fill: true }
+                        { ...common, label: 'Season End Rank', data: stats.map(s => s.rank), borderColor: '#2196F3', yAxisID: 'y', borderDash: [5, 5] },
+                        { ...common, label: 'Season End SP', data: stats.map(s => s.sp), borderColor: '#ffcc00', backgroundColor: 'rgba(255, 204, 0, 0.1)', yAxisID: 'y1', fill: true }
                     ]
                 },
                 options: {
                     responsive: true, maintainAspectRatio: false,
-                    layout: { padding: { top: 10 } },
+                    layout: { padding: { top: 0 } },
                     interaction: { mode: 'index', intersect: false },
                     scales: {
                         x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
-                        y: { type: 'linear', display: true, position: 'left', reverse: true, min: 1, suggestedMax: 100, title: { display: true, text: 'Rank', color: '#2196F3' }, grid: { color: '#333' }, ticks: { color: '#2196F3' } },
-                        y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'Snap Points', color: '#ffcc00' }, suggestedMin: minSP, suggestedMax: maxSP, grid: { drawOnChartArea: false }, ticks: { color: '#ffcc00' } }
+                        y: this.getRankAxis(true),
+                        y1: this.getSPAxis(minSP, maxSP, 'right', false)
                     }
                 }
             });
@@ -540,8 +530,15 @@
 
             try {
                 if (!chartInstance) throw new Error("No chart to copy");
-                const blob = await this.generateBlob(State, chartInstance);
-                await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+
+                // We use ClipboardItem with a Promise for the blob. 
+                // This keeps the user gesture 'alive' on mobile/Safari.
+                const promise = this.generateBlob(State, chartInstance);
+                const item = new ClipboardItem({
+                    'image/png': promise
+                });
+
+                await navigator.clipboard.write([item]);
 
                 // Success
                 showIcon('success');
@@ -575,7 +572,7 @@
             const ctx = canvas.getContext('2d');
             ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
 
-            ctx.fillStyle = '#1e293b'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#181c25'; ctx.fillRect(0, 0, canvas.width, canvas.height);
             const chartCanvas = await this.renderHighResChart(chartInstance, width, height, headerHeight, padding, dpi);
             ctx.drawImage(chartCanvas, padding * dpi, headerHeight * dpi);
             this.drawHeader(ctx, State, rankText, spText, padding, dpi);

@@ -1,4 +1,12 @@
-<a href="/" id="backLink" class="secondary">← Back to Home</a>
+<nav class="back-nav">
+    <a href="/" id="backLink" class="back-btn ghost">
+        <svg viewBox="0 0 24 24" class="back-arrow" width="20" height="20" stroke="currentColor" stroke-width="2"
+            fill="none" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5m0 0l7 7m-7-7l7-7" />
+        </svg>
+        <span id="backLinkText">Back to Home</span>
+    </a>
+</nav>
 
 <script>
     // Contextual Back Navigation
@@ -6,15 +14,16 @@
     const backQ = params.get('back_q');
     const ref = params.get('ref');
     const backBtn = document.getElementById('backLink');
+    const backText = document.getElementById('backLinkText');
 
     if (backQ) {
-        backBtn.innerText = "← Back to Search Results";
+        backText.innerText = "Back to Search Results";
         backBtn.href = `/player-search?q=${encodeURIComponent(backQ)}`;
     } else if (ref === 'leaderboard') {
-        backBtn.innerText = "← Back to Leaderboard";
+        backText.innerText = "Back to Leaderboard";
         backBtn.href = "/leaderboard";
     } else if (ref === 'home') {
-        backBtn.innerText = "← Back to Home";
+        backText.innerText = "Back to Home";
         backBtn.href = "/";
     }
 </script>
@@ -102,7 +111,7 @@
             </div>
         </header>
 
-        <div id="comparedPlayersList" class="flex-wrap-gap mb-10 flex-end"></div>
+        <div id="comparedPlayersList" class="flex-wrap-gap flex-end"></div>
         <div id="seasonChartContainer" class="chart-container">
             <canvas id="seasonChart"></canvas>
             <div id="noSeasonStats" class="status-msg d-none">No ranked data for this season.

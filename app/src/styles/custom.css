@@ -1024,6 +1024,16 @@ header>div {
     flex-direction: column;
 }
 
+@media (max-width: 992px) {
+    .compare-search-container {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 92vw;
+        max-width: 320px;
+    }
+}
+
 .compare-search-header {
     font-size: 0.85rem;
     font-weight: 600;
@@ -1193,4 +1203,35 @@ header>div {
 .btn-icon-only:active .icon-svg,
 .btn-compare-toggle:active .icon-svg {
     transform: scale(0.9);
+}
+
+/* Back Navigation (Ghost Button) */
+.back-nav {
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: var(--pico-muted-color);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.back-btn:hover {
+    color: var(--accent-gold);
+    background: rgba(255, 255, 255, 0.03);
+    text-decoration: none;
+}
+
+.back-arrow {
+    transition: transform 0.2s ease;
+}
+
+.back-btn:hover .back-arrow {
+    transform: translateX(-4px);
 }

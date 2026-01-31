@@ -147,9 +147,18 @@
     z-index: 1000;
     box-shadow: var(--pico-card-box-shadow);
     display: none;
-    max-height: 350px;
+    flex-direction: column;
+    max-height: 280px;
+    overflow: hidden;
+}
+
+/* Wrapper for results to allow a stable footer at the bottom */
+.search-results-list {
     overflow-y: auto;
     overflow-x: hidden;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 .search-suggestion-item {
@@ -217,9 +226,36 @@
     text-align: center;
     background: var(--pico-card-sectioning-background-color, rgba(255, 255, 255, 0.03));
     border-top: 1px solid var(--pico-card-border-color);
-    font-size: 0.9rem;
-    font-weight: 500;
     color: var(--accent-gold);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.search-suggestion-footer:hover {
+    background: rgba(255, 206, 43, 0.1) !important;
+}
+
+/* Specific Height for Comparison Search */
+.small-suggestions {
+    max-height: 175px !important;
+}
+
+/* More compact items for comparison search */
+.small-suggestions .search-suggestion-item {
+    padding: calc(var(--pico-spacing) * 0.25) var(--pico-spacing);
+}
+
+.small-suggestions .suggestion-name {
+    font-size: 0.85rem;
+}
+
+.small-suggestions .suggestion-rank {
+    font-size: 0.65rem;
+    padding: 0px 4px;
+}
+
+.small-suggestions .suggestion-content {
+    gap: 0px;
 }
 
 /* Components */
@@ -266,8 +302,8 @@
 /* Nav Polish */
 nav.container {
     border-bottom: 1px solid var(--pico-muted-border-color);
-    padding-bottom: 10px;
-    margin-bottom: 40px !important;
+    padding-bottom: 5px;
+    margin-bottom: 20px !important;
     position: relative;
     /* Anchor for absolute search overlay */
 }
@@ -578,10 +614,12 @@ table th {
     outline: none;
 }
 
-.status-msg {
-    padding: 40px;
+.status-msg,
+.search-help-text {
+    padding: 30px;
     text-align: center;
     color: var(--pico-muted-color);
+    font-size: 0.95rem;
 }
 
 .error-msg {
@@ -697,20 +735,19 @@ table th {
 
 /* No-results UI */
 .no-results {
-    padding: 20px;
+    padding: 30px;
     margin: 20px 0;
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid var(--pico-muted-border-color);
-    border-radius: 8px;
     text-align: center;
     color: var(--pico-muted-color);
-    font-size: 1rem;
+    font-size: 0.95rem;
+    opacity: 0.8;
 }
 
 .no-results .icon {
     display: block;
-    font-size: 2rem;
+    font-size: 1.5rem;
     margin-bottom: 8px;
+    opacity: 0.5;
 }
 
 /* Infinite Player Count Badge */

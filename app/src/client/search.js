@@ -32,6 +32,12 @@
             return;
         }
 
+        if (query.length < 3) {
+            resDiv.innerHTML = `<div class="search-help-text">Type at least 3 characters to search...</div>`;
+            loadMoreContainer.style.display = 'none';
+            return;
+        }
+
         if (!isLoadMore) {
             currentCursor = 0;
             currentQuery = query;
@@ -54,7 +60,7 @@
             const data = await req.json();
 
             if (!isLoadMore && data.matches.length === 0) {
-                resDiv.innerHTML = `<div class="no-results"><span class="icon">🔍</span>No players found. Try a different name or check your spelling.</div>`;
+                resDiv.innerHTML = `<div class="no-results">No players found matching "${query}".</div>`;
                 loadMoreContainer.style.display = 'none';
                 return;
             }
@@ -111,7 +117,7 @@
 
             // If no matches, show friendly message
             if (data.matches.length === 0) {
-                resDiv.innerHTML = `<div class="no-results"><span class="icon">🔍</span>No players found. Try a different name or check your spelling.</div>`;
+                resDiv.innerHTML = `<div class="no-results">No players found matching "${query}".</div>`;
             }
 
             // Handle Pagination Button

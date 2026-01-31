@@ -91,13 +91,22 @@
                 const query = navSearch.value.trim();
 
                 if (query.length < 3) {
-                    hideSuggestions();
+                    if (query.length > 0) {
+                        suggestionsBox.innerHTML = `
+                            <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); font-size: 0.85rem; padding: 15px;">
+                                Type at least 3 characters...
+                            </div>
+                        `;
+                        suggestionsBox.style.display = 'block';
+                    } else {
+                        hideSuggestions();
+                    }
                     return;
                 }
 
                 debounceTimer = setTimeout(async () => {
                     try {
-                        const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&limit=5&format=json`);
+                        const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&limit=20&format=json`);
                         const data = await res.json();
 
                         const highlightText = (text, q) => {
@@ -109,7 +118,7 @@
                         };
 
                         if (data.matches && data.matches.length > 0) {
-                            suggestionsBox.innerHTML = data.matches.map(m => {
+                            const itemsHtml = data.matches.map(m => {
                                 const otherNames = m.history
                                     .map(h => h.name)
                                     .filter(name => name && name !== m.name);
@@ -131,18 +140,19 @@
                                 `;
                             }).join('');
 
-                            // Add "See all results" footer
-                            suggestionsBox.innerHTML += `
+                            // Structure with a scrollable list and a fixed footer
+                            suggestionsBox.innerHTML = `
+                                <div class="search-results-list">${itemsHtml}</div>
                                 <div class="search-suggestion-item search-suggestion-footer" data-action="search">
                                     See all results for "${query}"
                                 </div>
                             `;
 
-                            suggestionsBox.style.display = 'block';
+                            suggestionsBox.style.display = 'flex';
                             selectedIndex = -1;
                         } else {
                             suggestionsBox.innerHTML = `
-                                <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color);">
+                                <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); padding: 15px;">
                                     No players found
                                 </div>
                             `;

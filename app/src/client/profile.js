@@ -364,18 +364,38 @@
         input.addEventListener('input', () => {
             clearTimeout(State.debounceTimer);
             const query = input.value.trim();
-            if (query.length < 3) return hide();
+            if (query.length < 3) {
+                if (query.length > 0) {
+                    box.innerHTML = `
+                        <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); font-size: 0.85rem; padding: 15px;">
+                            Type at least 3 characters...
+                        </div>
+                    `;
+                    box.style.display = 'block';
+                } else {
+                    hide();
+                }
+                return;
+            }
 
             State.debounceTimer = setTimeout(async () => {
                 try {
-                    const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&limit=5&format=json`);
+                    const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&limit=20&format=json`);
                     const data = await res.json();
+
+                    const highlightText = (text, q) => {
+                        if (!q || !text) return text;
+                        const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                        const regex = new RegExp(`(${escapedQ})`, 'gi');
+                        return text.replace(regex, '<strong>$1</strong>');
+                    };
+
                     if (data.matches?.length > 0) {
                         box.innerHTML = data.matches.filter(m => m.id !== State.playerId).map(m => `
                             <div class="search-suggestion-item" data-id="${m.id}" data-name="${m.name}">
                                 <div class="suggestion-content">
                                     <div class="suggestion-main">
-                                        <span class="suggestion-name">${m.name}</span>
+                                        <span class="suggestion-name">${highlightText(m.name, query)}</span>
                                         ${m.currentRank ? `<span class="suggestion-rank">#${m.currentRank}</span>` : ''}
                                     </div>
                                 </div>
@@ -384,7 +404,7 @@
                         box.style.display = 'block';
                     } else {
                         box.innerHTML = `
-                            <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color);">
+                            <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); padding: 15px;">
                                 No players found
                             </div>
                         `;

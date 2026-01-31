@@ -32,27 +32,56 @@
 
 <div id="content" class="mb-40 d-none">
 
-    <!-- HEADER -->
-    <article class="text-center border-gold">
-        <!-- Current Rank Badge -->
-        <div id="pRankBadge" class="mt-10 d-none d-inline-block mr-10">
-            <div class="tag-rank-lg">Rank <span id="pRank">--</span></div>
-        </div>
-        <div id="pSPBadge" class="mt-10 d-none valign-top">
-            <div class="tag-rank-lg sp-badge">
-                <span id="pSP">--</span> SP
+    <!-- DOSSIER LAYOUT -->
+    <div class="dossier-layout">
+        <section class="profile-hero">
+            <h1 id="pName" class="profile-name-h1"></h1>
+
+            <div class="hero-stats-grid">
+                <!-- Core Stats (Rank/SP) -->
+                <div id="pCoreStats" class="profile-stats-row core-stats-row d-none">
+                    <!-- Rank Pill -->
+                    <div id="pRankBadge" class="stat-pill rank d-none">
+                        <span class="stat-label">Rank</span>
+                        <span id="pRank" class="stat-value">--</span>
+                    </div>
+
+                    <!-- SP Pill -->
+                    <div id="pSPBadge" class="stat-pill sp d-none">
+                        <span class="stat-label">Snap Points</span>
+                        <span id="pSP" class="stat-value">--</span>
+                    </div>
+                </div>
+
+                <!-- Season Stats Section -->
+                <div id="pSeasonStats" class="season-stats-block d-none">
+                    <h4 class="stats-header">Season Stats</h4>
+                    <div class="profile-stats-row">
+                        <!-- Daily Progress (Left) -->
+                        <div id="pVolatilityBadge" class="stat-pill volatility d-none">
+                            <span class="stat-label">Daily Avg</span>
+                            <span id="pVolatility" class="stat-value">--</span>
+                        </div>
+
+                        <!-- Best Day (Right) -->
+                        <div id="pBestDayBadge" class="stat-pill best-day d-none">
+                            <span class="stat-label">Best Day</span>
+                            <span id="pBestDay" class="stat-value">--</span>
+                        </div>
+                    </div>
+                </div>
             </div>
-        </div>
 
-        <h1 id="pName" class="mt-10 mb-0 font-2-5rem"></h1>
-        <div id="pId" class="d-none"></div>
-    </article>
+            <div id="pId" class="d-none"></div>
+        </section>
 
-    <!-- NAME HISTORY -->
-    <article>
-        <header>Name History</header>
-        <div id="historyTimeline" class="timeline"></div>
-    </article>
+        <!-- NAME HISTORY SIDEBAR -->
+        <article id="pHistoryCard" class="history-card">
+            <div class="timeline-container">
+                <div id="historyTimeline" class="timeline"></div>
+            </div>
+        </article>
+    </div>
 
 
 

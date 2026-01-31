@@ -12,6 +12,8 @@ export function getHistoricalSeasonEndKeys() {
     // Go back 6 months
     for (let i = 1; i <= 6; i++) {
         const d = new Date(now);
+        // Set to middle of month to avoid rollover bugs when today is the 31st
+        d.setUTCDate(15);
         d.setUTCMonth(d.getUTCMonth() - i);
         const seasonEnd = getSeasonEnd(d);
 

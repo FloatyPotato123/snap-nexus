@@ -136,38 +136,59 @@
             $('pName').innerText = data.name;
             $('pName').dataset.rawName = data.name;
             $('pId').innerText = data.id;
+
+            // Technical Metadata
+            if ($('pMetaId')) {
+                $('pMetaId').innerText = `REF_0x${data.id.substring(0, 8).toUpperCase()}`;
+            }
+
             document.title = `${data.name} | Snap Nexus`;
 
             if (data.currentRank) {
+                $('pCoreStats').classList.remove('d-none');
                 $('pRank').innerText = data.currentRank;
                 $('pRank').dataset.rank = data.currentRank;
+                $('pRankBadge').classList.remove('d-none');
+
                 if (data.currentSP) {
                     $('pRank').dataset.sp = data.currentSP;
                     $('pSP').innerText = parseInt(data.currentSP).toLocaleString();
-                    $('pSPBadge').classList.toggle('d-none', false);
-                    $('pSPBadge').style.display = 'inline-block';
+                    $('pSPBadge').classList.remove('d-none');
+                } else {
+                    $('pSPBadge').classList.add('d-none');
                 }
-                $('pRankBadge').classList.toggle('d-none', false);
-                $('pRankBadge').style.display = 'inline-block';
             } else {
-                $('pRankBadge').classList.toggle('d-none', true);
-                $('pSPBadge').classList.toggle('d-none', true);
+                $('pCoreStats').classList.add('d-none');
+                $('pRankBadge').classList.add('d-none');
+                $('pSPBadge').classList.add('d-none');
             }
+            // Advanced Stats
+            this.updateAdvancedStats(State.primaryPlayerStats);
         },
 
         renderHistory(history) {
+            const historyCard = $('pHistoryCard');
+
+            // Hide if zero or only one entry (no changes to show)
+            if (!history || history.length <= 1) {
+                if (historyCard) historyCard.classList.add('d-none');
+                return;
+            }
+
+            if (historyCard) historyCard.classList.remove('d-none');
+
             const historyList = [...history].sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
             let html = historyList.map((h, i) => {
                 const isCurrent = i === 0;
-                const isOldest = i === historyList.length - 1;
+                const isFirstKnown = i === historyList.length - 1;
                 return `
-                    <div class="timeline-item ${isCurrent ? '' : 'past'}">
-                        <div class="timeline-name">${h.name}</div>
-                        <div class="timeline-date">${isOldest ? '' : h.seenAt}</div>
+                    <div class="timeline-item ${isCurrent ? 'current' : ''}">
+                        <span class="timeline-name">${h.name || 'Unknown'}</span>
+                        ${h.seenAt && !isFirstKnown ? `<span class="timeline-date">${h.seenAt}</span>` : ''}
                     </div>
                 `;
             }).join('');
-            $('historyTimeline').innerHTML = html || '<div class="status-msg">No history found</div>';
+            $('historyTimeline').innerHTML = html;
         },
 
         toggleChartDisplay(type, visible) {
@@ -191,9 +212,55 @@
             if (State.primaryPlayerStats.length > 0) {
                 this.toggleChartDisplay('season', true);
                 Charts.renderSeasonChart(State.primaryPlayerStats);
+                this.updateAdvancedStats(State.primaryPlayerStats);
             } else {
                 this.toggleChartDisplay('season', false);
+                this.updateAdvancedStats([]);
             }
+        },
+
+        updateAdvancedStats(stats) {
+            if (!stats || stats.length < 2) {
+                // Need at least 2 days to compare
+                $('pBestDayBadge').classList.add('d-none');
+                $('pVolatilityBadge').classList.add('d-none');
+                return;
+            }
+
+            // 1. Calculate Daily Deltas
+            const deltas = [];
+            for (let i = 1; i < stats.length; i++) {
+                const prev = stats[i - 1].sp;
+                const curr = stats[i].sp;
+                if (prev > 0 && curr > 0) {
+                    deltas.push(curr - prev);
+                }
+            }
+
+            if (deltas.length === 0) {
+                $('pBestDayBadge').classList.add('d-none');
+                $('pVolatilityBadge').classList.add('d-none');
+                return;
+            }
+
+            // 2. Daily Progress (Average Gain)
+            const mean = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+            const avgLabel = mean >= 0 ? `+${Math.round(mean).toLocaleString()}` : `${Math.round(mean).toLocaleString()}`;
+            $('pVolatility').innerText = `${avgLabel} SP`;
+            $('pVolatilityBadge').classList.remove('d-none');
+
+            // 3. Best Day (Max Positive Gain)
+            const maxGain = Math.max(...deltas);
+            if (maxGain > 0) {
+                $('pBestDay').innerText = `+${maxGain.toLocaleString()} SP`;
+                $('pBestDayBadge').classList.remove('d-none');
+            } else {
+                $('pBestDayBadge').classList.add('d-none');
+            }
+
+            // Toggle parent container
+            const hasSeasonStats = deltas.length > 0;
+            $('pSeasonStats').classList.toggle('d-none', !hasSeasonStats);
         },
 
         updateSeasonTriggerText() {

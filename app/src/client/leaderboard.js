@@ -3,6 +3,9 @@
  * Logic for the Infinite Leaderboard page (leaderboard.html).
  */
 (function () {
+    const $ = SnapUtils.$;
+    const { CONSTANTS } = window.SnapUtils;
+
     // Wait for DOM and Dependencies
     window.addEventListener('DOMContentLoaded', async () => {
         if (typeof SnapUtils === 'undefined') {
@@ -19,12 +22,13 @@
             if (!body || !loader) return;
 
             try {
-                const res = await fetch('/api/leaderboard/live');
+                const res = await fetch(CONSTANTS.API.LEADERBOARD_LIVE);
                 if (!res.ok) throw new Error('API Error');
                 const { results } = await res.json();
 
                 loader.style.display = 'none';
 
+                const { escapeHtml } = window.SnapUtils;
                 body.innerHTML = results.map(p => {
                     const tier = p.rank <= 10 ? 'top-10' : (p.rank <= 100 ? 'top-100' : 'normal');
 
@@ -41,7 +45,7 @@
                     }
 
                     return `
-                        <tr class="card-clickable" data-tier="${tier}" onclick="SnapUtils.navigateTo(event, '/player/${p.id}?ref=leaderboard')">
+                        <tr class="card-clickable" data-tier="${tier}" onclick="SnapUtils.navigateTo(event, '/player/${escapeHtml(p.id)}?ref=leaderboard')">
                             <td>
                                 <div style="display:flex; align-items:center; gap:4px;">
                                     <span class="rank-badge">#${p.rank}</span>
@@ -49,7 +53,7 @@
                                 </div>
                             </td>
                             <td>
-                                <a href="/player/${p.id}?ref=leaderboard" style="text-decoration:none; color:inherit;" onclick="event.stopPropagation()"><strong>${p.name}</strong></a>
+                                <a href="/player/${escapeHtml(p.id)}?ref=leaderboard" style="text-decoration:none; color:inherit;" onclick="event.stopPropagation()"><strong>${escapeHtml(p.name)}</strong></a>
                             </td>
                             <td style="text-align: right; font-variant-numeric: tabular-nums;">
                                 ${p.score.toLocaleString()}

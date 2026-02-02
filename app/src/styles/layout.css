@@ -1,0 +1,359 @@
+/* ============================================================================
+   LAYOUT STYLES
+   ============================================================================ */
+
+/* Header Logo */
+.header-logo {
+    height: 2rem;
+    width: auto;
+    margin-right: 0 !important;
+    vertical-align: middle;
+}
+
+/* Infinite Player Count */
+.infinite-stat-box {
+    text-align: center;
+    /* margin handled by utility classes per location */
+}
+
+.infinite-stat-value {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-gold);
+}
+
+.infinite-stat-label {
+    font-size: 1rem;
+    /* Same size as value */
+    font-weight: 500;
+    color: var(--pico-color);
+    opacity: 0.9;
+    margin-left: 4px;
+}
+
+/* Nav Polish */
+nav.container {
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    padding-bottom: 5px;
+    margin-bottom: 20px !important;
+    position: relative;
+    /* Anchor for absolute search overlay */
+}
+
+nav a.active {
+    color: var(--accent-gold);
+    text-shadow: 0 0 10px rgba(255, 206, 43, 0.3);
+}
+
+nav a:hover {
+    text-decoration: none;
+}
+
+/* Navbar Search Bar */
+/* Expanding Navbar Search */
+.nav-search-container {
+    display: flex;
+    align-items: center;
+    background: var(--pico-form-element-background-color);
+    border: 1px solid var(--pico-form-element-border-color);
+    border-radius: 6.25rem;
+    position: relative;
+    padding: 0 0.25rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    width: 25rem;
+    max-width: 100%;
+    /* overflow: hidden; -- Removed to allow suggestions dropdown */
+    height: calc(var(--pico-form-element-height, 2.5rem) * 0.85);
+}
+
+@media (min-width: 1025px) {
+    .nav-search-container.collapsed {
+        width: 2.625rem;
+        background: transparent;
+        border-color: transparent;
+        padding: 0;
+    }
+}
+
+.search-toggle-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    color: var(--pico-muted-color) !important;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+    width: 2rem !important;
+    height: 100% !important;
+    flex-shrink: 0;
+    box-shadow: none !important;
+    outline: none !important;
+}
+
+.search-toggle-btn:hover {
+    color: var(--accent-gold) !important;
+}
+
+@media (max-width: 1024px) {
+
+    /* Allow main nav to wrap rows */
+    nav {
+        flex-wrap: wrap;
+    }
+
+    /* DEFAULT (Expanded) State on Mobile */
+    .nav-search-container:not(.collapsed) {
+        width: 100%;
+        height: 2.25rem;
+        background: var(--pico-form-element-background-color);
+        border: 1px solid var(--pico-form-element-border-color);
+        padding: 0 0.5rem;
+    }
+
+    /* Target the PARENT LIST to force line break */
+    #searchNavList.search-expanded {
+        width: 100%;
+        order: 99;
+        /* Drop to bottom */
+        margin-top: -10px;
+        /* Pull up tight against the row above */
+        margin-bottom: 0.5rem;
+    }
+
+    #searchNavList li {
+        width: 100%;
+        /* Ensure li takes full width of ul */
+    }
+
+    /* COLLAPSED State on Mobile */
+    .nav-search-container.collapsed {
+        width: 2.625rem;
+        background: transparent;
+        border-color: transparent;
+        padding: 0;
+        margin-top: 0;
+        order: unset;
+    }
+
+    .search-toggle-btn {
+        display: flex !important;
+        /* Always show toggle on mobile */
+    }
+}
+
+/* Leaderboard Rank Badges */
+.rank-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    color: var(--accent-gold);
+    /* Gold for everyone */
+}
+
+/* Tiered Leaderboard Styling */
+tr[data-tier="top-10"] strong {
+    font-size: 1.05rem;
+}
+
+/* Sticky Leaderboard Header */
+.leaderboard-table-container thead th {
+    position: sticky;
+    top: 0;
+    background-color: var(--pico-background-color) !important;
+    z-index: 100;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    color: var(--pico-muted-color) !important;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05rem;
+    font-weight: 600;
+}
+
+/* Floating Back to Top Button */
+.back-to-top {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: var(--pico-border-radius);
+    background: transparent;
+    color: var(--pico-muted-color);
+    border: 1px solid var(--pico-muted-border-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.2s ease-in-out;
+    z-index: 100;
+}
+
+.back-to-top.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    color: var(--pico-contrast-color);
+    border-color: var(--pico-muted-color);
+    transform: translateY(-2px);
+}
+
+/* Clickable Player Hover Effects */
+.card-clickable:hover strong,
+table td a[href^="/player/"]:hover {
+    color: var(--accent-gold) !important;
+    text-decoration: none;
+}
+
+.nav-search-container input {
+    background: transparent !important;
+    border: none !important;
+    margin-bottom: 0 !important;
+    padding: 0 0.25rem !important;
+    font-size: 0.9rem !important;
+    box-shadow: none !important;
+    transition: opacity 0.3s;
+    width: 100%;
+}
+
+.nav-search-container.collapsed input {
+    opacity: 0;
+    pointer-events: none;
+    width: 0;
+}
+
+
+/* Disclaimer Footer */
+.disclaimer-box {
+    margin-top: 40px;
+    padding: 15px;
+    background: rgba(255, 204, 0, 0.1);
+    border-left: 4px solid var(--accent-gold);
+    color: var(--pico-muted-color);
+    font-size: 0.9rem;
+}
+
+/* Table Density */
+table td,
+table th {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    font-variant-numeric: tabular-nums;
+}
+
+table th {
+    text-transform: none;
+    letter-spacing: 0.02em;
+    font-weight: 500;
+    color: var(--pico-muted-color);
+}
+
+/* Movers Grid Visual Refinement */
+.mover-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 12px;
+    padding: 20px;
+    height: 100%;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.mover-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.mover-card table {
+    margin-bottom: 0;
+    --pico-background-color: transparent;
+}
+
+/* New Clean Containers */
+.hero-header {
+    text-align: center;
+    margin-bottom: 60px;
+}
+
+.hero-title {
+    font-size: 2.8rem;
+    color: var(--accent-gold);
+    letter-spacing: -0.02em;
+    text-shadow: 0 0 30px rgba(255, 204, 0, 0.15);
+}
+
+.fake-select {
+    appearance: none;
+    -webkit-appearance: none;
+    background-color: var(--pico-form-element-background-color);
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color);
+    border-radius: var(--pico-border-radius);
+    color: var(--pico-color);
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: var(--pico-font-weight);
+    padding: 2px 10px;
+    padding-right: 1.5rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='rgb(113, 128, 150)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-position: center right 0.4rem;
+    background-size: 1rem auto;
+    background-repeat: no-repeat;
+    display: inline-block;
+    width: auto;
+    min-width: 140px;
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: border-color var(--pico-transition), box-shadow var(--pico-transition);
+}
+
+.fake-select:focus {
+    border-color: var(--pico-form-element-focus-color);
+    box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-form-element-focus-color);
+    outline: none;
+}
+
+.status-msg,
+.search-help-text {
+    padding: 30px;
+    text-align: center;
+    color: var(--pico-muted-color);
+    font-size: 0.95rem;
+}
+
+.error-msg {
+    color: #f44336;
+}
+
+.success-msg {
+    color: #4caf50;
+}
+
+.pagination-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 20px;
+}
+
+.d-none {
+    display: none !important;
+}
+
+.btn-small {
+    padding: 2px 10px !important;
+    font-size: 0.8rem !important;
+    width: auto !important;
+}
+
+.card-clickable {
+    cursor: pointer;
+    transition: background 0.2s ease;
+}

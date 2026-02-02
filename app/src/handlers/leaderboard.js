@@ -1,32 +1,69 @@
+/**
+ * Leaderboard Handlers
+ * 
+ * Handles leaderboard-related API endpoints including:
+ * - Daily snapshot retrieval
+ * - Live leaderboard with rank deltas
+ * - Leaderboard comparisons (gainers/losers)
+ * - Debug endpoints
+ */
+
 import { getLeaderboardKey } from '../utils/keys.js';
 import { getCurrentSeason } from '../utils/seasons.js';
+import { logError } from '../utils/errors.js';
 
-// --- SHARED CONSTANTS ---
-const CACHE_TTL_MS = 60 * 1000; // 1 Minute
-// --- STATE/CACHE ---
+import { errorResponse, notFoundResponse, badRequestResponse } from '../utils/response.js';
+import {
+    LIVE_LEADERBOARD_CACHE_TTL_MS,
+    TOP_MOVERS_LIMIT,
+    getLeaderboardApiUrl,
+    ERROR_MESSAGES
+} from '../config.js';
+
+// ============================================================================
+// Cache State
+// ============================================================================
+
+/**
+ * In-memory cache for live leaderboard data
+ * @type {{timestamp: number, data: Map<string, Object>, total: number}}
+ */
 let liveLeaderboardCache = { timestamp: 0, data: new Map(), total: 0 };
 
-// --- HELPERS ---
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 /**
  * Fetches live Top 1000 ranks and global Infinite total from the official API.
- * @returns {Promise<{map: Map, total: number}>}
+ * Results are cached for 1 minute to reduce API calls.
+ * 
+ * @returns {Promise<{map: Map<string, {id: string, rank: number, name: string, score: number}>, total: number}>}
  */
 export async function getLiveLeaderboardData() {
     const now = Date.now();
-    if (now - liveLeaderboardCache.timestamp < CACHE_TTL_MS && liveLeaderboardCache.data.size > 0) {
+
+    // Return cached data if still valid
+    if (now - liveLeaderboardCache.timestamp < LIVE_LEADERBOARD_CACHE_TTL_MS &&
+        liveLeaderboardCache.data.size > 0) {
         return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
     }
 
     const { year, month } = getCurrentSeason(new Date());
-    const apiUrl = `https://marvelsnap.com/wp-json/api/v1/leaderboard?month=${month}&year=${year}&region=global`;
+    const apiUrl = getLeaderboardApiUrl(month, year);
 
     try {
         const res = await fetch(apiUrl);
-        if (!res.ok) return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
-        const data = await res.json();
 
+        // If API fails, return stale cache
+        if (!res.ok) {
+            logError('[Leaderboard]', new Error(`API returned ${res.status}`));
+            return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
+        }
+
+        const data = await res.json();
         const newMap = new Map();
+
         if (data?.results) {
             data.results.forEach((entry, index) => {
                 const rank = index + 1;
@@ -45,101 +82,167 @@ export async function getLiveLeaderboardData() {
 
         const globalTotal = data?.total || 0;
         liveLeaderboardCache = { timestamp: now, data: newMap, total: globalTotal };
+
         return { map: newMap, total: globalTotal };
-    } catch (e) {
+    } catch (error) {
+        logError('[Leaderboard]', error, { apiUrl });
+        // Return stale cache on error
         return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
     }
 }
 
+// ============================================================================
+// API Handlers
+// ============================================================================
 
+/**
+ * GET /api/leaderboard/daily
+ * 
+ * Retrieves a historical daily leaderboard snapshot from KV storage.
+ * 
+ * @param {Object} c - Hono context
+ * @param {Object} c.req.query - Query parameters
+ * @param {string} c.req.query.year - Year (YYYY)
+ * @param {string} c.req.query.month - Month (MM)
+ * @param {string} c.req.query.day - Day (DD)
+ * @returns {Promise<Response>} JSON response with leaderboard data
+ */
 export async function handleLeaderboard(c) {
     const year = c.req.query('year');
     const month = c.req.query('month');
     const day = c.req.query('day');
 
     if (!year || !month || !day) {
-        return c.json({ error: "Missing parameters. Use ?year=YYYY&month=MM&day=DD" }, 400);
+        return badRequestResponse(c, ERROR_MESSAGES.MISSING_DATE_PARAMS);
     }
 
     // Pad inputs to ensure YYYY-MM-DD format
     const m = month.padStart(2, '0');
     const d = day.padStart(2, '0');
-    const key = getLeaderboardKey(`${year}-${m}-${d}`);
+    const dateStr = `${year}-${m}-${d}`;
+
+    // Validate date format
+    try {
+
+    } catch (error) {
+        return badRequestResponse(c, error.message);
+    }
+
+    const key = getLeaderboardKey(dateStr);
 
     try {
         const data = await c.env.MARVEL_SNAP_HUB.get(key, { type: 'json' });
 
         if (!data) {
-            return c.json({ error: "No data found for this date." }, 404);
+            return notFoundResponse(c, ERROR_MESSAGES.DATA_NOT_FOUND);
         }
 
         return c.json(data);
-    } catch (e) {
-        return c.json({ error: "Failed to fetch data." }, 500);
+    } catch (error) {
+        logError('[Leaderboard]', error, { dateStr });
+        return errorResponse(c, ERROR_MESSAGES.FETCH_FAILED);
     }
 }
 
+/**
+ * GET /api/leaderboard/movers
+ * 
+ * Compares two daily snapshots to calculate rank changes and SP gains/losses.
+ * Returns top gainers and top losers.
+ * 
+ * @param {Object} c - Hono context
+ * @param {Object} c.req.query - Query parameters
+ * @param {string} c.req.query.date1 - First date (YYYY-MM-DD)
+ * @param {string} c.req.query.date2 - Second date (YYYY-MM-DD)
+ * @returns {Promise<Response>} JSON response with movers data
+ */
 export async function handleLeaderboardComparison(c) {
-    const date1Str = c.req.query('date1'); // e.g. Today
-    const date2Str = c.req.query('date2'); // e.g. Yesterday
+    const date1Str = c.req.query('date1');
+    const date2Str = c.req.query('date2');
 
     if (!date1Str || !date2Str) {
-        return c.json({ error: "Missing date1 or date2" }, 400);
+        return badRequestResponse(c, ERROR_MESSAGES.MISSING_COMPARISON_DATES);
     }
 
-    // Parallel fetch: Leaderboards + Live Data
-    const [d1, d2, { total: liveTotal }] = await Promise.all([
-        c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
-        c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
-        getLiveLeaderboardData()
-    ]);
+    // Validate dates
+    try {
 
-    if (!d1 || !d2) {
-        return c.json({ error: "Data missing for one or both dates." }, 404);
+    } catch (error) {
+        return badRequestResponse(c, error.message);
     }
 
-    // Process Momentum
-    const prevMap = new Map();
-    if (d2.results) d2.results.forEach(p => prevMap.set(p.playerId || p.id, p.score));
+    try {
+        // Parallel fetch: Leaderboards + Live Data
+        const [d1, d2, { total: liveTotal }] = await Promise.all([
+            c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
+            c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
+            getLiveLeaderboardData()
+        ]);
 
-    const movers = [];
-    if (d1.results) {
-        d1.results.forEach(curr => {
-            const pid = curr.playerId || curr.id;
-            const prevScore = prevMap.get(pid);
-            if (prevScore !== undefined) {
-                const diff = curr.score - prevScore;
-                movers.push({
-                    name: curr.playerName || curr.name,
-                    id: pid,
-                    change: diff,
-                    spStart: prevScore,
-                    spEnd: curr.score,
-                    rank: curr.rank || 0
-                });
-            }
+        if (!d1 || !d2) {
+            return notFoundResponse(c, 'Data missing for one or both dates.');
+        }
+
+        // Build previous scores map
+        const prevMap = new Map();
+        if (d2.results) {
+            d2.results.forEach(p => prevMap.set(p.playerId || p.id, p.score));
+        }
+
+        // Calculate momentum for all players
+        const movers = [];
+        if (d1.results) {
+            d1.results.forEach(curr => {
+                const pid = curr.playerId || curr.id;
+                const prevScore = prevMap.get(pid);
+
+                if (prevScore !== undefined) {
+                    const diff = curr.score - prevScore;
+                    movers.push({
+                        name: curr.playerName || curr.name,
+                        id: pid,
+                        change: diff,
+                        spStart: prevScore,
+                        spEnd: curr.score,
+                        rank: curr.rank || 0
+                    });
+                }
+            });
+        }
+
+        // Sort by change (descending)
+        movers.sort((a, b) => b.change - a.change);
+
+        const gainers = movers.filter(m => m.change > 0);
+        const losers = movers.filter(m => m.change < 0);
+
+        return c.json({
+            topGainers: gainers.slice(0, TOP_MOVERS_LIMIT),
+            topLosers: losers.reverse().slice(0, TOP_MOVERS_LIMIT),
+            date1: date1Str,
+            date2: date2Str,
+            totalInfinitePlayers: liveTotal
         });
+    } catch (error) {
+        logError('[Leaderboard Comparison]', error, { date1Str, date2Str });
+        return errorResponse(c, ERROR_MESSAGES.FETCH_FAILED);
     }
-
-    movers.sort((a, b) => b.change - a.change);
-    const gainers = movers.filter(m => m.change > 0);
-    const losers = movers.filter(m => m.change < 0);
-
-    return c.json({
-        topGainers: gainers.slice(0, 50),
-        topLosers: losers.reverse().slice(0, 50),
-        date1: date1Str,
-        date2: date2Str,
-        totalInfinitePlayers: liveTotal
-    });
 }
 
+/**
+ * GET /api/leaderboard/live
+ * 
+ * Fetches the current live leaderboard with rank deltas compared to yesterday.
+ * 
+ * @param {Object} c - Hono context
+ * @returns {Promise<Response>} JSON response with live leaderboard and deltas
+ */
 export async function handleGetLiveLeaderboard(c) {
     try {
         // 1. Fetch Live Data
         const { map, total } = await getLiveLeaderboardData();
 
-        // 2. Fetch Yesterday's Snapshot for comparison from KV (Most efficient for full 1k list)
+        // 2. Fetch Yesterday's Snapshot for comparison
         const yesterday = new Date();
         yesterday.setUTCDate(yesterday.getUTCDate() - 1);
         const yKey = getLeaderboardKey(yesterday);
@@ -147,17 +250,17 @@ export async function handleGetLiveLeaderboard(c) {
 
         // 3. Build Previous Rank Map
         const prevRankMap = new Map();
-        if (prevData && prevData.results) {
-            // Guarantee sort order before using index as rank
+        if (prevData?.results) {
+            // Ensure consistent sort order before using index as rank
             const sortedPrev = [...prevData.results].sort((a, b) => b.score - a.score);
 
             sortedPrev.forEach((p, i) => {
-                const r = i + 1;
-                prevRankMap.set(String(p.playerId || p.id), r);
+                const rank = i + 1;
+                prevRankMap.set(String(p.playerId || p.id), rank);
             });
         }
 
-        // 4. Calculate Deltas
+        // 4. Calculate Rank Deltas
         const results = Array.from(map.values())
             .map(p => {
                 const prevRank = prevRankMap.get(String(p.id));
@@ -172,26 +275,42 @@ export async function handleGetLiveLeaderboard(c) {
             results,
             total
         });
-    } catch (e) {
-        console.error("Leaderboard Error:", e);
-        return c.json({ error: "Failed to fetch live leaderboard." }, 500);
+    } catch (error) {
+        logError('[Live Leaderboard]', error);
+        return errorResponse(c, ERROR_MESSAGES.LEADERBOARD_ERROR);
     }
 }
 
+/**
+ * GET /api/debug/snapshot
+ * 
+ * Debug endpoint to inspect yesterday's snapshot data.
+ * 
+ * @param {Object} c - Hono context
+ * @returns {Promise<Response>} JSON response with snapshot metadata
+ */
 export async function handleDebugSnapshot(c) {
     const yesterday = new Date();
     yesterday.setUTCDate(yesterday.getUTCDate() - 1);
     const yKey = getLeaderboardKey(yesterday);
-    const prevData = await c.env.MARVEL_SNAP_HUB.get(yKey, { type: 'json' });
 
-    if (!prevData) return c.json({ error: "No data for yesterday", key: yKey });
+    try {
+        const prevData = await c.env.MARVEL_SNAP_HUB.get(yKey, { type: 'json' });
 
-    // Show top 5 raw entries
-    const sample = prevData.results ? prevData.results.slice(0, 5) : [];
+        if (!prevData) {
+            return c.json({ error: 'No data for yesterday', key: yKey });
+        }
 
-    return c.json({
-        key: yKey,
-        total: prevData.results ? prevData.results.length : 0,
-        sample: sample
-    });
+        // Show top 5 raw entries for inspection
+        const sample = prevData.results ? prevData.results.slice(0, 5) : [];
+
+        return c.json({
+            key: yKey,
+            total: prevData.results ? prevData.results.length : 0,
+            sample: sample
+        });
+    } catch (error) {
+        logError('[Debug Snapshot]', error, { key: yKey });
+        return errorResponse(c, 'Failed to fetch snapshot');
+    }
 }

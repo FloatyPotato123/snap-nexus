@@ -1,24 +1,24 @@
-<h1 class="text-center text-gold fw-800 mb-40">Deck Generator</h1>
+<h1 class="text-center text-gold fw-800 mb-lg">Deck Generator</h1>
 
 <article class="text-center">
-    <p class="text-muted mb-20">Generate random decks or challenge yourself with a stress deck.</p>
+    <p class="text-muted mb-md">Generate random decks or challenge yourself with a stress deck.</p>
 
     <div class="grid">
         <div>
-            <button onclick="fetchDeck('random')" class="mb-10">Random Deck</button>
+            <button onclick="fetchDeck('random')" class="mb-xs">Random Deck</button>
             <small class="text-muted text-small d-block">
                 Get a completely random <strong>12-card</strong> deck.
             </small>
         </div>
         <div>
-            <button class="secondary mb-10" onclick="fetchDeck('stress')">Stress Deck</button>
+            <button class="secondary mb-xs" onclick="fetchDeck('stress')">Stress Deck</button>
             <small class="text-muted text-small d-block">
                 Get <strong>3 cards</strong>. Build the rest as fast as possible!
             </small>
         </div>
     </div>
 
-    <div class="mt-20 relative">
+    <div class="mt-md relative">
         <button id="copyBtn" onclick="copyDeck()" class="outline btn-small copy-btn-abs">
             📋 Copy
         </button>

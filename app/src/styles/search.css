@@ -1,0 +1,185 @@
+/* ============================================================================
+   SEARCH STYLES
+   ============================================================================ */
+
+/* Search Suggestions */
+.search-suggestions {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    left: 0;
+    right: 0;
+    background: var(--pico-card-background-color);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: var(--pico-border-radius);
+    z-index: 1000;
+    box-shadow: var(--pico-card-box-shadow);
+    display: none;
+    flex-direction: column;
+    max-height: 280px;
+    overflow: hidden;
+}
+
+/* Wrapper for results to allow a stable footer at the bottom */
+.search-results-list {
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.search-suggestion-item {
+    padding: calc(var(--pico-spacing) * 0.5) var(--pico-spacing);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background 0.2s;
+}
+
+.suggestion-content {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.suggestion-main {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.suggestion-name {
+    font-size: 0.95rem;
+    font-weight: 400;
+}
+
+.suggestion-name strong,
+.suggestion-aka strong {
+    font-weight: 700;
+    color: var(--pico-contrast);
+}
+
+.suggestion-aka {
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    font-style: italic;
+}
+
+.search-suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.search-suggestion-item:hover,
+.search-suggestion-item.selected {
+    background: var(--pico-dropdown-hover-background-color, rgba(255, 204, 0, 0.08));
+}
+
+.suggestion-name {
+    font-weight: 500;
+}
+
+.suggestion-rank {
+    font-size: 0.75rem;
+    color: var(--accent-gold);
+    background: rgba(255, 204, 0, 0.1);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+.search-suggestion-footer {
+    padding: calc(var(--pico-spacing) * 0.75) var(--pico-spacing);
+    text-align: center;
+    background: var(--pico-card-sectioning-background-color, rgba(255, 255, 255, 0.03));
+    border-top: 1px solid var(--pico-card-border-color);
+    color: var(--accent-gold);
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.search-suggestion-footer:hover {
+    background: rgba(255, 206, 43, 0.1) !important;
+}
+
+/* Specific Height for Comparison Search */
+.small-suggestions {
+    max-height: 175px !important;
+}
+
+/* More compact items for comparison search */
+.small-suggestions .search-suggestion-item {
+    padding: calc(var(--pico-spacing) * 0.25) var(--pico-spacing);
+}
+
+.small-suggestions .suggestion-name {
+    font-size: 0.85rem;
+}
+
+.small-suggestions .suggestion-rank {
+    font-size: 0.65rem;
+    padding: 0px 4px;
+}
+
+.small-suggestions .suggestion-content {
+    gap: 0px;
+}
+
+/* Search Input Hero */
+.search-hero {
+    display: flex;
+    gap: 0;
+    border: 1px solid var(--pico-muted-border-color);
+    border-radius: 8px;
+    margin-bottom: 40px;
+}
+
+.search-hero input {
+    border-radius: 8px 0 0 8px !important;
+    border: none;
+    margin-bottom: 0;
+    background: transparent;
+}
+
+.search-hero button {
+    border-radius: 0 8px 8px 0 !important;
+    width: auto;
+    margin-bottom: 0;
+    background-color: var(--pico-primary-background);
+    border: none;
+    color: var(--pico-primary-inverse);
+    font-weight: 600;
+}
+
+/* Search Clear Button */
+.search-clear-btn {
+    background: transparent !important;
+    border: none !important;
+    padding: 0 0.5rem !important;
+    margin: 0 !important;
+    color: var(--pico-muted-color) !important;
+    cursor: pointer;
+    display: none;
+    /* Toggled by JS */
+    align-items: center;
+    justify-content: center;
+    height: 100% !important;
+    transition: color 0.2s;
+    outline: none !important;
+    box-shadow: none !important;
+}
+
+.search-clear-btn:hover {
+    color: var(--pico-contrast-color) !important;
+}
+
+/* Ensure input doesn't overlap clear button */
+.nav-search-container input {
+    /* Existing styles are fine, flex layout handles spacing */
+    flex: 1;
+    /* Allow input to grow */
+}
+
+/* --- Profile Page: Compare UI & Dropdown --- */

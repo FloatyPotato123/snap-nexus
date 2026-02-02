@@ -1,22 +1,41 @@
 /**
- * Cloudflare D1 Database Helper
- * Handles Search Indexing and Querying
+ * Cloudflare D1 Database Utilities
+ * 
+ * Provides database access functions for:
+ * - Player search (FTS5 full-text search)
+ * - Player name history tracking
+ * - Daily stats recording and retrieval
+ * - Batch operations for efficient data processing
+ * 
+ * All functions handle errors gracefully and return empty results on failure.
  */
 
+import { logError } from './errors.js';
+import { DB_BATCH_SIZE_PLAYERS, DB_BATCH_SIZE_STATS, SEARCH_MIN_QUERY_LENGTH } from '../config.js';
+
+// ============================================================================
+// Player Search
+// ============================================================================
+
 /**
- * Search for players by name (case-insensitive substring)
- * Uses PlayerAliases to find any name the player has ever used.
- * @param {D1Database} db 
- * @param {string} query 
- * @param {number} limit 
+ * Searches for players by name using full-text search.
+ * 
+ * Uses the FTS5 virtual table (PlayerSearch) with trigram indexing
+ * to find players by current name or any historical alias.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {string} query - Search query (case-insensitive)
+ * @param {number} [limit=10] - Maximum number of results
+ * @returns {Promise<Array<{id: string, name: string}>>} Array of matching players
  */
 export async function searchPlayers(db, query, limit = 10) {
-    if (!query || query.length < 2) return [];
+    if (!query || query.length < SEARCH_MIN_QUERY_LENGTH) {
+        return [];
+    }
 
     const normalized = query.toLowerCase();
 
-    // Search using FTS5 virtual table (Trigram indexed)
-    // Wrap in quotes to avoid FTS5 syntax errors with reserved words like "AND"
+    // Wrap query in quotes to avoid FTS5 syntax errors with reserved words
     const sql = `
         SELECT DISTINCT player_id as id, name 
         FROM PlayerSearch 
@@ -30,18 +49,31 @@ export async function searchPlayers(db, query, limit = 10) {
             .bind(`"${normalized}"*`, limit)
             .run();
         return results || [];
-    } catch (e) {
-        console.error("DB Search Error:", e);
+    } catch (error) {
+        logError('[DB Search]', error, { query, limit });
         return [];
     }
 }
 
+// ============================================================================
+// Player Data Management
+// ============================================================================
+
 /**
- * Batch Upsert (For Scraper/Live Sync or Snapshot Migration)
- * Updates Master Name and intelligent history insertion (A -> B -> A support).
- * @param {D1Database} db 
- * @param {Array<{id, name}>} players 
- * @param {string} seenAt Optional date string (e.g. "2024-10-19")
+ * Batch upserts player data with intelligent name change detection.
+ * 
+ * This function:
+ * 1. Updates the Players table with current names
+ * 2. Adds new entries to PlayerAliases only when names change
+ * 3. Processes in chunks to avoid SQLite bind limits
+ * 
+ * Optimization: Only writes to the database when a player's name has changed,
+ * reducing unnecessary writes during daily scrapes.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {Array<{id: string, name: string}>} players - Array of player data
+ * @param {string} [seenAt] - Date string (YYYY-MM-DD), defaults to today
+ * @returns {Promise<void>}
  */
 export async function batchUpsertPlayers(db, players, seenAt) {
     if (!players || players.length === 0) return;
@@ -66,32 +98,29 @@ export async function batchUpsertPlayers(db, players, seenAt) {
     const stmtMain = db.prepare(sqlMain);
     const stmtAlias = db.prepare(sqlAlias);
 
-    // Process in chunks to avoid SQLite bind limits on both READ and WRITE
-    const PROCESS_CHUNK_SIZE = 50;
-
-    for (let i = 0; i < players.length; i += PROCESS_CHUNK_SIZE) {
-        const chunk = players.slice(i, i + PROCESS_CHUNK_SIZE);
+    // Process in chunks to avoid SQLite bind limits
+    for (let i = 0; i < players.length; i += DB_BATCH_SIZE_PLAYERS) {
+        const chunk = players.slice(i, i + DB_BATCH_SIZE_PLAYERS);
         const playerIds = chunk.map(p => p.id);
 
-        // 1. Bulk Fetch History for this chunk
+        // Fetch existing history for this chunk to detect name changes
         let historyMap = {};
         try {
             historyMap = await batchGetPlayerHistories(db, playerIds);
-        } catch (e) {
-            console.error(`Batch History Fetch Error (Chunk ${i}):`, e);
+        } catch (error) {
+            logError('[DB Batch Upsert]', error, { chunkIndex: i });
         }
 
         const statements = [];
 
         for (const p of chunk) {
             if (!p.id || !p.name) continue;
+
             const normalized = p.name.toLowerCase();
-
-            // Logic: Periodic Identity Update (Write Optimization)
-            // Only update history AND master record if name actually changed.
             const history = historyMap[p.id];
-            let nameChanged = true;
 
+            // Only write if name has changed (optimization)
+            let nameChanged = true;
             if (history && history.length > 0) {
                 const latest = history[history.length - 1];
                 if (latest.name === p.name) {
@@ -108,19 +137,26 @@ export async function batchUpsertPlayers(db, players, seenAt) {
         if (statements.length > 0) {
             try {
                 await db.batch(statements);
-            } catch (e) {
-                console.error(`Batch Upsert Error (Chunk ${i}):`, e);
+            } catch (error) {
+                logError('[DB Batch Execute]', error, { chunkIndex: i, statementCount: statements.length });
             }
         }
     }
 }
 
+// ============================================================================
+// Player History
+// ============================================================================
 
 /**
- * Get name history for a player
- * Replaces the 'history:' KV keys.
- * @param {D1Database} db 
- * @param {string} playerId 
+ * Retrieves the name history for a single player.
+ * 
+ * Returns all known names for a player, ordered chronologically.
+ * Replaces the legacy 'history:' KV keys.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {string} playerId - Player ID
+ * @returns {Promise<Array<{name: string, seenAt: string}>>} Name history
  */
 export async function getPlayerHistory(db, playerId) {
     if (!playerId) return [];
@@ -135,21 +171,25 @@ export async function getPlayerHistory(db, playerId) {
     try {
         const { results } = await db.prepare(sql).bind(playerId).all();
         return results || [];
-    } catch (e) {
-        console.error("DB History Error:", playerId, e);
+    } catch (error) {
+        logError('[DB History]', error, { playerId });
         return [];
     }
 }
 
 /**
- * Get name history for multiple players in one query
- * @param {D1Database} db 
- * @param {Array<string>} playerIds 
+ * Retrieves name history for multiple players in a single query.
+ * 
+ * More efficient than calling getPlayerHistory() multiple times.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {Array<string>} playerIds - Array of player IDs
+ * @returns {Promise<Object<string, Array<{name: string, seenAt: string}>>>} Map of playerId to history
  */
 export async function batchGetPlayerHistories(db, playerIds) {
     if (!playerIds || playerIds.length === 0) return {};
 
-    // SQLite doesn't support arrays directly, so we build placeholders
+    // Build SQL with placeholders for IN clause
     const placeholders = playerIds.map(() => '?').join(',');
     const sql = `
         SELECT player_id, name, first_seen_at as seenAt 
@@ -161,24 +201,35 @@ export async function batchGetPlayerHistories(db, playerIds) {
     try {
         const { results } = await db.prepare(sql).bind(...playerIds).all();
 
-        // Group by player_id
+        // Group results by player_id
         const map = {};
         (results || []).forEach(row => {
-            if (!map[row.player_id]) map[row.player_id] = [];
+            if (!map[row.player_id]) {
+                map[row.player_id] = [];
+            }
             map[row.player_id].push({ name: row.name, seenAt: row.seenAt });
         });
+
         return map;
-    } catch (e) {
-        console.error("DB Batch History Error:", e);
+    } catch (error) {
+        logError('[DB Batch History]', error, { playerCount: playerIds.length });
         return {};
     }
 }
 
+// ============================================================================
+// Player Stats
+// ============================================================================
+
 /**
- * Get player stats for a specific set of dates (e.g. season ends)
- * @param {D1Database} db 
- * @param {string} playerId 
- * @param {Array<string>} dates 
+ * Retrieves historical ranks for a player on specific dates.
+ * 
+ * Used to fetch season-end rankings for the historical chart.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {string} playerId - Player ID
+ * @param {Array<string>} dates - Array of dates (YYYY-MM-DD)
+ * @returns {Promise<Array<{date: string, rank: number, sp: number}>>} Historical ranks
  */
 export async function getPlayerHistoricalRanks(db, playerId, dates) {
     if (!dates || dates.length === 0) return [];
@@ -194,49 +245,22 @@ export async function getPlayerHistoricalRanks(db, playerId, dates) {
     try {
         const { results } = await db.prepare(sql).bind(playerId, ...dates).all();
         return results || [];
-    } catch (e) {
-        console.error("DB Historical Ranks Error:", e);
+    } catch (error) {
+        logError('[DB Historical Ranks]', error, { playerId, dateCount: dates.length });
         return [];
     }
 }
 
-
 /**
- * Record daily total infinite player count
- */
-export async function recordDailyTotal(db, date, total) {
-    const sql = `INSERT OR REPLACE INTO DailyTotals (date, total) VALUES (?, ?)`;
-    try {
-        await db.prepare(sql).bind(date, total).run();
-    } catch (e) {
-        console.error("DB DailyTotal Error:", e);
-    }
-}
-
-/**
- * Record daily player ranking/score stats in bulk
- */
-export async function recordPlayerStats(db, date, entries) {
-    if (!entries || entries.length === 0) return;
-
-    const sql = `INSERT OR REPLACE INTO PlayerStats (player_id, date, rank, score) VALUES (?, ?, ?, ?)`;
-    const stmt = db.prepare(sql);
-
-    // Process in larger chunks to stay under the 1000 sub-request limit per Worker invocation
-    const CHUNK_SIZE = 500;
-    for (let i = 0; i < entries.length; i += CHUNK_SIZE) {
-        const chunk = entries.slice(i, i + CHUNK_SIZE);
-        const statements = chunk.map(p => stmt.bind(p.playerId || p.id, date, p.rank, p.score));
-        try {
-            await db.batch(statements);
-        } catch (e) {
-            console.error("DB PlayerStats Error:", e);
-        }
-    }
-}
-
-/**
- * Get historical stats for a single player
+ * Retrieves daily stats for a player within a date range.
+ * 
+ * Used for the season performance chart on player profiles.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {string} playerId - Player ID
+ * @param {string} start - Start date (YYYY-MM-DD)
+ * @param {string} end - End date (YYYY-MM-DD)
+ * @returns {Promise<Array<{date: string, rank: number, score: number}>>} Daily stats
  */
 export async function getPlayerStatsRange(db, playerId, start, end) {
     const sql = `
@@ -245,17 +269,75 @@ export async function getPlayerStatsRange(db, playerId, start, end) {
         WHERE player_id = ? AND date BETWEEN ? AND ?
         ORDER BY date ASC
     `;
+
     try {
         const { results } = await db.prepare(sql).bind(playerId, start, end).all();
         return results || [];
-    } catch (e) {
-        console.error("DB GetStats Error:", e);
+    } catch (error) {
+        logError('[DB Stats Range]', error, { playerId, start, end });
         return [];
     }
 }
 
 /**
- * Get historical daily totals for a range
+ * Records daily player stats in bulk.
+ * 
+ * Processes in chunks to stay under the 1000 sub-request limit
+ * per Worker invocation.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {string} date - Date (YYYY-MM-DD)
+ * @param {Array<{playerId: string, rank: number, score: number}>} entries - Player stats
+ * @returns {Promise<void>}
+ */
+export async function recordPlayerStats(db, date, entries) {
+    if (!entries || entries.length === 0) return;
+
+    const sql = `INSERT OR REPLACE INTO PlayerStats (player_id, date, rank, score) VALUES (?, ?, ?, ?)`;
+    const stmt = db.prepare(sql);
+
+    // Process in chunks to stay under Worker sub-request limits
+    for (let i = 0; i < entries.length; i += DB_BATCH_SIZE_STATS) {
+        const chunk = entries.slice(i, i + DB_BATCH_SIZE_STATS);
+        const statements = chunk.map(p => stmt.bind(p.playerId || p.id, date, p.rank, p.score));
+
+        try {
+            await db.batch(statements);
+        } catch (error) {
+            logError('[DB Record Stats]', error, { date, chunkIndex: i, chunkSize: chunk.length });
+        }
+    }
+}
+
+// ============================================================================
+// Daily Totals
+// ============================================================================
+
+/**
+ * Records the total number of Infinite players for a given date.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {string} date - Date (YYYY-MM-DD)
+ * @param {number} total - Total Infinite player count
+ * @returns {Promise<void>}
+ */
+export async function recordDailyTotal(db, date, total) {
+    const sql = `INSERT OR REPLACE INTO DailyTotals (date, total) VALUES (?, ?)`;
+
+    try {
+        await db.prepare(sql).bind(date, total).run();
+    } catch (error) {
+        logError('[DB Daily Total]', error, { date, total });
+    }
+}
+
+/**
+ * Retrieves daily Infinite player totals for a date range.
+ * 
+ * @param {Object} db - D1 database instance
+ * @param {string} start - Start date (YYYY-MM-DD)
+ * @param {string} end - End date (YYYY-MM-DD)
+ * @returns {Promise<Array<{date: string, total: number}>>} Daily totals
  */
 export async function getDailyTotalsRange(db, start, end) {
     const sql = `
@@ -264,11 +346,13 @@ export async function getDailyTotalsRange(db, start, end) {
         WHERE date BETWEEN ? AND ?
         ORDER BY date ASC
     `;
+
     try {
         const { results } = await db.prepare(sql).bind(start, end).all();
         return results || [];
-    } catch (e) {
-        console.error("DB GetTotals Error:", e);
+    } catch (error) {
+        logError('[DB Totals Range]', error, { start, end });
         return [];
     }
 }
+

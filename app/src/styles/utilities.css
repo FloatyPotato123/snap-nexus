@@ -1,0 +1,212 @@
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+/* Text Utilities */
+.text-gold {
+    color: var(--accent-gold) !important;
+}
+
+.text-purple {
+    color: var(--accent-purple) !important;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+.text-muted {
+    color: var(--pico-muted-color);
+}
+
+.text-small {
+    font-size: 0.85rem;
+}
+
+/* Spacing Utilities - Using CSS Variables (Consolidated from 12 classes to 11) */
+.mt-xs {
+    margin-top: var(--space-xs);
+}
+
+.mt-sm {
+    margin-top: var(--space-sm);
+}
+
+.mt-md {
+    margin-top: var(--space-md);
+}
+
+.mt-lg {
+    margin-top: var(--space-lg) !important;
+}
+
+.mt-xl {
+    margin-top: var(--space-xl);
+}
+
+.mb-0 {
+    margin-bottom: 0 !important;
+}
+
+.mb-xs {
+    margin-bottom: var(--space-xs);
+}
+
+.mb-sm {
+    margin-bottom: var(--space-sm);
+}
+
+.mb-md {
+    margin-bottom: var(--space-md);
+}
+
+.mb-lg {
+    margin-bottom: var(--space-lg) !important;
+}
+
+.mb-xl {
+    margin-bottom: var(--space-xl);
+}
+
+.mr-xs {
+    margin-right: var(--space-xs);
+}
+
+/* Font Weight */
+.fw-300 {
+    font-weight: 300;
+}
+
+.fw-800 {
+    font-weight: 800;
+}
+
+/* Status Colors */
+.gainer {
+    color: #4caf50;
+    font-weight: 400;
+}
+
+.loser {
+    color: #f44336;
+    font-weight: 400;
+}
+
+/* Flex Utilities */
+.relative {
+    position: relative;
+}
+
+.flex-center {
+    display: flex;
+    align-items: center;
+}
+
+.flex-end {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.flex-between {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.flex-wrap {
+    flex-wrap: wrap;
+}
+
+.gap-10 {
+    gap: var(--space-xs);
+}
+
+/* Display */
+.d-none {
+    display: none;
+}
+
+.d-block {
+    display: block;
+}
+
+.d-flex {
+    display: flex;
+}
+
+/* Height Utilities */
+.h-250 {
+    height: 250px;
+}
+
+/* Font Size */
+.font-1rem {
+    font-size: 1rem;
+}
+
+/* Misc */
+.subtitle-small {
+    font-weight: normal;
+    float: right;
+}
+
+.flex-end-gap {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    align-items: center;
+}
+
+.d-inline-block {
+    display: inline-block;
+}
+
+.w-6rem {
+    width: 6rem;
+}
+
+.w-auto {
+    width: auto !important;
+}
+
+.mr-10 {
+    margin-right: 10px;
+}
+
+.valign-top {
+    vertical-align: top;
+}
+
+.font-2-5rem {
+    font-size: 2.5rem;
+}
+
+.copy-btn-abs {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 5;
+}
+
+.deck-pre {
+    text-align: left;
+    min-height: 100px;
+    padding: 40px 20px 20px 20px;
+    -webkit-user-select: all;
+    user-select: all;
+}
+
+.season-select {
+    margin-bottom: 0 !important;
+    width: auto !important;
+}
+
+.sp-badge {
+    background: rgba(255, 204, 0, 0.15);
+    color: var(--accent-gold);
+    border: 1px solid rgba(255, 204, 0, 0.3);
+}

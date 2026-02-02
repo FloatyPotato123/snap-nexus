@@ -1,0 +1,670 @@
+/* ============================================================================
+   PROFILE STYLES
+   ============================================================================ */
+
+/* Season Dropdown Items (Profile Only) */
+.season-dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+    color: var(--pico-color);
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+}
+
+.season-dropdown-item:hover {
+    background-color: var(--pico-dropdown-hover-background-color, rgba(255, 255, 255, 0.05));
+}
+
+.season-dropdown-item label {
+    cursor: pointer;
+    width: 100%;
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.season-dropdown-item input[type="radio"] {
+    margin: 0;
+    margin-right: 10px;
+    cursor: pointer;
+}
+
+/* Fix Profile Season Dropdown Height & Style to match other buttons */
+#seasonTrigger.fake-select {
+    height: 32px !important;
+    display: inline-flex;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+}
+
+/* Compare Search Container */
+.compare-search-container {
+    position: absolute;
+    right: 0;
+    top: 45px;
+    z-index: 110;
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-card-border-color);
+    border-radius: 8px;
+    padding: 8px;
+    box-shadow: var(--pico-card-box-shadow);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    display: flex;
+    gap: 8px;
+    width: 320px;
+    max-width: 90vw;
+    flex-direction: column;
+}
+
+/* Movers Table Responsive Cell */
+.mover-cell-right {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 1rem;
+}
+
+@media (max-width: 992px) {
+    .mover-cell-right {
+        flex-direction: column;
+        align-items: flex-end;
+        gap: 0;
+    }
+
+    .compare-search-container {
+        right: auto;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 92vw;
+        max-width: 320px;
+    }
+}
+
+.compare-search-header {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--pico-muted-color);
+    margin-bottom: 4px;
+    padding: 0 4px;
+}
+
+.compare-search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+.compare-search-container input {
+    margin-bottom: 0 !important;
+    background: var(--pico-form-element-background-color) !important;
+    border: 1px solid var(--pico-form-element-border-color) !important;
+    color: var(--pico-color) !important;
+    height: 36px !important;
+    font-size: 0.9rem !important;
+    padding-left: 32px !important;
+    /* Space for icon */
+    border-radius: 6px !important;
+}
+
+.compare-search-icon {
+    position: absolute;
+    left: 10px;
+    color: var(--pico-muted-color);
+    pointer-events: none;
+}
+
+/* Ensure suggestions list sits nicely */
+.small-suggestions {
+    width: 100% !important;
+    top: calc(100% + 4px) !important;
+    left: 0 !important;
+    margin-top: 0 !important;
+    z-index: 1000 !important;
+}
+
+/* Compare Toggle Button Style (matches Season Trigger) */
+.btn-compare-toggle {
+    background-color: var(--pico-form-element-background-color) !important;
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color) !important;
+    color: var(--pico-color) !important;
+    padding: 0 12px !important;
+    height: 32px !important;
+    font-size: 0.85rem !important;
+    border-radius: var(--pico-border-radius) !important;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 0 !important;
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 500;
+    gap: 6px;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.btn-compare-toggle:hover {
+    border-color: var(--pico-form-element-focus-color) !important;
+    box-shadow: 0 0 0 var(--pico-outline-width) var(--pico-form-element-focus-color);
+}
+
+/* Comparison Tag Styles */
+#comparedPlayersList {
+    padding-right: 15px;
+    /* Visual alignment with chart grid */
+}
+
+.flex-wrap-gap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.comparison-tag {
+    display: inline-flex;
+    align-items: center;
+    background: #1e293b;
+    border: 1px solid #334155;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    color: #e2e8f0;
+    gap: 6px;
+}
+
+.comparison-tag .color-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+}
+
+.comparison-tag .remove-btn {
+    cursor: pointer;
+    font-weight: bold;
+    color: #94a3b8;
+    margin-left: 2px;
+}
+
+.comparison-tag .remove-btn:hover {
+    color: #f87171;
+}
+
+/* Comparison Tray Positioning */
+.compare-tray {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.btn-icon-only {
+    background-color: var(--pico-form-element-background-color) !important;
+    border: var(--pico-border-width) solid var(--pico-form-element-border-color) !important;
+    padding: 0 8px !important;
+    font-size: 1.1rem !important;
+    cursor: pointer;
+    transition: all 0.2s;
+    margin-bottom: 0 !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px !important;
+    border-radius: var(--pico-border-radius) !important;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+}
+
+.btn-icon-only:hover {
+    background: rgba(30, 41, 59, 0.7) !important;
+    border-color: rgba(71, 85, 105, 0.5) !important;
+}
+
+.btn-icon-only.success {
+    color: #4caf50 !important;
+    border-color: #4caf50 !important;
+}
+
+.btn-icon-only.error {
+    color: #f87171 !important;
+    border-color: #f87171 !important;
+}
+
+/* SVG Icons - common styles to reduce HTML clutter */
+.icon-svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.2s;
+}
+
+.compare-search-icon {
+    width: 16px;
+    height: 16px;
+}
+
+.btn-icon-only:active .icon-svg,
+.btn-compare-toggle:active .icon-svg {
+    transform: scale(0.9);
+}
+
+/* Back Navigation (Ghost Button) */
+.back-nav {
+    margin-bottom: 20px;
+}
+
+.back-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: var(--pico-muted-color);
+    text-decoration: none;
+    transition: all 0.2s ease;
+    font-weight: 500;
+}
+
+.back-btn:hover {
+    color: var(--accent-gold);
+    background: rgba(255, 255, 255, 0.03);
+    text-decoration: none;
+}
+
+.back-arrow {
+    transition: transform 0.2s ease;
+}
+
+.back-btn:hover .back-arrow {
+    transform: translateX(-4px);
+}
+
+/* --- TAB UI --- */
+
+/* Tab Container */
+.tab-container {
+    width: 100%;
+}
+
+/* Tab Navigation (Buttons Row) */
+.tab-nav {
+    display: flex;
+    gap: 15px;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    margin-bottom: 20px;
+    overflow-x: auto;
+    /* Allow scroll on tiny screens */
+    scrollbar-width: none;
+    /* Firefox */
+    -ms-overflow-style: none;
+    /* IE 10+ */
+}
+
+.tab-nav::-webkit-scrollbar {
+    display: none;
+    /* Chrome/Safari/Webkit */
+}
+
+/* Tab Button */
+.tab-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--pico-muted-color);
+    font-weight: 600;
+    font-size: 0.95rem;
+    padding: 10px 15px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    border-radius: 4px 4px 0 0;
+    /* Rounded top corners only */
+    margin-bottom: -1px;
+    /* Sit on the line */
+}
+
+.tab-btn:hover {
+    color: var(--pico-contrast-color);
+}
+
+.tab-btn.active {
+    color: var(--accent-gold);
+    border-bottom-color: var(--accent-gold);
+}
+
+.tab-btn:focus {
+    outline: none;
+    box-shadow: none;
+}
+
+/* Tab Content Areas */
+.tab-content {
+    animation: fadeIn 0.3s ease;
+}
+
+.tab-content.d-none {
+    display: none;
+}
+
+/* Profile Dossier Layout */
+.dossier-layout {
+    display: grid;
+    grid-template-columns: 1fr 340px;
+    gap: 0;
+    margin-bottom: 30px;
+    align-items: stretch;
+    background: var(--pico-card-background-color);
+    border: 1px solid var(--pico-card-border-color);
+    border-top: 4px solid var(--accent-gold);
+    border-radius: var(--pico-border-radius);
+    box-shadow: var(--pico-card-box-shadow);
+    overflow: hidden;
+    /* Clips internal dividers to card edges/corners */
+}
+
+.profile-hero {
+    position: relative;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    text-align: left;
+    width: 100%;
+}
+
+.history-card {
+    margin-bottom: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 24px;
+    background: transparent;
+    border: none;
+    border-left: 1px solid var(--pico-muted-border-color);
+    border-radius: 0;
+}
+
+.profile-name-h1 {
+    font-size: 3.2rem;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    margin-bottom: 30px;
+    color: #fff;
+    line-height: 1;
+}
+
+.hero-stats-grid {
+    display: flex;
+    gap: 50px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+}
+
+.profile-stats-row {
+    display: flex;
+    justify-content: flex-start;
+    gap: 50px;
+    align-items: flex-start;
+}
+
+.season-stats-block {
+    padding-left: 50px;
+    border-left: 1px solid var(--pico-muted-border-color);
+}
+
+.core-stats-row.d-none+.season-stats-block {
+    padding-left: 0;
+    border-left: none;
+}
+
+.stats-header {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--pico-muted-color);
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    margin-bottom: 10px;
+    opacity: 0.6;
+    line-height: 1;
+}
+
+.season-stats-block .stat-pill .stat-value {
+    font-size: 0.9rem;
+    font-weight: 600;
+}
+
+.season-stats-block .stat-pill .stat-label {
+    font-size: 0.65rem;
+    letter-spacing: 0.02em;
+}
+
+.stat-pill {
+    background: transparent;
+    border: none;
+    border-left: 3px solid var(--pico-muted-border-color);
+    border-radius: 0;
+    padding-left: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    min-width: auto;
+}
+
+.stat-pill:hover {
+    background: transparent;
+    border-color: transparent;
+}
+
+.stat-pill.rank {
+    border-left-color: var(--accent-blue);
+}
+
+.stat-pill.sp {
+    border-left-color: var(--accent-gold);
+}
+
+.stat-pill.best-day {
+    border-left-color: #2ecc71;
+    border-left-width: 2px;
+}
+
+.stat-pill.volatility {
+    border-left-color: #9b59b6;
+    border-left-width: 2px;
+}
+
+.stat-pill .stat-label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: var(--pico-muted-color);
+    margin-bottom: 0;
+    letter-spacing: 0.05em;
+    font-weight: 600;
+}
+
+.stat-pill .stat-value {
+    font-family: var(--pico-font-family-mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.stat-pill.rank .stat-value {
+    color: var(--accent-blue);
+    font-size: 2.05rem;
+    letter-spacing: -0.02em;
+}
+
+.stat-pill.sp .stat-value {
+    color: var(--accent-gold);
+    font-size: 2.05rem;
+    letter-spacing: -0.02em;
+}
+
+@media (max-width: 1024px) {
+    .dossier-layout {
+        grid-template-columns: 1fr;
+        gap: 0;
+        height: auto;
+        max-height: none;
+    }
+
+    .profile-hero {
+        padding: 20px 20px 10px 20px;
+        min-width: 0;
+        /* Allows children to shrink/truncate */
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    .history-card {
+        border-left: none;
+        border-top: 1px solid var(--pico-muted-border-color);
+        padding: 10px 20px 20px 20px;
+        min-height: auto;
+    }
+
+    .profile-name-h1 {
+        font-size: clamp(1.2rem, 8vw, 2.5rem);
+        line-height: 1.1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        width: 100%;
+        display: block;
+    }
+}
+
+@media (max-width: 768px) {
+    .hero-stats-grid {
+        gap: 0;
+    }
+
+    .season-stats-block {
+        position: relative;
+        padding-left: 0;
+        border-left: none;
+        padding-top: 20px;
+        margin-top: 20px;
+        width: 100%;
+    }
+
+    /* Fixed Divider Line: Uses absolute positioning relative to content box */
+    .season-stats-block::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -20px;
+        /* Perfectly flush with card content padding */
+        right: -20px;
+        height: 1px;
+        background-color: var(--pico-muted-border-color);
+        z-index: 1;
+    }
+
+    .stat-pill.rank .stat-value,
+    .stat-pill.sp .stat-value {
+        font-size: 1.6rem;
+    }
+}
+
+/* Timeline Component */
+.timeline-container {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 15px;
+    max-height: 260px;
+}
+
+.timeline-container::-webkit-scrollbar {
+    width: 4px;
+    display: block;
+}
+
+.timeline-container::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.timeline-container::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 4px;
+    transition: background 0.3s ease;
+}
+
+.timeline-container:hover::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.timeline-container {
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.3s ease;
+}
+
+.timeline-container:hover {
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.timeline {
+    position: relative;
+    padding-left: 20px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    margin-left: 5px;
+    border-left: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 24px;
+}
+
+.timeline-item:last-child {
+    margin-bottom: 0;
+}
+
+.timeline-item::before {
+    content: '';
+    position: absolute;
+    left: -21px;
+    top: 0.6rem;
+    transform: translate(-50%, -50%);
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #64748b;
+    box-shadow: 0 0 0 4px var(--pico-card-background-color);
+    z-index: 1;
+}
+
+.timeline-item.current::before {
+    background: var(--accent-gold);
+    box-shadow: 0 0 0 4px var(--pico-card-background-color), 0 0 10px rgba(255, 204, 0, 0.4);
+}
+
+.timeline-name {
+    display: block;
+    font-weight: 700;
+    color: #fff;
+    font-size: 0.95rem;
+    line-height: 1.2;
+    margin-bottom: 4px;
+}
+
+.timeline-date {
+    display: block;
+    color: var(--pico-muted-color);
+    font-size: 0.8rem;
+    font-family: ui-monospace, 'SFMono-Regular', 'Roboto Mono', Menlo, Monaco, Consolas, monospace;
+    font-variant-numeric: slashed-zero;
+    margin-top: 2px;
+}

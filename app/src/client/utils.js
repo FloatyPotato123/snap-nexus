@@ -8,17 +8,128 @@ import { getSeasonStartForMonth, getSeasonEndForMonth, getSeasonStart, getSeason
 // Global Namespace to avoid collisions with other 'utils'
 window.SnapUtils = window.SnapUtils || {};
 
-// Export Season Logic
+// ============================================================================
+// Client-Side Constants
+// ============================================================================
+
+/**
+ * Centralized configuration for client-side behavior
+ */
+window.SnapUtils.CONSTANTS = {
+    // Timing (milliseconds)
+    SEARCH_DEBOUNCE_MS: 250,
+    COPY_SUCCESS_DURATION_MS: 2500,
+
+    // Validation
+    MIN_SEARCH_QUERY_LENGTH: 3,
+    SEARCH_RESULTS_LIMIT: 20,
+
+    // Data ranges
+    DATA_START_YEAR: 2025,
+    DATA_START_MONTH: 9, // October (0-indexed)
+
+    // API Endpoints
+    API: {
+        PLAYER_SEARCH: '/api/players/search',
+        PLAYER_PROFILE: '/api/player',
+        SEASON_STATS: '/api/season/stats',
+        HISTORY_SEASONS: '/api/history/seasons',
+        LEADERBOARD_MOVERS: '/api/leaderboard/movers',
+        LEADERBOARD_LIVE: '/api/leaderboard/live'
+    },
+
+    // UI Messages
+    MESSAGES: {
+        SEARCH_MIN_CHARS: 'Type at least 3 characters...',
+        NO_RESULTS: 'No players found',
+        SEARCHING: 'Searching...',
+        LOADING: 'Loading...'
+    },
+
+    // Chart config
+    CHART_HEIGHT: '350px'
+};
+
+// ============================================================================
+// XSS Protection & HTML Sanitization
+// ============================================================================
+
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * 
+ * @param {string} str - String to escape
+ * @returns {string} Escaped string safe for HTML insertion
+ */
+window.SnapUtils.escapeHtml = function (str) {
+    if (typeof str !== 'string') return '';
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+};
+
+/**
+ * Sanitizes player names for safe display.
+ * 
+ * @param {string} name - Player name to sanitize
+ * @returns {string} Sanitized name
+ */
+window.SnapUtils.sanitizePlayerName = function (name) {
+    if (typeof name !== 'string') return '';
+    return name
+        .replace(/[<>'"]/g, '')
+        .trim()
+        .substring(0, 100);
+};
+
+/**
+ * Creates a safe HTML string with highlighted search terms.
+ * Escapes the text first, then wraps matching portions in <strong> tags.
+ * 
+ * @param {string} text - Text to highlight
+ * @param {string} query - Search query to highlight
+ * @returns {string} HTML string with highlighted matches
+ */
+window.SnapUtils.highlightText = function (text, query) {
+    if (!query || !text) return window.SnapUtils.escapeHtml(text);
+
+    const escapedText = window.SnapUtils.escapeHtml(text);
+    const escapedQuery = window.SnapUtils.escapeHtml(query);
+
+    // Escape regex special characters
+    const regexSafeQuery = escapedQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`(${regexSafeQuery})`, 'gi');
+
+    return escapedText.replace(regex, '<strong>$1</strong>');
+};
+
+// ============================================================================
+// Season Logic
+// ============================================================================
+
 window.SnapUtils.getSeasonStartForMonth = getSeasonStartForMonth;
 window.SnapUtils.getSeasonEndForMonth = getSeasonEndForMonth;
 window.SnapUtils.getSeasonStart = getSeasonStart;
 window.SnapUtils.getSeasonEnd = getSeasonEnd;
 window.SnapUtils.getCurrentSeason = getCurrentSeason;
 
-// Export Helper $
+// ============================================================================
+// DOM Helpers
+// ============================================================================
+
+/**
+ * Shorthand for document.getElementById
+ * @param {string} id - Element ID
+ * @returns {HTMLElement|null}
+ */
 window.SnapUtils.$ = (id) => document.getElementById(id);
 
-// Export Animate Helper
+/**
+ * Animate a number value with easing
+ * @param {HTMLElement} obj - Element to update
+ * @param {number} start - Starting value
+ * @param {number} end - Ending value
+ * @param {number} duration - Animation duration in ms
+ */
 window.SnapUtils.animateValue = function (obj, start, end, duration) {
     let startTimestamp = null;
     const step = (timestamp) => {
@@ -35,7 +146,11 @@ window.SnapUtils.animateValue = function (obj, start, end, duration) {
     window.requestAnimationFrame(step);
 };
 
-// Unified Navigation Helper (respects Command/Ctrl click for new tabs)
+/**
+ * Unified navigation helper (respects Command/Ctrl click for new tabs)
+ * @param {Event} event - Click event
+ * @param {string} url - URL to navigate to
+ */
 window.SnapUtils.navigateTo = function (event, url) {
     if (event.metaKey || event.ctrlKey) {
         window.open(url, '_blank');
@@ -44,7 +159,9 @@ window.SnapUtils.navigateTo = function (event, url) {
     }
 };
 
-// --- CHART.JS HELPERS ---
+// ============================================================================
+// Chart.js Helpers
+// ============================================================================
 
 // Palette (12 Colors)
 window.SnapUtils.CHART_PALETTE = [
@@ -62,6 +179,9 @@ window.SnapUtils.CHART_PALETTE = [
     { border: '#e879f9', bg: 'rgba(232, 121, 249, 0.1)' }  // Magenta
 ];
 
+/**
+ * Initialize Chart.js defaults
+ */
 window.SnapUtils.initChartDefaults = function () {
     if (typeof Chart === 'undefined') return;
     Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
@@ -69,6 +189,12 @@ window.SnapUtils.initChartDefaults = function () {
     Chart.defaults.borderColor = 'rgba(255,255,255,0.1)';
 };
 
+/**
+ * Get color for a specific season
+ * @param {number} year - Season year
+ * @param {number} month - Season month
+ * @returns {Object} Color object with border and bg properties
+ */
 window.SnapUtils.getSeasonColor = function (year, month) {
     const now = new Date();
     const active = SnapUtils.getCurrentSeason(now);
@@ -81,8 +207,12 @@ window.SnapUtils.getSeasonColor = function (year, month) {
     return window.SnapUtils.CHART_PALETTE[index];
 };
 
+// ============================================================================
+// Tab Logic
+// ============================================================================
+
 /**
- * Initialize Tab Logic
+ * Initialize tab switching logic
  * Usage: Button must have class 'tab-btn' and 'data-target="someId"'
  * Target Content must have id="someId" and class 'tab-content'
  */
@@ -113,3 +243,129 @@ window.SnapUtils.initTabs = function () {
 
 
 
+
+
+/**
+ * Creates a reusable player search autocomplete
+ * @param {HTMLElement} input - Search input element
+ * @param {HTMLElement} resultsBox - Results container element
+ * @param {Object} options - Configuration options
+ */
+window.SnapUtils.createPlayerAutocomplete = function(input, resultsBox, options = {}) {
+    const {
+        onSelect,
+        excludeId = null,
+        showFooter = false,
+        onHide = null
+    } = options;
+
+    let debounceTimer;
+    const { CONSTANTS, highlightText, escapeHtml } = window.SnapUtils;
+
+    const hide = () => {
+        resultsBox.style.display = 'none';
+        if (onHide) onHide();
+    };
+
+    input.addEventListener('input', () => {
+        clearTimeout(debounceTimer);
+        const query = input.value.trim();
+
+        if (query.length < CONSTANTS.MIN_SEARCH_QUERY_LENGTH) {
+            if (query.length > 0) {
+                resultsBox.innerHTML = `
+                    <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); font-size: 0.85rem; padding: 15px;">
+                        ${CONSTANTS.MESSAGES.SEARCH_MIN_CHARS}
+                    </div>
+                `;
+                resultsBox.style.display = 'block';
+            } else {
+                hide();
+            }
+            return;
+        }
+
+        debounceTimer = setTimeout(async () => {
+            try {
+                const res = await fetch(`${CONSTANTS.API.PLAYER_SEARCH}?q=${encodeURIComponent(query)}&limit=${CONSTANTS.SEARCH_RESULTS_LIMIT}&format=json`);
+                const data = await res.json();
+
+                if (data.matches && data.matches.length > 0) {
+                    const filteredMatches = excludeId
+                        ? data.matches.filter(m => m.id !== excludeId)
+                        : data.matches;
+
+                    if (filteredMatches.length === 0) {
+                        resultsBox.innerHTML = `
+                            <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); padding: 15px;">
+                                ${CONSTANTS.MESSAGES.NO_RESULTS}
+                            </div>
+                        `;
+                        resultsBox.style.display = 'block';
+                        return;
+                    }
+
+                    const itemsHtml = filteredMatches.map(m => {
+                        const otherNames = m.history
+                            ?.map(h => h.name)
+                            .filter(name => name && name !== m.name) || [];
+                        const uniqueAka = [...new Set(otherNames)].slice(0, 2);
+                        const akaHtml = uniqueAka.length > 0
+                            ? `<div class="suggestion-aka">aka ${uniqueAka.map(a => highlightText(a, query)).join(', ')}</div>`
+                            : '';
+
+                        return `
+                            <div class="search-suggestion-item" data-id="${escapeHtml(m.id)}" data-name="${escapeHtml(m.name)}">
+                                <div class="suggestion-content">
+                                    <div class="suggestion-main">
+                                        <span class="suggestion-name">${highlightText(m.name, query)}</span>
+                                        ${m.currentRank ? `<span class="suggestion-rank">#${m.currentRank}</span>` : ''}
+                                    </div>
+                                    ${akaHtml}
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+
+                    if (showFooter) {
+                        resultsBox.innerHTML = `
+                            <div class="search-results-list">${itemsHtml}</div>
+                            <div class="search-suggestion-item search-suggestion-footer" data-action="search">
+                                See all results for "${escapeHtml(query)}"
+                            </div>
+                        `;
+                        resultsBox.style.display = 'flex';
+                    } else {
+                        resultsBox.innerHTML = itemsHtml;
+                        resultsBox.style.display = 'block';
+                    }
+                } else {
+                    resultsBox.innerHTML = `
+                        <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); padding: 15px;">
+                            ${CONSTANTS.MESSAGES.NO_RESULTS}
+                        </div>
+                    `;
+                    resultsBox.style.display = 'block';
+                }
+            } catch (e) {
+                hide();
+            }
+        }, CONSTANTS.SEARCH_DEBOUNCE_MS);
+    });
+
+    resultsBox.addEventListener('click', (e) => {
+        const item = e.target.closest('.search-suggestion-item');
+        if (!item) return;
+
+        const playerId = item.dataset.id;
+        const playerName = item.dataset.name;
+
+        if (playerId && onSelect) {
+            onSelect({ id: playerId, name: playerName });
+            input.value = '';
+            hide();
+        }
+    });
+
+    return { destroy: () => { clearTimeout(debounceTimer); hide(); }, hide };
+};

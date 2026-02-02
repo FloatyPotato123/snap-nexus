@@ -1,0 +1,35 @@
+/* ============================================================================
+   CSS VARIABLES & DESIGN TOKENS
+   ============================================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+    /* Typography */
+    --pico-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    --pico-border-radius: 8px;
+    --pico-form-element-spacing-vertical: 0.75rem;
+    --pico-form-element-spacing-horizontal: 1.25rem;
+
+    /* Brand Colors */
+    --accent-gold: #ffce2b;
+    --accent-purple: #bb86fc;
+    --accent-blue: #2196F3;
+
+    /* Spacing Scale - Consolidates mt-10, mt-15, mt-20, mt-40, mt-60 */
+    --space-xs: 10px;
+    --space-sm: 15px;
+    --space-md: 20px;
+    --space-lg: 40px;
+    --space-xl: 60px;
+
+    /* Gradients - Reused across components */
+    --gradient-gold: linear-gradient(135deg, var(--accent-gold), #ffaa00);
+
+    /* Borders */
+    --border-radius-sm: 4px;
+
+    /* Shadows */
+    --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.2);
+    --shadow-md: 0 4px 10px rgba(0, 0, 0, 0.3);
+}

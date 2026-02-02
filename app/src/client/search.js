@@ -4,6 +4,7 @@
  */
 (function () {
     const $ = SnapUtils.$;
+    const { CONSTANTS } = window.SnapUtils;
 
     // Check URL params on load
     window.addEventListener('DOMContentLoaded', () => {
@@ -31,9 +32,8 @@
             loadMoreContainer.style.display = 'none';
             return;
         }
-
-        if (query.length < 3) {
-            resDiv.innerHTML = `<div class="search-help-text">Type at least 3 characters to search...</div>`;
+        if (query.length < CONSTANTS.MIN_SEARCH_QUERY_LENGTH) {
+            resDiv.innerHTML = `<div class="search-help-text">${CONSTANTS.MESSAGES.SEARCH_MIN_CHARS}</div>`;
             loadMoreContainer.style.display = 'none';
             return;
         }
@@ -47,7 +47,7 @@
             newUrl.searchParams.set('q', query);
             window.history.pushState({}, '', newUrl);
 
-            resDiv.innerHTML = '<div class="status-msg">Searching...</div>';
+            resDiv.innerHTML = `<div class="status-msg">${CONSTANTS.MESSAGES.SEARCHING}</div>`;
             loadMoreContainer.style.display = 'none';
         } else {
             isLoadingMore = true;
@@ -55,12 +55,14 @@
         }
 
         try {
-            const req = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&cursor=${currentCursor}`);
+            const req = await fetch(`${CONSTANTS.API.PLAYER_SEARCH}?q=${encodeURIComponent(query)}&cursor=${currentCursor}`);
             if (!req.ok) throw new Error(await req.text());
             const data = await req.json();
 
+            const { escapeHtml } = window.SnapUtils;
+
             if (!isLoadMore && data.matches.length === 0) {
-                resDiv.innerHTML = `<div class="no-results">No players found matching "${query}".</div>`;
+                resDiv.innerHTML = `<div class="no-results">No players found matching "${escapeHtml(query)}".</div>`;
                 loadMoreContainer.style.display = 'none';
                 return;
             }
@@ -75,6 +77,8 @@
             }
 
             data.matches.forEach(match => {
+                const { escapeHtml } = window.SnapUtils;
+
                 // Filter "Also Known As"
                 const otherNames = match.history
                     .map(h => h.name)
@@ -82,11 +86,11 @@
                 const uniqueAlsoKnown = [...new Set(otherNames)];
 
                 const akaStr = uniqueAlsoKnown.length > 0
-                    ? `<div class="text-muted text-small mt-10">Also known as: <span style="font-style:italic; color:var(--pico-muted-color);">${uniqueAlsoKnown.slice(0, 3).join(', ')}${uniqueAlsoKnown.length > 3 ? '...' : ''}</span></div>`
+                    ? `<div class="text-muted text-small mt-10">Also known as: <span style="font-style:italic; color:var(--pico-muted-color);">${uniqueAlsoKnown.slice(0, 3).map(escapeHtml).join(', ')}${uniqueAlsoKnown.length > 3 ? '...' : ''}</span></div>`
                     : '';
 
                 // Pass params
-                const profileUrl = `/player/${match.id}?back_q=${encodeURIComponent(query)}`;
+                const profileUrl = `/player/${escapeHtml(match.id)}?back_q=${encodeURIComponent(query)}`;
 
                 // Rank Badge
                 let rankHtml = '';
@@ -101,7 +105,7 @@
                     <div class="match-info">
                         ${rankHtml}
                         <div>
-                            <h3 class="text-gold mb-0">${match.name}</h3>
+                            <h3 class="text-gold mb-0">${escapeHtml(match.name)}</h3>
                             ${akaStr ? akaStr.replace('<div class="text-muted text-small mt-10">', '<div class="aka-text">').replace('</div>', '</div>') : ''} 
                         </div>
                     </div>
@@ -117,7 +121,8 @@
 
             // If no matches, show friendly message
             if (data.matches.length === 0) {
-                resDiv.innerHTML = `<div class="no-results">No players found matching "${query}".</div>`;
+                const { escapeHtml } = window.SnapUtils;
+                resDiv.innerHTML = `<div class="no-results">No players found matching "${escapeHtml(query)}".</div>`;
             }
 
             // Handle Pagination Button
@@ -130,7 +135,8 @@
             }
 
         } catch (e) {
-            if (!isLoadMore) resDiv.innerHTML = `<div class="error-msg">Error: ${e.message}</div>`;
+            const { escapeHtml } = window.SnapUtils;
+            if (!isLoadMore) resDiv.innerHTML = `<div class="error-msg">Error: ${escapeHtml(e.message)}</div>`;
             else alert("Failed to load more results.");
             console.error(e);
         }

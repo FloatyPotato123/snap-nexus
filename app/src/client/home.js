@@ -3,6 +3,9 @@
  * Logic for the Home Dashboard (index.html).
  */
 (function () {
+    const $ = SnapUtils.$;
+    const { CONSTANTS } = window.SnapUtils;
+
     // Wait for DOM and Dependencies
     window.addEventListener('DOMContentLoaded', async () => {
         if (typeof SnapUtils === 'undefined' || typeof Chart === 'undefined') {
@@ -166,7 +169,7 @@
             const eStr = fetchEnd.toISOString().split('T')[0];
 
             try {
-                const req = await fetch(`/api/season/stats?start=${sStr}&end=${eStr}`);
+                const req = await fetch(`${CONSTANTS.API.SEASON_STATS}?start=${sStr}&end=${eStr}`);
                 const data = await req.json();
                 return { ...season, data, year, month, start };
             } catch {
@@ -209,7 +212,7 @@
 
             $('seasonChart').style.display = 'block';
             $('noSeasonData').style.display = 'none';
-            $('seasonChartContainer').style.height = '350px';
+            $('seasonChartContainer').style.height = CONSTANTS.CHART_HEIGHT;
 
             const ctx = $('seasonChart').getContext('2d');
             if (chartInstance) chartInstance.destroy();
@@ -289,7 +292,7 @@
             try {
                 if (!cachedHistory) {
                     // Fetch Unified History (Legacy + D1)
-                    const req = await fetch('/api/history/seasons');
+                    const req = await fetch(CONSTANTS.API.HISTORY_SEASONS);
                     if (!req.ok) throw new Error("History fetch failed");
                     cachedHistory = await req.json();
                 }
@@ -384,7 +387,7 @@
 
             try {
                 // Note: Updated to use /api prefix
-                const req = await fetch(`/api/leaderboard/movers?date1=${date1}&date2=${date2}`);
+                const req = await fetch(`${CONSTANTS.API.LEADERBOARD_MOVERS}?date1=${date1}&date2=${date2}`);
                 if (!req.ok) {
                     const err = await req.json();
                     $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>No data available (${req.status})</td></tr>`;
@@ -392,16 +395,17 @@
                     return;
                 }
                 const data = await req.json();
+                const { escapeHtml } = window.SnapUtils;
                 const renderRows = (list, isGain) => {
                     if (!list || !list.length) return "<tr><td>No data</td></tr>";
                     return list.slice(0, 10).map((p, i) => {
                         const spContext = (p.spStart && p.spEnd)
                             ? `<span class="text-muted" style="font-size:0.8rem;">${p.spStart} → ${p.spEnd} SP</span>`
                             : '';
-                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${p.id}?ref=home')">
+                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${escapeHtml(p.id)}?ref=home')">
                         <td>
                             <span class="text-muted" style="margin-right:8px; font-size:0.9em;">${i + 1}</span>
-                            <a href="/player/${p.id}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${p.name}</a>
+                            <a href="/player/${escapeHtml(p.id)}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${escapeHtml(p.name)}</a>
                         </td>
                         <td style="text-align:right;">
                             <div class="mover-cell-right">

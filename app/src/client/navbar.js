@@ -4,6 +4,9 @@
  * Handles: Search toggle, Autocomplete suggestions, Active link highlighting.
  */
 (function () {
+    // Destructure utilities and constants once at top
+    const { CONSTANTS, createPlayerAutocomplete } = window.SnapUtils;
+
     // Wait for DOM to be ready
     window.addEventListener('DOMContentLoaded', () => {
 
@@ -67,10 +70,9 @@
             toggleClearBtn();
         }
 
-        // --- 2. AUTOCOMPLETE SUGGESTIONS ---
+        // --- 2. AUTOCOMPLETE SUGGESTIONS (Using Shared Function) ---
         if (navSearch) {
             const suggestionsBox = document.getElementById('searchSuggestions');
-            let debounceTimer;
             let selectedIndex = -1;
 
             const setSelectedIndex = (index) => {
@@ -86,91 +88,24 @@
                 selectedIndex = -1;
             };
 
-            navSearch.addEventListener('input', () => {
-                clearTimeout(debounceTimer);
-                const query = navSearch.value.trim();
-
-                if (query.length < 3) {
-                    if (query.length > 0) {
-                        suggestionsBox.innerHTML = `
-                            <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); font-size: 0.85rem; padding: 15px;">
-                                Type at least 3 characters...
-                            </div>
-                        `;
-                        suggestionsBox.style.display = 'block';
-                    } else {
-                        hideSuggestions();
-                    }
-                    return;
+            // Use shared autocomplete function
+            createPlayerAutocomplete(navSearch, suggestionsBox, {
+                showFooter: true,
+                onSelect: (player) => {
+                    window.location.href = `/player/${player.id}`;
+                },
+                onHide: () => {
+                    selectedIndex = -1;
                 }
-
-                debounceTimer = setTimeout(async () => {
-                    try {
-                        const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&limit=20&format=json`);
-                        const data = await res.json();
-
-                        const highlightText = (text, q) => {
-                            if (!q || !text) return text;
-                            // Escape regex characters in query
-                            const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                            const regex = new RegExp(`(${escapedQ})`, 'gi');
-                            return text.replace(regex, '<strong>$1</strong>');
-                        };
-
-                        if (data.matches && data.matches.length > 0) {
-                            const itemsHtml = data.matches.map(m => {
-                                const otherNames = m.history
-                                    .map(h => h.name)
-                                    .filter(name => name && name !== m.name);
-                                const uniqueAka = [...new Set(otherNames)].slice(0, 2);
-                                const akaHtml = uniqueAka.length > 0
-                                    ? `<div class="suggestion-aka">aka ${uniqueAka.map(a => highlightText(a, query)).join(', ')}</div>`
-                                    : '';
-
-                                return `
-                                    <div class="search-suggestion-item" data-id="${m.id}">
-                                        <div class="suggestion-content">
-                                            <div class="suggestion-main">
-                                                <span class="suggestion-name">${highlightText(m.name, query)}</span>
-                                                ${m.currentRank ? `<span class="suggestion-rank">#${m.currentRank}</span>` : ''}
-                                            </div>
-                                            ${akaHtml}
-                                        </div>
-                                    </div>
-                                `;
-                            }).join('');
-
-                            // Structure with a scrollable list and a fixed footer
-                            suggestionsBox.innerHTML = `
-                                <div class="search-results-list">${itemsHtml}</div>
-                                <div class="search-suggestion-item search-suggestion-footer" data-action="search">
-                                    See all results for "${query}"
-                                </div>
-                            `;
-
-                            suggestionsBox.style.display = 'flex';
-                            selectedIndex = -1;
-                        } else {
-                            suggestionsBox.innerHTML = `
-                                <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); padding: 15px;">
-                                    No players found
-                                </div>
-                            `;
-                            suggestionsBox.style.display = 'block';
-                            selectedIndex = -1;
-                        }
-                    } catch (e) {
-                        hideSuggestions();
-                    }
-                }, 250);
             });
 
+            // Keyboard navigation (navbar-specific)
             navSearch.addEventListener('keydown', (e) => {
                 const items = suggestionsBox.querySelectorAll('.search-suggestion-item');
                 const playerMatches = Array.from(items).filter(item => item.dataset.id);
 
                 if (e.key === 'Enter') {
-                    if (suggestionsBox.style.display === 'block') {
+                    if (suggestionsBox.style.display === 'block' || suggestionsBox.style.display === 'flex') {
                         if (selectedIndex >= 0) {
                             e.preventDefault();
                             const selected = items[selectedIndex];
@@ -196,7 +131,7 @@
                             window.location.href = `/player-search?q=${encodeURIComponent(query)}`;
                         }
                     }
-                } else if (suggestionsBox.style.display === 'block') {
+                } else if (suggestionsBox.style.display === 'block' || suggestionsBox.style.display === 'flex') {
                     if (e.key === 'ArrowDown') {
                         e.preventDefault();
                         setSelectedIndex((selectedIndex + 1) % items.length);
@@ -209,15 +144,12 @@
                 }
             });
 
+            // Override click handler for footer "See all results" action
             suggestionsBox.addEventListener('click', (e) => {
                 const item = e.target.closest('.search-suggestion-item');
-                if (item) {
-                    if (item.dataset.action === 'search') {
-                        const query = navSearch.value.trim();
-                        window.location.href = `/player-search?q=${encodeURIComponent(query)}`;
-                    } else {
-                        window.location.href = `/player/${item.dataset.id}`;
-                    }
+                if (item && item.dataset.action === 'search') {
+                    const query = navSearch.value.trim();
+                    window.location.href = `/player-search?q=${encodeURIComponent(query)}`;
                 }
             });
 
@@ -227,9 +159,6 @@
                     hideSuggestions();
                 }
             });
-
-
-
         }
 
         // --- 3. ACTIVE LINK HIGHLIGHT ---

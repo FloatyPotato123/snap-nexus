@@ -7,9 +7,7 @@
     const playerId = pathParts[pathParts.length - 1];
     let $; // Define $ in closure but init later
 
-    // --- CONSTANTS ---
-    const DATA_START_YEAR = 2025;
-    const DATA_START_MONTH = 9; // October (0-indexed)
+    const { CONSTANTS } = window.SnapUtils;
 
     // --- STATE ---
     const State = {
@@ -59,7 +57,8 @@
 
         } catch (e) {
             console.error("[Profile] Init failed:", e);
-            document.getElementById('loading').innerHTML = `<div class="error-msg">Init Crash: ${e.message}</div>`;
+            const escapeHtml = SnapUtils.escapeHtml || ((s) => s);
+            document.getElementById('loading').innerHTML = `<div class="error-msg">Init Crash: ${escapeHtml(e.message)}</div>`;
         }
     }
 
@@ -68,7 +67,7 @@
         try {
             populateSeasonSelector();
 
-            const req = await fetch(`/api/player/${State.playerId}`);
+            const req = await fetch(`${CONSTANTS.API.PLAYER_PROFILE}/${State.playerId}`);
             if (!req.ok) throw new Error("Player not found");
             const data = await req.json();
 
@@ -93,7 +92,8 @@
             $('content').classList.remove('d-none');
         } catch (e) {
             $('loading').innerText = ""; // Clear
-            $('loading').innerHTML = `<div class="error-msg">Load Error: ${e.message}</div>`;
+            const { escapeHtml } = window.SnapUtils;
+            $('loading').innerHTML = `<div class="error-msg">Load Error: ${escapeHtml(e.message)}</div>`;
             console.error(e);
         }
     }
@@ -178,12 +178,13 @@
             if (historyCard) historyCard.classList.remove('d-none');
 
             const historyList = [...history].sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
+            const { escapeHtml } = window.SnapUtils;
             let html = historyList.map((h, i) => {
                 const isCurrent = i === 0;
                 const isFirstKnown = i === historyList.length - 1;
                 return `
                     <div class="timeline-item ${isCurrent ? 'current' : ''}">
-                        <span class="timeline-name">${h.name || 'Unknown'}</span>
+                        <span class="timeline-name">${escapeHtml(h.name || 'Unknown')}</span>
                         ${h.seenAt && !isFirstKnown ? `<span class="timeline-date">${h.seenAt}</span>` : ''}
                     </div>
                 `;
@@ -275,13 +276,14 @@
             const list = $('comparedPlayersList');
             if (!list) return;
 
+            const { escapeHtml } = window.SnapUtils;
             list.innerHTML = State.comparedPlayers.map((p, i) => {
                 const color = SnapUtils.CHART_PALETTE[(i + 1) % SnapUtils.CHART_PALETTE.length];
                 return `
                     <div class="comparison-tag">
                         <span class="color-dot" style="background-color: ${color.border}"></span>
-                        ${p.name}
-                        <span class="remove-btn" onclick="SnapProfile.removeComparedPlayer('${p.id}')">×</span>
+                        ${escapeHtml(p.name)}
+                        <span class="remove-btn" onclick="SnapProfile.removeComparedPlayer('${escapeHtml(p.id)}')">×</span>
                     </div>
                 `;
             }).join('');
@@ -426,74 +428,22 @@
         const box = $('compareSuggestions');
         if (!input || !box) return;
 
-        const hide = () => { box.style.display = 'none'; };
+        // Use shared autocomplete function
+        const { createPlayerAutocomplete } = window.SnapUtils;
 
-        input.addEventListener('input', () => {
-            clearTimeout(State.debounceTimer);
-            const query = input.value.trim();
-            if (query.length < 3) {
-                if (query.length > 0) {
-                    box.innerHTML = `
-                        <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); font-size: 0.85rem; padding: 15px;">
-                            Type at least 3 characters...
-                        </div>
-                    `;
-                    box.style.display = 'block';
-                } else {
-                    hide();
-                }
-                return;
-            }
-
-            State.debounceTimer = setTimeout(async () => {
-                try {
-                    const res = await fetch(`/api/players/search?q=${encodeURIComponent(query)}&limit=20&format=json`);
-                    const data = await res.json();
-
-                    const highlightText = (text, q) => {
-                        if (!q || !text) return text;
-                        const escapedQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                        const regex = new RegExp(`(${escapedQ})`, 'gi');
-                        return text.replace(regex, '<strong>$1</strong>');
-                    };
-
-                    if (data.matches?.length > 0) {
-                        box.innerHTML = data.matches.filter(m => m.id !== State.playerId).map(m => `
-                            <div class="search-suggestion-item" data-id="${m.id}" data-name="${m.name}">
-                                <div class="suggestion-content">
-                                    <div class="suggestion-main">
-                                        <span class="suggestion-name">${highlightText(m.name, query)}</span>
-                                        ${m.currentRank ? `<span class="suggestion-rank">#${m.currentRank}</span>` : ''}
-                                    </div>
-                                </div>
-                            </div>
-                        `).join('');
-                        box.style.display = 'block';
-                    } else {
-                        box.innerHTML = `
-                            <div class="search-suggestion-item no-hover" style="cursor:default; color:var(--pico-muted-color); padding: 15px;">
-                                No players found
-                            </div>
-                        `;
-                        box.style.display = 'block';
-                    }
-                } catch (e) { hide(); }
-            }, 250);
-        });
-
-        box.addEventListener('click', async (e) => {
-            const item = e.target.closest('.search-suggestion-item');
-            if (item) {
-                await SnapProfile.addComparedPlayer(item.dataset.id, item.dataset.name);
+        createPlayerAutocomplete(input, box, {
+            excludeId: State.playerId, // Don't show current player in results
+            onSelect: async (player) => {
+                await SnapProfile.addComparedPlayer(player.id, player.name);
                 input.value = '';
-                hide();
                 SnapProfile.toggleCompareSearch(false);
             }
         });
 
+        // Escape key handling
         input.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
-                hide();
+                box.style.display = 'none';
                 SnapProfile.toggleCompareSearch(false);
             }
         });
@@ -524,7 +474,7 @@
 
         // Previous months
         if (--m < 0) { m = 11; y--; }
-        while (y > DATA_START_YEAR || (y === DATA_START_YEAR && m >= DATA_START_MONTH)) {
+        while (y > CONSTANTS.DATA_START_YEAR || (y === CONSTANTS.DATA_START_YEAR && m >= CONSTANTS.DATA_START_MONTH)) {
             addItem(`${y}-${m + 1}`, `${months[m]} ${y}`, false);
             if (--m < 0) { m = 11; y--; }
         }

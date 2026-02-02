@@ -1,0 +1,159 @@
+/* ============================================================================
+   COMPONENTS STYLES
+   ============================================================================ */
+
+/* Components */
+.chart-container {
+    position: relative;
+    height: 350px;
+    width: 100%;
+}
+
+.chart-container canvas {
+    height: 100% !important;
+    width: 100% !important;
+}
+
+/* Ghost Button for Native Feel */
+.btn-ghost {
+    background: transparent;
+    border: 1px solid var(--pico-muted-border-color);
+    color: var(--pico-muted-color);
+    padding: 6px 12px;
+    font-size: 0.85rem;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    line-height: 1;
+}
+
+.btn-ghost:hover {
+    border-color: var(--accent-gold);
+    color: var(--accent-gold);
+    background: rgba(255, 206, 43, 0.05);
+    text-decoration: none;
+}
+
+.border-gold {
+    border-top: 4px solid var(--accent-gold);
+}
+
+.border-purple {
+    border-left: 4px solid var(--accent-purple);
+}
+
+.border-blue {
+    border-top: 4px solid var(--accent-blue);
+}
+
+
+/* Slim Row for Search Results */
+.card-slim {
+    padding: 12px 20px !important;
+    margin-bottom: 15px !important;
+    display: flex !important;
+    /* Force flex row */
+    align-items: center;
+    justify-content: space-between;
+}
+
+.card-slim .match-info {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.card-slim h3 {
+    font-size: 1.1rem;
+    margin-bottom: 0 !important;
+}
+
+.card-slim .tag-rank {
+    font-size: 0.8rem;
+    padding: 2px 8px;
+    margin-bottom: 0;
+    /* No bottom margin in row */
+    margin-right: 0;
+    min-width: 70px;
+    /* Fixed width for alignment */
+    text-align: center;
+}
+
+.card-slim .aka-text {
+    display: block;
+    /* Ensure it breaks to new line if needed, or stays tight */
+    font-size: 0.75rem;
+    color: var(--pico-muted-color);
+    margin-top: 4px;
+    margin-left: 0;
+    /* Align with name */
+    font-style: italic;
+    line-height: 1.2;
+}
+
+/* No-results UI */
+.no-results {
+    padding: 30px;
+    margin: 20px 0;
+    text-align: center;
+    color: var(--pico-muted-color);
+    font-size: 0.95rem;
+    opacity: 0.8;
+}
+
+.no-results .icon {
+    display: block;
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+    opacity: 0.5;
+}
+
+/* Infinite Player Count Badge */
+.infinite-badge {
+    display: none;
+    /* Controlled by JS */
+    align-items: center;
+    white-space: nowrap;
+    flex-shrink: 0;
+    margin-left: 15px;
+    background: rgba(255, 206, 43, 0.1);
+    border: 1px solid rgba(255, 206, 43, 0.4);
+    padding: 4px 12px;
+    border-radius: 20px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.infinite-badge .count {
+    font-weight: 800;
+    font-size: 0.95rem;
+    text-shadow: 0 0 5px rgba(255, 206, 43, 0.3);
+}
+
+.infinite-badge .label {
+    font-size: 0.75rem;
+    margin-left: 6px;
+    font-weight: 500;
+}
+
+/* Season Dropdown */
+.season-dropdown {
+    display: none;
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 5px;
+    background: var(--card-bg);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    width: 240px;
+    max-height: 400px;
+    overflow-y: auto;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+    z-index: 1000;
+    padding: 8px;
+    text-align: left;
+}

@@ -27,6 +27,7 @@ window.SnapUtils.CONSTANTS = {
     // Data ranges
     DATA_START_YEAR: 2025,
     DATA_START_MONTH: 9, // October (0-indexed)
+    MONTHS: ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
 
     // API Endpoints
     API: {
@@ -251,7 +252,7 @@ window.SnapUtils.initTabs = function () {
  * @param {HTMLElement} resultsBox - Results container element
  * @param {Object} options - Configuration options
  */
-window.SnapUtils.createPlayerAutocomplete = function(input, resultsBox, options = {}) {
+window.SnapUtils.createPlayerAutocomplete = function (input, resultsBox, options = {}) {
     const {
         onSelect,
         excludeId = null,

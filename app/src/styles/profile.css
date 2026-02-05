@@ -2,37 +2,6 @@
    PROFILE STYLES
    ============================================================================ */
 
-/* Season Dropdown Items (Profile Only) */
-.season-dropdown-item {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    cursor: pointer;
-    border-radius: 6px;
-    transition: background-color 0.2s;
-    color: var(--pico-color);
-    font-size: 0.9rem;
-    margin-bottom: 2px;
-}
-
-.season-dropdown-item:hover {
-    background-color: var(--pico-dropdown-hover-background-color, rgba(255, 255, 255, 0.05));
-}
-
-.season-dropdown-item label {
-    cursor: pointer;
-    width: 100%;
-    margin: 0;
-    display: flex;
-    align-items: center;
-}
-
-.season-dropdown-item input[type="radio"] {
-    margin: 0;
-    margin-right: 10px;
-    cursor: pointer;
-}
-
 /* Fix Profile Season Dropdown Height & Style to match other buttons */
 #seasonTrigger.fake-select {
     height: 32px !important;

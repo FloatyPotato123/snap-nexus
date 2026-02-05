@@ -73,7 +73,7 @@ export async function getLiveLeaderboardData() {
                     newMap.set(id, {
                         id,
                         rank,
-                        name: entry.playerName,
+                        name: entry.playerName || entry.name,
                         score: entry.score
                     });
                 }
@@ -263,7 +263,7 @@ export async function handleGetLiveLeaderboard(c) {
         // 4. Calculate Rank Deltas
         const results = Array.from(map.values())
             .map(p => {
-                const prevRank = prevRankMap.get(String(p.id));
+                const prevRank = prevRankMap.get(String(p.playerId));
                 const delta = prevRank ? (prevRank - p.rank) : null;
                 const isNew = prevRank === undefined;
 

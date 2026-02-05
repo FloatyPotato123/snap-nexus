@@ -136,7 +136,7 @@
     font-weight: 500;
 }
 
-/* Season Dropdown */
+/* Season Dropdown (Shared) */
 .season-dropdown {
     display: none;
     position: absolute;
@@ -154,4 +154,48 @@
     z-index: 1000;
     padding: 8px;
     text-align: left;
+}
+
+.season-dropdown-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: background-color 0.2s;
+    color: var(--pico-color);
+    font-size: 0.9rem;
+    margin-bottom: 2px;
+}
+
+.season-dropdown-item:hover {
+    background-color: var(--pico-dropdown-hover-background-color, rgba(255, 255, 255, 0.05));
+}
+
+.season-dropdown-item label {
+    cursor: pointer;
+    width: 100%;
+    margin: 0;
+    display: flex;
+    align-items: center;
+}
+
+.season-dropdown-item input[type="radio"] {
+    margin: 0;
+    margin-right: 10px;
+    cursor: pointer;
+}
+
+
+.leaderboard-controls {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 auto 0.5rem;
+    max-width: 1000px;
+}
+
+.season-selector-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
 }

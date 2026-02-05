@@ -51,7 +51,7 @@
             container.innerHTML = '';
 
             const now = new Date();
-            const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+            const months = SnapUtils.CONSTANTS.MONTHS;
 
             // Helper to add checkbox item
             const addItem = (val, text, isDefault) => {

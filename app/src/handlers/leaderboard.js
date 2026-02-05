@@ -43,11 +43,8 @@ let liveLeaderboardCache = { timestamp: 0, data: new Map(), total: 0 };
 export async function getLiveLeaderboardData() {
     const now = Date.now();
 
-    // Return cached data if still valid
-    if (now - liveLeaderboardCache.timestamp < LIVE_LEADERBOARD_CACHE_TTL_MS &&
-        liveLeaderboardCache.data.size > 0) {
-        return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
-    }
+    // Always fetch fresh data, cache is only used for error fallback
+
 
     const { year, month } = getCurrentSeason(new Date());
     const apiUrl = getLeaderboardApiUrl(month, year);

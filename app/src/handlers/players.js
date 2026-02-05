@@ -138,35 +138,74 @@ export async function handlePlayerHistory(c) {
         // 1. Search in FTS5 index
         const rawResults = await searchPlayers(db, q, limit);
 
-        // Deduplicate by player ID (FTS5 may return duplicates)
-        const seenIds = new Set();
-        const uniqueResults = [];
-        for (const r of rawResults) {
-            if (!seenIds.has(r.id)) {
-                seenIds.add(r.id);
-                uniqueResults.push(r);
+        // 2. Fetch live leaderboard for current ranks AND to find "newer" names
+        const { map: liveMap } = await getLiveLeaderboardData();
+
+        // 3. Search live leaderboard for names matching the query
+        const liveMatches = [];
+        const normalizedQ = q.toLowerCase();
+        for (const [id, entry] of liveMap.entries()) {
+            if (entry.name.toLowerCase().includes(normalizedQ)) {
+                liveMatches.push({
+                    id: id,
+                    name: entry.name,
+                    liveEntry: entry
+                });
             }
         }
 
-        // 2. Fetch live leaderboard for current ranks
-        const { map: liveMap } = await getLiveLeaderboardData();
+        // 4. Merge results and deduplicate by player ID
+        const finalResultsMap = new Map();
 
-        // 3. Fetch name history for all matched players
+        // Add D1 results first
+        for (const r of rawResults) {
+            finalResultsMap.set(r.id, {
+                id: r.id,
+                name: r.name,
+                source: 'db'
+            });
+        }
+
+        // Add live results (they take precedence or add new players)
+        for (const m of liveMatches) {
+            finalResultsMap.set(m.id, {
+                id: m.id,
+                name: m.name,
+                source: 'live',
+                liveEntry: m.liveEntry
+            });
+        }
+
+        const uniqueResults = Array.from(finalResultsMap.values()).slice(0, limit);
+
+        // 5. Fetch name history for all matched players
         const playerIds = uniqueResults.map(p => p.id);
         const historyMap = await batchGetPlayerHistories(db, playerIds);
 
-        // 4. Enrich results with history and live data
+        // 6. Enrich results with history and live data
         const enrichedResults = [];
         for (const p of uniqueResults) {
             const history = historyMap[p.id] || [];
-            let currentName = getCurrentNameFromHistory(history) || p.name;
+            let currentName = p.name;
             let currentRank = null;
 
-            // Check if player is on live leaderboard
-            if (liveMap.has(p.id)) {
+            // Check if player is on live leaderboard (either from liveMatch or liveMap check)
+            if (p.liveEntry) {
+                currentName = p.liveEntry.name;
+                currentRank = p.liveEntry.rank;
+            } else if (liveMap.has(p.id)) {
                 const liveEntry = liveMap.get(p.id);
                 currentName = liveEntry.name;
                 currentRank = liveEntry.rank;
+            } else {
+                // Fallback to latest in history if not live
+                currentName = getCurrentNameFromHistory(history) || p.name;
+            }
+
+            // Ensure current name is in history if missing (for "new" players or very recent changes)
+            const historyNames = new Set(history.map(h => h.name));
+            if (!historyNames.has(currentName)) {
+                history.push({ name: currentName, seenAt: new Date().toISOString().split('T')[0] });
             }
 
             enrichedResults.push({
@@ -288,6 +327,16 @@ export async function handleGetPlayerProfile(c) {
             currentRank = liveData.rank;
             currentSP = liveData.score;
             finalName = liveData.name;
+
+            // Proactively add live name to history if it's missing (newer than last scrape)
+            const safeHistory = history || [];
+            const historyNames = new Set(safeHistory.map(h => h.name));
+            if (!historyNames.has(finalName)) {
+                safeHistory.push({
+                    name: finalName,
+                    seenAt: new Date().toISOString().split('T')[0]
+                });
+            }
         }
 
         // Return 404 only if player has absolutely no data

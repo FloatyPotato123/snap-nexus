@@ -28,34 +28,29 @@
 
                 loader.style.display = 'none';
 
-                const { escapeHtml } = window.SnapUtils;
                 body.innerHTML = results.map(p => {
-                    const tier = p.rank <= 10 ? 'top-10' : (p.rank <= 100 ? 'top-100' : 'normal');
 
-                    // Delta Logic
-                    let tickerHtml = '';
+                    let indicatorHtml = '';
                     if (p.isNew) {
-                        tickerHtml = `<span title="New Entry today" style="font-size:0.9rem; margin-left:4px; cursor:help;">✨</span>`;
-                    } else if (p.delta > 0) {
-                        tickerHtml = `<span style="color:#4caf50; font-size:0.75rem; margin-left:4px;">▲ ${p.delta}</span>`;
-                    } else if (p.delta < 0) {
-                        tickerHtml = `<span style="color:#f44336; font-size:0.75rem; margin-left:4px;">▼ ${Math.abs(p.delta)}</span>`;
-                    } else {
-                        tickerHtml = `<span style="color:var(--pico-muted-color); font-size:0.75rem; margin-left:4px;">-</span>`;
+                        indicatorHtml = `<span style="font-size:0.9rem; margin-left:10px;" title="New entry today">✨</span>`;
+                    } else if (p.delta !== 0) {
+                        const deltaClass = p.delta > 0 ? 'delta-up' : 'delta-down';
+                        const deltaSymbol = p.delta > 0 ? '▲' : '▼';
+                        indicatorHtml = `<span class="${deltaClass}" style="margin-left:10px;">${deltaSymbol}&nbsp;${Math.abs(p.delta)}</span>`;
                     }
 
                     return `
-                        <tr class="card-clickable" data-tier="${tier}" onclick="SnapUtils.navigateTo(event, '/player/${escapeHtml(p.id)}?ref=leaderboard')">
-                            <td>
-                                <div style="display:flex; align-items:center; gap:4px;">
-                                    <span class="rank-badge">#${p.rank}</span>
-                                    ${tickerHtml}
+                        <tr class="leaderboard-row" onclick="SnapUtils.navigateTo(event, '/player/${p.id}?ref=leaderboard')">
+                            <td class="rank-col">
+                                <div style="display:flex; align-items:center;">
+                                    <span class="rank-value">#${p.rank}</span>
+                                    ${indicatorHtml}
                                 </div>
                             </td>
-                            <td>
-                                <a href="/player/${escapeHtml(p.id)}?ref=leaderboard" style="text-decoration:none; color:inherit;" onclick="event.stopPropagation()"><strong>${escapeHtml(p.name)}</strong></a>
+                            <td class="name-col">
+                                <a href="/player/${p.id}?ref=leaderboard" class="player-link" onclick="event.stopPropagation()">${p.name}</a>
                             </td>
-                            <td style="text-align: right; font-variant-numeric: tabular-nums;">
+                            <td class="score-col">
                                 ${p.score.toLocaleString()}
                             </td>
                         </tr>
@@ -68,21 +63,7 @@
             }
         }
 
-        // Back to Top Logic
-        const backToTopBtn = $('backToTop');
-        if (backToTopBtn) {
-            window.addEventListener('scroll', () => {
-                if (window.scrollY > 500) {
-                    backToTopBtn.classList.add('visible');
-                } else {
-                    backToTopBtn.classList.remove('visible');
-                }
-            });
 
-            backToTopBtn.addEventListener('click', () => {
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-        }
 
         // Initialize
         fetchLeaderboard();

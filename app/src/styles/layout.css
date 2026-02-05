@@ -42,7 +42,6 @@ nav.container {
 
 nav a.active {
     color: var(--accent-gold);
-    text-shadow: 0 0 10px rgba(255, 206, 43, 0.3);
 }
 
 nav a:hover {
@@ -144,73 +143,71 @@ nav a:hover {
     }
 }
 
-/* Leaderboard Rank Badges */
-.rank-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+/* Leaderboard Refinement: Modern Condensed List */
+.leaderboard-row {
+    cursor: pointer;
+}
+
+.leaderboard-row td:first-child {
+    border-left: 3px solid transparent;
+}
+
+.leaderboard-row:hover td {
+    background-color: rgba(255, 255, 255, 0.03) !important;
+}
+
+.leaderboard-row:hover td:first-child {
+    border-left-color: rgba(255, 206, 43, 0.5);
+}
+
+
+.rank-value {
     font-weight: 700;
-    font-size: 0.85rem;
     color: var(--accent-gold);
-    /* Gold for everyone */
+    font-size: 0.85rem;
 }
 
-/* Tiered Leaderboard Styling */
-tr[data-tier="top-10"] strong {
-    font-size: 1.05rem;
+.indicator-col {
+    width: 60px;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    text-align: center;
 }
 
-/* Sticky Leaderboard Header */
-.leaderboard-table-container thead th {
-    position: sticky;
-    top: 0;
-    background-color: var(--pico-background-color) !important;
-    z-index: 100;
-    border-bottom: 1px solid var(--pico-muted-border-color);
-    color: var(--pico-muted-color) !important;
-    font-size: 0.8rem;
-    text-transform: uppercase;
-    letter-spacing: 0.05rem;
+.delta-up,
+.delta-down {
+    font-size: 0.75rem;
     font-weight: 600;
 }
 
-/* Floating Back to Top Button */
-.back-to-top {
-    position: fixed;
-    bottom: 2rem;
-    right: 2rem;
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: var(--pico-border-radius);
-    background: transparent;
-    color: var(--pico-muted-color);
-    border: 1px solid var(--pico-muted-border-color);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s ease-in-out;
-    z-index: 100;
+.delta-up {
+    color: #4caf50;
 }
 
-.back-to-top.visible {
-    opacity: 1;
-    visibility: visible;
+.delta-down {
+    color: #f44336;
 }
 
-.back-to-top:hover {
+.score-col {
+    text-align: right;
+    width: 120px;
+    font-weight: 500;
     color: var(--pico-contrast-color);
-    border-color: var(--pico-muted-color);
-    transform: translateY(-2px);
+    font-size: 0.9rem;
 }
+
+
 
 /* Clickable Player Hover Effects */
 .card-clickable:hover strong,
 table td a[href^="/player/"]:hover {
     color: var(--accent-gold) !important;
     text-decoration: none;
+}
+
+.player-link {
+    text-decoration: none;
+    color: inherit;
 }
 
 .nav-search-container input {
@@ -249,6 +246,17 @@ table th {
     font-variant-numeric: tabular-nums;
 }
 
+/* Scoped Leaderboard Compactness */
+.leaderboard-table-container table td,
+.leaderboard-table-container table th {
+    padding: 0.35rem 0.6rem;
+    font-size: 0.85rem;
+}
+
+.rank-col {
+    width: 80px;
+}
+
 table th {
     text-transform: none;
     letter-spacing: 0.02em;
@@ -285,8 +293,8 @@ table th {
     font-size: 2.8rem;
     color: var(--accent-gold);
     letter-spacing: -0.02em;
-    text-shadow: 0 0 30px rgba(255, 204, 0, 0.15);
 }
+
 
 .fake-select {
     appearance: none;

@@ -648,7 +648,7 @@
 
 .timeline-item.current::before {
     background: var(--accent-gold);
-    box-shadow: 0 0 0 4px var(--pico-card-background-color), 0 0 10px rgba(255, 204, 0, 0.4);
+    box-shadow: 0 0 0 4px var(--pico-card-background-color);
 }
 
 .timeline-name {

@@ -129,7 +129,6 @@
 .infinite-badge .count {
     font-weight: 800;
     font-size: 0.95rem;
-    text-shadow: 0 0 5px rgba(255, 206, 43, 0.3);
 }
 
 .infinite-badge .label {

@@ -95,7 +95,7 @@
                 // Rank Badge
                 let rankHtml = '';
                 if (match.currentRank) {
-                    rankHtml = `<div class="tag-rank">Rank ${match.currentRank}</div>`;
+                    rankHtml = `<div class="tag-rank">#${match.currentRank}</div>`;
                 }
 
                 // Clickable Card -> Profile

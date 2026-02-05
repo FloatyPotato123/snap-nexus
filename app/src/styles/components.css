@@ -72,14 +72,13 @@
 }
 
 .card-slim .tag-rank {
-    font-size: 0.8rem;
+    font-size: 0.75rem;
+    color: var(--accent-gold);
+    background: rgba(255, 204, 0, 0.1);
     padding: 2px 8px;
-    margin-bottom: 0;
-    /* No bottom margin in row */
-    margin-right: 0;
-    min-width: 70px;
-    /* Fixed width for alignment */
-    text-align: center;
+    border-radius: 4px;
+    font-weight: 700;
+    display: inline-block;
 }
 
 .card-slim .aka-text {

@@ -38,10 +38,8 @@ import {
  */
 function getCurrentNameFromHistory(history) {
     if (!history || history.length === 0) return 'Unknown';
-
-    // Sort by seenAt descending to get the latest name
-    const sorted = [...history].sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
-    return sorted[0].name || 'Unknown';
+    // Database query already returns history ordered chronologically (ASC)
+    return history[history.length - 1].name || 'Unknown';
 }
 
 /**

@@ -267,20 +267,10 @@
 /* Tab Navigation (Buttons Row) */
 .tab-nav {
     display: flex;
+    flex-wrap: wrap;
     gap: 15px;
     border-bottom: 1px solid var(--pico-muted-border-color);
     margin-bottom: 20px;
-    overflow-x: auto;
-    /* Allow scroll on tiny screens */
-    scrollbar-width: none;
-    /* Firefox */
-    -ms-overflow-style: none;
-    /* IE 10+ */
-}
-
-.tab-nav::-webkit-scrollbar {
-    display: none;
-    /* Chrome/Safari/Webkit */
 }
 
 /* Tab Button */

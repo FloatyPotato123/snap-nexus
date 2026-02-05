@@ -191,7 +191,6 @@
     display: flex;
     justify-content: flex-end;
     margin: 0 auto 0.5rem;
-    max-width: 1000px;
 }
 
 .season-selector-container {

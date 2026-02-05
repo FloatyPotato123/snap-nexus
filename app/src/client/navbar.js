@@ -163,7 +163,7 @@
 
         // --- 3. ACTIVE LINK HIGHLIGHT ---
         const current = window.location.pathname;
-        const navLinks = document.querySelectorAll('nav ul li a[href^="/"]:not(.logo-link)');
+        const navLinks = document.querySelectorAll('nav ul li a[href^="/"]');
 
         navLinks.forEach(link => {
             const href = link.getAttribute('href');

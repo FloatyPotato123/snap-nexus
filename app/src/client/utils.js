@@ -307,10 +307,11 @@ window.SnapUtils.createPlayerAutocomplete = function (input, resultsBox, options
                     }
 
                     const itemsHtml = filteredMatches.map(m => {
-                        const otherNames = m.history
-                            ?.map(h => h.name)
-                            .filter(name => name && name !== m.name) || [];
-                        const uniqueAka = [...new Set(otherNames)].slice(0, 2);
+                        const otherNames = m.history ? [...m.history]
+                            .reverse()
+                            .map(h => h.name)
+                            .filter(name => name && name !== m.name) : [];
+                        const uniqueAka = [...new Set(otherNames)];
                         const akaHtml = uniqueAka.length > 0
                             ? `<div class="suggestion-aka">aka ${uniqueAka.map(a => highlightText(a, query)).join(', ')}</div>`
                             : '';

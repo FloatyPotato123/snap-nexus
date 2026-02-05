@@ -86,18 +86,20 @@
 
             if (!isHistorical) {
                 if (p.isNew) {
-                    indicatorHtml = `<span style="font-size:0.9rem; margin-left:10px;" title="New entry today">✨</span>`;
+                    indicatorHtml = `<span class="indicator-new" title="New entry today">✨</span>`;
                 } else if (p.delta !== 0 && p.delta !== undefined && p.delta !== null) {
                     const deltaClass = p.delta > 0 ? 'delta-up' : 'delta-down';
                     const deltaSymbol = p.delta > 0 ? '▲' : '▼';
-                    indicatorHtml = `<span class="${deltaClass}" style="margin-left:10px;">${deltaSymbol}&nbsp;${Math.abs(p.delta)}</span>`;
+                    indicatorHtml = `<span class="rank-delta ${deltaClass}">${deltaSymbol}&nbsp;${Math.abs(p.delta)}</span>`;
                 }
             }
+
+
 
             return `
                 <tr class="leaderboard-row" onclick="SnapUtils.navigateTo(event, '/player/${p.id || p.playerId}?ref=leaderboard')">
                     <td class="rank-col">
-                        <div style="display:flex; align-items:center;">
+                        <div class="rank-container">
                             <span class="rank-value">#${displayRank}</span>
                             ${indicatorHtml}
                         </div>

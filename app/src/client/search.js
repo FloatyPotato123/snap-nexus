@@ -80,13 +80,14 @@
                 const { escapeHtml } = window.SnapUtils;
 
                 // Filter "Also Known As"
-                const otherNames = match.history
+                const otherNames = [...match.history]
+                    .reverse()
                     .map(h => h.name)
                     .filter(n => n !== match.name);
                 const uniqueAlsoKnown = [...new Set(otherNames)];
 
                 const akaStr = uniqueAlsoKnown.length > 0
-                    ? `<div class="text-muted text-small mt-10">Also known as: <span style="font-style:italic; color:var(--pico-muted-color);">${uniqueAlsoKnown.slice(0, 3).map(escapeHtml).join(', ')}${uniqueAlsoKnown.length > 3 ? '...' : ''}</span></div>`
+                    ? `<div class="text-muted text-small mt-10">Also known as: <span style="font-style:italic; color:var(--pico-muted-color);">${uniqueAlsoKnown.map(escapeHtml).join(', ')}</span></div>`
                     : '';
 
                 // Pass params

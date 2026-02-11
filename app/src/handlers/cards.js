@@ -109,75 +109,27 @@ export async function getWeeklyCardReleases(c) {
  * Shang-Chi, Master of the Rings | 3/5 | Game Start: The Ten Rings starts in your hand.
  */
 function formatCardScheduleText(thisWeek, nextWeek) {
-    const MAX_TOTAL_CHARS = 400;
-    const allCards = [];
+    const grouped = {};
 
-    // 1. Flatten and Prepare
-    const prep = (list) => {
-        if (!list) return;
-        list.forEach(c => {
-            let d = "Unknown";
-            try { d = new Date(c.releaseDate).toISOString().split('T')[0]; } catch (e) { }
-            allCards.push({ ...c, dateKey: d });
-        });
-    };
-    prep(thisWeek);
-    prep(nextWeek);
-
-    if (allCards.length === 0) return "No cards found.";
-
-    // 2. Calculate Overhead
-    // Unique Dates (8 chars each) + Fixed Card Data
-    const uniqueDates = new Set(allCards.map(c => c.dateKey));
-    let fixedCost = (uniqueDates.size * 8); // "Jan 06\n" is ~7-8 chars
-
-    allCards.forEach(c => {
-        // "Name | Cost/Power | \n" (+7 chars separation)
-        fixedCost += (c.name?.length || 0) + `${c.cost}/${c.power}`.length + 7;
+    // 1. Group cards by day once
+    const addToList = (list) => (list || []).forEach(c => {
+        const d = c.releaseDate ? new Date(c.releaseDate).toISOString().split('T')[0] : "Unknown";
+        if (!grouped[d]) grouped[d] = [];
+        grouped[d].push(c);
     });
+    addToList(thisWeek);
+    addToList(nextWeek);
 
-    // 3. Determine Budget
-    let descBudget = Math.max(0, MAX_TOTAL_CHARS - fixedCost);
+    const dates = Object.keys(grouped).sort();
+    if (dates.length === 0) return "No cards found.";
 
-    // 4. Calculate Proportions
-    const totalDescLen = allCards.reduce((sum, c) => sum + cleanDesc(c.description).length, 0);
-
-    // 5. Render
-    const renderList = (list) => {
-        if (!list || list.length === 0) return "None";
-        const grouped = {};
-        list.forEach(c => {
-            let d = "Unknown";
-            try { d = new Date(c.releaseDate).toISOString().split('T')[0]; } catch (e) { }
-            if (!grouped[d]) grouped[d] = [];
-            grouped[d].push(c);
-        });
-
-        return Object.keys(grouped).sort().map(dateKey => {
-            const dateHeader = new Date(dateKey).toLocaleDateString("en-US", { month: "short", day: "2-digit", timeZone: "UTC" });
-            const cardsStr = grouped[dateKey].map(c => {
-                let text = cleanDesc(c.description);
-
-                // Apply Truncation
-                if (totalDescLen > descBudget && descBudget > 0) {
-                    const ratio = text.length / totalDescLen;
-                    const allow = Math.floor(descBudget * ratio);
-                    if (text.length > allow) {
-                        text = text.substring(0, Math.max(0, allow - 3)) + "...";
-                    }
-                } else if (descBudget <= 0) {
-                    text = "";
-                }
-
-                // Clean up trailing separators if description is empty
-                return `${c.name} [${c.cost}/${c.power}]${text ? ': ' + text : ''}`;
-            }).join(" | ");
-
-            return `${dateHeader}: ${cardsStr}`;
-        }).join(" // ");
-    };
-
-    return `${renderList(thisWeek)} // ${renderList(nextWeek)}`.trim();
+    // 2. Render
+    return dates.map(d => {
+        // e.g. "Tue Feb 10: Card A [1/2]"
+        const header = new Date(d).toLocaleDateString("en-US", { weekday: 'short', month: 'short', day: '2-digit', timeZone: 'UTC' });
+        const cards = grouped[d].map(c => `${c.name} [${c.cost}/${c.power}]`).join(" | ");
+        return `${header}: ${cards}`;
+    }).join(" • ");
 }
 
 function cleanDesc(desc) {

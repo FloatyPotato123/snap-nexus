@@ -107,6 +107,13 @@ window.SnapUtils.highlightText = function (text, query) {
 // Season Logic
 // ============================================================================
 
+window.SnapUtils.getSeasonDuration = function (year, month) {
+    const start = getSeasonStartForMonth(year, month - 1);
+    const end = getSeasonEndForMonth(year, month - 1);
+    const diffMs = end.getTime() - start.getTime();
+    return Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+};
+
 window.SnapUtils.getSeasonStartForMonth = getSeasonStartForMonth;
 window.SnapUtils.getSeasonEndForMonth = getSeasonEndForMonth;
 window.SnapUtils.getSeasonStart = getSeasonStart;

@@ -7,6 +7,7 @@
     position: relative;
     height: 350px;
     width: 100%;
+    transition: opacity 0.3s ease-in-out;
 }
 
 .chart-container canvas {
@@ -197,4 +198,46 @@
     position: relative;
     display: inline-flex;
     align-items: center;
+}
+
+/* Native Toggle Group (Option D) */
+.native-toggle-group {
+    display: flex;
+    gap: 15px;
+    border-bottom: 1px solid var(--pico-muted-border-color);
+    margin-bottom: 10px;
+}
+
+.native-toggle-btn {
+    background: transparent;
+    border: none;
+    border-bottom: 3px solid transparent;
+    color: var(--pico-muted-color);
+    font-weight: 700;
+    font-size: 0.75rem;
+    padding: 6px 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    transition: all 0.2s ease;
+    border-radius: 0;
+    margin-bottom: -1px;
+    /* Equal widths for balanced underscores */
+    min-width: 100px;
+    text-align: center;
+}
+
+.native-toggle-btn:hover {
+    color: var(--pico-contrast-color);
+    background: transparent;
+}
+
+.native-toggle-btn.active {
+    color: var(--accent-gold);
+    border-bottom-color: var(--accent-gold);
+}
+
+.native-toggle-btn:focus {
+    outline: none;
+    box-shadow: none;
 }

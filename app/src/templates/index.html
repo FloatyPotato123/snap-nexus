@@ -39,6 +39,13 @@
     <!-- Tab 2: History -->
     <div id="tab-history" class="tab-content d-none">
         <article>
+            <header class="flex-between mb-sm" style="padding: 0 5px; justify-content: flex-end;">
+                <div class="native-toggle-group">
+                    <button id="btnTotal" class="native-toggle-btn active"
+                        onclick="setHistoryView('total')">Total</button>
+                    <button id="btnAvg" class="native-toggle-btn" onclick="setHistoryView('avg')">Daily Avg</button>
+                </div>
+            </header>
             <div id="history-chart-container" class="chart-container">
                 <canvas id="historyChart"></canvas>
             </div>

@@ -55,7 +55,7 @@
         }
 
         try {
-            const req = await fetch(`${CONSTANTS.API.PLAYER_SEARCH}?q=${encodeURIComponent(query)}&cursor=${currentCursor}`);
+            const req = await fetch(`${CONSTANTS.API.PLAYER_SEARCH}?q=${encodeURIComponent(query)}&cursor=${currentCursor}&limit=100`);
             if (!req.ok) throw new Error(await req.text());
             const data = await req.json();
 

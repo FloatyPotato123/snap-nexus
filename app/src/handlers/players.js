@@ -81,7 +81,7 @@ function formatSearchTextOutput(players) {
         }
 
         // Check if adding this entry would exceed the limit
-        if (currentLength + nameStr.length + 2 > MAX_LENGTH) {
+        if (currentLength + nameStr.length + 5 > MAX_LENGTH) {
             outputParts.push('...');
             break;
         }
@@ -129,7 +129,7 @@ export async function handlePlayerHistory(c) {
         return badRequestResponse(c, 'Query required');
     }
 
-    const limit = Math.min(parseInt(limitParam) || SEARCH_RESULT_LIMIT_DEFAULT, 50);
+    const limit = Math.min(parseInt(limitParam) || SEARCH_RESULT_LIMIT_DEFAULT, 100);
     const db = c.env.DB;
 
     try {

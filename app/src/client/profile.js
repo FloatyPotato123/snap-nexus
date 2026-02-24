@@ -222,36 +222,38 @@
 
         updateAdvancedStats(stats) {
             if (!stats || stats.length < 2) {
-                // Need at least 2 days to compare
                 $('pBestDayBadge').classList.add('d-none');
                 $('pVolatilityBadge').classList.add('d-none');
                 return;
             }
 
-            // 1. Calculate Daily Deltas
-            const deltas = [];
-            for (let i = 1; i < stats.length; i++) {
-                const prev = stats[i - 1].sp;
-                const curr = stats[i].sp;
-                if (prev > 0 && curr > 0) {
-                    deltas.push(curr - prev);
-                }
-            }
+            const first = stats[0];
+            const last = stats[stats.length - 1];
 
-            if (deltas.length === 0) {
-                $('pBestDayBadge').classList.add('d-none');
-                $('pVolatilityBadge').classList.add('d-none');
-                return;
-            }
+            // Helper to get whole days between two date strings (YYYY-MM-DD)
+            const daysBetween = (d2, d1) => Math.round((new Date(d2) - new Date(d1)) / 86400000);
 
-            // 2. Daily Progress (Average Gain)
-            const mean = deltas.reduce((a, b) => a + b, 0) / deltas.length;
+            // 1. Daily Average (Total Gain / Days Elapsed)
+            const daysElapsed = daysBetween(last.date, first.date) || 1;
+            const mean = (last.sp - first.sp) / daysElapsed;
             const avgLabel = mean >= 0 ? `+${Math.round(mean).toLocaleString()}` : `${Math.round(mean).toLocaleString()}`;
+
             $('pVolatility').innerText = `${avgLabel} SP`;
             $('pVolatilityBadge').classList.remove('d-none');
 
-            // 3. Best Day (Max Positive Gain)
-            const maxGain = Math.max(...deltas);
+            // 2. Best Day (Max gain on a single day)
+            const dailyDeltas = [];
+            for (let i = 1; i < stats.length; i++) {
+                const prev = stats[i - 1];
+                const curr = stats[i];
+
+                // Only count as "Best Day" if records are exactly 1 day apart
+                if (daysBetween(curr.date, prev.date) === 1 && prev.sp > 0 && curr.sp > 0) {
+                    dailyDeltas.push(curr.sp - prev.sp);
+                }
+            }
+
+            const maxGain = dailyDeltas.length > 0 ? Math.max(...dailyDeltas) : 0;
             if (maxGain > 0) {
                 $('pBestDay').innerText = `+${maxGain.toLocaleString()} SP`;
                 $('pBestDayBadge').classList.remove('d-none');
@@ -259,9 +261,7 @@
                 $('pBestDayBadge').classList.add('d-none');
             }
 
-            // Toggle parent container
-            const hasSeasonStats = deltas.length > 0;
-            $('pSeasonStats').classList.toggle('d-none', !hasSeasonStats);
+            $('pSeasonStats').classList.remove('d-none');
         },
 
         updateSeasonTriggerText() {

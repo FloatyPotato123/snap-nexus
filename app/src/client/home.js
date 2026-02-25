@@ -207,6 +207,15 @@
                         data = res.points.map(p => p.y);
                     }
 
+                    // --- GAP HANDLING ---
+                    // If a day (other than the first) has 0 players, it's likely a data collection gap.
+                    // We set these to null so Chart.js can span the gap smoothly (dot-less) via spanGaps: true.
+                    for (let i = 1; i < data.length; i++) {
+                        if (data[i] === 0) {
+                            data[i] = null;
+                        }
+                    }
+
                     return {
                         label: res.label,
                         data: data,

@@ -1,39 +1,41 @@
-<nav class="container">
-    <ul>
-        <li>
-            <a href="/" class="logo-link">
-                <img src="/logo.png" class="header-logo">
-                <strong style="white-space: nowrap;">Snap Nexus</strong>
-            </a>
-        </li>
-        <li>
-            <a href="/leaderboard" class="pico-color-amber-500"
-                style="text-decoration:none; font-weight: 500; font-size: 0.9rem;">Leaderboard</a>
-        </li>
-    </ul>
-    <ul id="searchNavList">
-        <li>
-            <div id="navSearchContainer" class="nav-search-container collapsed">
-                <button id="searchToggle" class="search-toggle-btn" aria-label="Toggle Search">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="11" cy="11" r="8"></circle>
-                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                    </svg>
-                </button>
-                <input type="search" id="navSearchInput" placeholder="Search Players..." aria-label="Search"
-                    autocomplete="off">
-                <button id="searchClear" class="search-clear-btn" aria-label="Clear Search" style="display: none;">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <line x1="18" y1="6" x2="6" y2="18"></line>
-                        <line x1="6" y1="6" x2="18" y2="18"></line>
-                    </svg>
-                </button>
-                <div id="searchSuggestions" class="search-suggestions"></div>
-            </div>
-        </li>
-    </ul>
-</nav>
+<div class="sticky-nav">
+    <nav class="container">
+        <ul>
+            <li>
+                <a href="/" class="logo-link">
+                    <img src="/logo.png" class="header-logo">
+                    <strong style="white-space: nowrap;">Snap Nexus</strong>
+                </a>
+            </li>
+            <li>
+                <a href="/leaderboard" class="pico-color-amber-500"
+                    style="text-decoration:none; font-weight: 500; font-size: 0.9rem;">Leaderboard</a>
+            </li>
+        </ul>
+        <ul id="searchNavList">
+            <li>
+                <div id="navSearchContainer" class="nav-search-container collapsed">
+                    <button id="searchToggle" class="search-toggle-btn" aria-label="Toggle Search">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="11" cy="11" r="8"></circle>
+                            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                        </svg>
+                    </button>
+                    <input type="search" id="navSearchInput" placeholder="Search Players..." aria-label="Search"
+                        autocomplete="off">
+                    <button id="searchClear" class="search-clear-btn" aria-label="Clear Search" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                    <div id="searchSuggestions" class="search-suggestions"></div>
+                </div>
+            </li>
+        </ul>
+    </nav>
+</div>
 
 <script src="/client/navbar.js"></script>

@@ -21,7 +21,7 @@
 }
 
 .header-logo {
-    height: 2rem;
+    height: 1.85rem;
     width: auto;
     margin-right: 0 !important;
     vertical-align: middle;
@@ -48,13 +48,30 @@
     margin-left: 4px;
 }
 
+/* Sticky Header Wrapper */
+.sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    background-color: var(--pico-background-color);
+    padding: 0;
+    margin: 0;
+}
+
 /* Nav Polish */
 nav.container {
     border-bottom: 1px solid var(--pico-muted-border-color);
-    padding-bottom: 5px;
-    margin-bottom: 20px !important;
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
+    margin-top: 0 !important;
+    margin-bottom: 15px !important;
     position: relative;
-    /* Anchor for absolute search overlay */
+    min-height: auto;
+}
+
+nav ul li {
+    padding-top: 6px !important;
+    padding-bottom: 6px !important;
 }
 
 nav a.active {
@@ -79,12 +96,12 @@ nav a:hover {
     width: 25rem;
     max-width: 100%;
     /* overflow: hidden; -- Removed to allow suggestions dropdown */
-    height: calc(var(--pico-form-element-height, 2.5rem) * 0.85);
+    height: 2.25rem;
 }
 
 @media (min-width: 1025px) {
     .nav-search-container.collapsed {
-        width: 2.625rem;
+        width: 2.25rem;
         background: transparent;
         border-color: transparent;
         padding: 0;
@@ -130,12 +147,16 @@ nav a:hover {
     }
 
     /* Target the PARENT LIST to force line break */
+    #searchNavList {
+        margin-left: 10px;
+    }
+
     #searchNavList.search-expanded {
         width: 100%;
         order: 99;
         /* Drop to bottom */
-        margin-top: -10px;
-        /* Pull up tight against the row above */
+        margin-top: 5px;
+        /* Give some breathing room from the row above */
         margin-bottom: 0.5rem;
     }
 
@@ -146,7 +167,7 @@ nav a:hover {
 
     /* COLLAPSED State on Mobile */
     .nav-search-container.collapsed {
-        width: 2.625rem;
+        width: 2.25rem;
         background: transparent;
         border-color: transparent;
         padding: 0;

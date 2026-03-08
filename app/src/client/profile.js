@@ -15,7 +15,9 @@
         primaryPlayerStats: [],
         comparedPlayers: [], // Array of { id, name, stats: [], liveStats: {} }
         liveStats: null,
+        rollingHistory: null,
         seasonChartInstance: null,
+        rollingChartInstance: null,
         historicalChartInstance: null,
         debounceTimer: null,
         isComparing: false
@@ -76,6 +78,25 @@
             UI.renderBasicInfo(data);
             State.liveStats = { rank: data.currentRank, sp: data.currentSP };
             UI.renderHistory(data.history || []);
+            
+            // 2. Load Rolling History (24h Window)
+            try {
+                const rollReq = await fetch('/api/leaderboard/rolling');
+                if (rollReq.ok) {
+                    const rollData = await rollReq.json();
+                    State.rollingHistory = rollData.players?.[State.playerId] || [];
+                    
+                    if (State.rollingHistory.length > 0) {
+                        UI.toggleChartDisplay('rolling', true);
+                        Charts.renderRollingChart(State.rollingHistory);
+                    } else {
+                        UI.toggleChartDisplay('rolling', false);
+                    }
+                }
+            } catch (e) {
+                console.warn("[Profile] Failed to load rolling data:", e);
+                UI.toggleChartDisplay('rolling', false);
+            }
 
             if (data.currentSeasonStats?.length > 0) {
                 State.primaryPlayerStats = data.currentSeasonStats;
@@ -454,6 +475,92 @@
                 }
             });
             State.seasonChartInstance.rawStats = stats;
+        },
+
+        renderRollingChart(history) {
+            const chartEl = $('rollingChart');
+            if (!chartEl) return;
+            const ctx = chartEl.getContext('2d');
+            if (State.rollingChartInstance) State.rollingChartInstance.destroy();
+
+            // Generate labels (HH:MM) chronologically ending at the current 5-minute mark
+            const now = new Date();
+            now.setMinutes(Math.floor(now.getMinutes() / 5) * 5, 0, 0);
+            
+            const labels = [];
+            for (let i = history.length - 1; i >= 0; i--) {
+                const d = new Date(now.getTime() - (i * 5 * 60 * 1000));
+                labels.push(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            }
+
+            const spData = history.map(h => h ? h[0] : null);
+            const rankData = history.map(h => h ? h[1] : null);
+
+            let allSPs = spData.filter(v => v !== null);
+            let minSP, maxSP;
+            if (allSPs.length > 0) {
+                let dMin = Math.min(...allSPs), dMax = Math.max(...allSPs);
+                // Buffer for visual clarity
+                minSP = dMin - 50;
+                maxSP = dMax + 50;
+                // Ensure at least a 500 SP range for a "flatter" look if change is small
+                if (maxSP - minSP < 500) {
+                    const center = (maxSP + minSP) / 2;
+                    minSP = center - 250;
+                    maxSP = center + 250;
+                }
+            }
+
+            State.rollingChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        {
+                            label: 'Rank',
+                            data: rankData,
+                            borderColor: '#2196F3',
+                            yAxisID: 'yRank',
+                            borderDash: [5, 5],
+                            tension: 0.3,
+                            pointRadius: 0,
+                            clip: false
+                        },
+                        {
+                            label: 'SP',
+                            data: spData,
+                            borderColor: '#ffcc00',
+                            backgroundColor: 'rgba(255, 204, 0, 0.1)',
+                            pointBackgroundColor: '#ffcc00',
+                            yAxisID: 'ySP',
+                            fill: true,
+                            tension: 0.3,
+                            pointRadius: 2
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    scales: {
+                        x: {
+                            grid: { color: '#333' },
+                            ticks: { 
+                                color: '#aaa', 
+                                maxRotation: 0, 
+                                autoSkip: true, 
+                                maxTicksLimit: 8 // Fewer ticks for cleaner mobile look
+                            }
+                        },
+                        yRank: this.getRankAxis(true),
+                        ySP: this.getSPAxis(minSP, maxSP, 'right', false)
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
         },
 
         renderHistoricalChart(stats) {

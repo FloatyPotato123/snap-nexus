@@ -5,7 +5,7 @@ compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
 [triggers]
-crons = ["0 19 * * *"]
+crons = ["0 19 * * *", "*/5 * * * *"]
 
 [assets]
 directory = "app/public"

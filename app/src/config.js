@@ -85,6 +85,29 @@ export const SEASON_ROLLOVER_BUFFER_MINUTES = 15;
 // ============================================================================
 
 /**
+ * KV key for rolling 24-hour SP history
+ */
+export const ROLLING_HISTORY_KV_KEY = 'leaderboard:rolling_24h';
+
+/**
+ * Frequency of rolling updates (in minutes)
+ */
+export const ROLLING_HISTORY_FREQUENCY_MINS = 5;
+
+/**
+ * Number of intervals to store for a rolling 24-hour window
+ */
+export const ROLLING_HISTORY_SIZE = (24 * 60) / ROLLING_HISTORY_FREQUENCY_MINS;
+
+/**
+ * Cron schedules for triggered events
+ */
+export const CRON_SCHEDULES = {
+    ROLLING_UPDATE: "*/5 * * * *",
+    DAILY_SNAPSHOT: "0 19 * * *"
+};
+
+/**
  * Number of top gainers/losers to show
  */
 export const TOP_MOVERS_LIMIT = 50;

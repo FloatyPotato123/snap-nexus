@@ -16,6 +16,7 @@ import { errorResponse, notFoundResponse, badRequestResponse } from '../utils/re
 import {
     LIVE_LEADERBOARD_CACHE_TTL_MS,
     TOP_MOVERS_LIMIT,
+    ROLLING_HISTORY_KV_KEY,
     getLeaderboardApiUrl,
     ERROR_MESSAGES
 } from '../config.js';
@@ -239,22 +240,19 @@ export async function handleGetLiveLeaderboard(c) {
         // 1. Fetch Live Data
         const { map, total } = await getLiveLeaderboardData();
 
-        // 2. Fetch Yesterday's Snapshot for comparison
-        const yesterday = new Date();
-        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        const yKey = getLeaderboardKey(yesterday);
-        const prevData = await c.env.MARVEL_SNAP_HUB.get(yKey, { type: 'json' });
+        // 2. Fetch Rolling 24h History for comparison
+        const rollingRaw = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
+        const rollingPlayers = rollingRaw?.players || {};
 
-        // 3. Build Previous Rank Map
+        // 3. Build Previous Rank Map from the OLDEST entry in rolling history (24h ago)
         const prevRankMap = new Map();
-        if (prevData?.results) {
-            // Ensure consistent sort order before using index as rank
-            const sortedPrev = [...prevData.results].sort((a, b) => b.score - a.score);
-
-            sortedPrev.forEach((p, i) => {
-                const rank = i + 1;
-                prevRankMap.set(String(p.playerId || p.id), rank);
-            });
+        for (const [pid, history] of Object.entries(rollingPlayers)) {
+            // Find the first non-null entry (the oldest available rank in the 24h window)
+            const oldestEntry = history.find(entry => entry !== null);
+            if (oldestEntry) {
+                const [sp, rank] = oldestEntry;
+                prevRankMap.set(pid, rank);
+            }
         }
 
         // 4. Calculate Rank Deltas

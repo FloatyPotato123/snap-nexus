@@ -89,6 +89,7 @@
     <div class="tab-container mt-lg">
         <div class="tab-nav">
             <button class="tab-btn active" data-target="tab-p-season">Season Performance</button>
+            <button class="tab-btn" data-target="tab-p-rolling">24h Performance</button>
             <button class="tab-btn" data-target="tab-p-history">Past Finishes</button>
         </div>
 
@@ -158,7 +159,17 @@
             </article>
         </div>
 
-        <!-- Tab 2: Historical Ranks -->
+        <!-- Tab 2: Rolling 24h -->
+        <div id="tab-p-rolling" class="tab-content d-none">
+            <article>
+                <div id="rollingChartContainer" class="chart-container">
+                    <canvas id="rollingChart"></canvas>
+                    <div id="noRollingStats" class="status-msg d-none">No live activity tracked for this player in the last 24h.</div>
+                </div>
+            </article>
+        </div>
+
+        <!-- Tab 3: Historical Ranks -->
         <div id="tab-p-history" class="tab-content d-none">
             <article>
                 <div id="historicalChartContainer" class="chart-container">

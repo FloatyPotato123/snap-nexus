@@ -31,6 +31,8 @@ import layoutHtml from "./templates/layout.html";
 
 import { getWeeklyCardReleases } from "./handlers/cards.js";
 import { runDailyScrape } from "./handlers/scraper.js";
+import { runRollingScrape, handleGetRollingHistory, handleGetPlayerPlaytime, handleGetPlayerSparkline } from "./handlers/rolling.js";
+import { CRON_SCHEDULES } from "./config.js";
 
 const app = new Hono();
 
@@ -58,6 +60,9 @@ api.get("/decks/stress", (c) => handleStressDeck(c));
 api.get("/decks/decode", (c) => handleDecodeDeck(c));
 
 // Leaderboard/History
+api.get("/player/playtime", (c) => handleGetPlayerPlaytime(c));
+api.get("/player/sparkline", (c) => handleGetPlayerSparkline(c));
+api.get("/player/:id/sparkline", (c) => handleGetPlayerSparkline(c));
 api.get("/players/search", (c) => handlePlayerHistory(c));
 api.get("/player/:id", (c) => handleGetPlayerProfile(c));
 api.get("/cards/new-releases", (c) => getWeeklyCardReleases(c));
@@ -66,6 +71,7 @@ api.get("/leaderboard/daily", (c) => handleLeaderboard(c));
 api.get("/leaderboard/live", (c) => handleGetLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/seasons", (c) => handleSeasonHistory(c));
+api.get("/leaderboard/rolling", (c) => handleGetRollingHistory(c));
 api.get("/debug/snapshot", (c) => handleDebugSnapshot(c));
 
 // Mount API under /api
@@ -74,6 +80,10 @@ app.route("/api", api);
 export default {
     fetch: app.fetch,
     async scheduled(event, env, ctx) {
-        ctx.waitUntil(runDailyScrape(env));
+        if (event.cron === CRON_SCHEDULES.ROLLING_UPDATE) {
+            ctx.waitUntil(runRollingScrape(env));
+        } else if (event.cron === CRON_SCHEDULES.DAILY_SNAPSHOT || !event.cron) {
+            ctx.waitUntil(runDailyScrape(env));
+        }
     },
 };

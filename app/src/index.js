@@ -32,6 +32,7 @@ import layoutHtml from "./templates/layout.html";
 import { getWeeklyCardReleases } from "./handlers/cards.js";
 import { runDailyScrape } from "./handlers/scraper.js";
 import { runRollingScrape, handleGetRollingHistory, handleGetPlayerPlaytime, handleGetPlayerSparkline } from "./handlers/rolling.js";
+import { handleGetHotLocation } from "./handlers/locations.js";
 import { CRON_SCHEDULES } from "./config.js";
 
 const app = new Hono();
@@ -62,6 +63,7 @@ api.get("/decks/decode", (c) => handleDecodeDeck(c));
 // Leaderboard/History
 api.get("/player/playtime", (c) => handleGetPlayerPlaytime(c));
 api.get("/player/sparkline", (c) => handleGetPlayerSparkline(c));
+api.get("/locations/hot", (c) => handleGetHotLocation(c));
 api.get("/player/:id/sparkline", (c) => handleGetPlayerSparkline(c));
 api.get("/players/search", (c) => handlePlayerHistory(c));
 api.get("/player/:id", (c) => handleGetPlayerProfile(c));

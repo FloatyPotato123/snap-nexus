@@ -215,10 +215,10 @@ export async function handleGetPlayerSparkline(c) {
     const windowParam = c.req.query('window');
     
     // Determine target player
-    let target = q;
-    let isSearch = !!q;
+    let target = q && q.trim() !== '' ? q.trim() : null;
+    let isSearch = !!target;
     
-    // If no search query, fall back to the default/streamer ID or path ID
+    // If no valid search query, fall back to the default/streamer ID or path ID
     if (!target) {
         target = defaultId || idParam;
     }

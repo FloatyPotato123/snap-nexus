@@ -23,11 +23,11 @@ export async function runRollingScrape(env) {
     try {
         // 1. Fetch current top 1000
         const { map: liveMap } = await getLiveLeaderboardData();
-        
+
         // 2. Load existing history from KV
         const rawHistory = await env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
         const matrix = rawHistory || { players: {} };
-        
+
         // 3. Update matrix for each player
         const allPlayerIds = new Set([
             ...Object.keys(matrix.players),
@@ -61,7 +61,7 @@ export async function runRollingScrape(env) {
 
         // 4. Save back to KV
         await env.MARVEL_SNAP_HUB.put(ROLLING_HISTORY_KV_KEY, JSON.stringify(matrix));
-        
+
         console.log(`[Rolling Scraper] Success: Updated 24h history for ${Object.keys(matrix.players).length} players`);
 
     } catch (error) {
@@ -90,7 +90,7 @@ async function resolvePlayer(target, matrix, liveMap) {
 
         if (matches.length > 1) {
             const list = matches.map(p => `${p.name} (#${p.rank}: ${p.id})`).join(', ');
-            return { error: truncate(`${list}. Use full ID.`) };
+            return { error: truncate(`${list}. Specify unique name or ID`) };
         } else if (matches.length === 1) {
             targetId = matches[0].id;
             playerName = matches[0].name;
@@ -132,23 +132,29 @@ export async function handleGetPlayerPlaytime(c) {
     const q = c.req.query('q');
     const idParam = c.req.param('id');
     const target = q || idParam;
-    
+
     if (!target) return c.text('No player specified. Usage: !playtime [name]');
-    
+
     try {
         const matrix = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
         if (!matrix) return c.text('No rolling data available yet.');
 
         const { map: liveMap } = await getLiveLeaderboardData();
         const { targetId, playerName, error } = await resolvePlayer(target, matrix, liveMap);
-        
+
         if (error) return c.text(error);
 
         if (!matrix.players[targetId]) {
             return c.text(`No rolling data found for ${playerName} in the last 24h.`);
         }
 
-        const history = matrix.players[targetId];
+        const history = [...matrix.players[targetId]];
+
+        // Append live data directly
+        const liveEntry = liveMap.get(targetId);
+        if (liveEntry) {
+            history.push([liveEntry.score, liveEntry.rank]);
+        }
 
         // Statistics
         let activeIntervals = 0;
@@ -165,7 +171,7 @@ export async function handleGetPlayerPlaytime(c) {
             }
 
             const [sp, rank] = entry;
-            
+
             // Track start/end for delta
             if (startSP === null) {
                 startSP = sp;
@@ -184,12 +190,12 @@ export async function handleGetPlayerPlaytime(c) {
         const minsPlayed = activeIntervals * ROLLING_HISTORY_FREQUENCY_MINS;
         const spDelta = endSP - (startSP || endSP);
         const rankDelta = (startRank || endRank) - endRank;
-        
+
         const spDeltaStr = spDelta >= 0 ? `▲${spDelta}` : `▼${Math.abs(spDelta)}`;
         const rankDeltaStr = rankDelta >= 0 ? `▲${rankDelta}` : `▼${Math.abs(rankDelta)}`;
 
         return c.text(truncate(`${playerName} played ~${minsPlayed} mins in last 24h. SP: ${endSP} ${spDeltaStr}, Rank: #${endRank} ${rankDeltaStr}`));
-        
+
     } catch (error) {
         logError('[Twitch Playtime API]', error);
         return c.text('Error calculating playtime.');
@@ -199,29 +205,23 @@ export async function handleGetPlayerPlaytime(c) {
 /**
  * Returns a Unicode sparkline (trend graph) for a player.
  * 
- * SMART LOGIC:
- * 1. If 'q' query param exists (!sp Dekkster) -> Searches player and shows 24h trend.
- * 2. If no 'q' but 'default' param exists (!sp) -> Shows streamer session using $(twitch uptime).
+ * Resolves player via 'q' (name/ID search) or path 'id', then applies an optional
+ * 'window' param (minutes or Nightbot uptime string) to slice the lookback period.
+ * If no window is given, defaults to 24h.
  * 
- * URL for Nightbot:
- * !addcom !sp $(urlfetch https://.../sparkline?q=$(query)&default=ID&window=$(twitch uptime))
+ * Nightbot commands:
+ *   !sp     → ?q=$(querystring)
+ *   _huskysp → ?q=PLAYER_ID&window=$(querystring)
  * 
  * Output Example: ▂▂▃▅▆▇█ (Last 3h 15m: SP: 9005 ▲23, Rank: #7 ▲1)
  */
 export async function handleGetPlayerSparkline(c) {
     const idParam = c.req.param('id');
     const q = c.req.query('q');
-    const defaultId = c.req.query('default');
     const windowParam = c.req.query('window');
-    
-    // Determine target player
-    let target = q && q.trim() !== '' ? q.trim() : null;
-    let isSearch = !!target;
-    
-    // If no valid search query, fall back to the default/streamer ID or path ID
-    if (!target) {
-        target = defaultId || idParam;
-    }
+
+    // Determine target player. Nightbot sometimes passes literal "$(query)" if empty.
+    const target = (q && q.trim() !== '' && q !== '$(query)') ? q.trim() : idParam;
 
     if (!target) return c.text('No player specified. Usage: !sp [name]');
 
@@ -231,20 +231,14 @@ export async function handleGetPlayerSparkline(c) {
     if (windowParam) {
         if (/^\d+$/.test(windowParam)) {
             lookbackMins = parseInt(windowParam);
+            isSession = true;
         } else {
-            // Parse Nightbot uptime: "3 hours, 15 minutes" -> 195
+            // Parse Nightbot uptime string: "3 hours, 15 minutes" -> 195 mins
             lookbackMins = parseUptime(windowParam);
-            // Only consider it a "Session" if we actually parsed an uptime string and didn't fall back to 24h
-            isSession = !windowParam.toLowerCase().includes('offline') && !isSearch;
+            isSession = !windowParam.toLowerCase().includes('offline');
         }
     }
 
-    // Force 24h for searches to keep results consistent
-    if (isSearch) {
-        lookbackMins = 1440;
-        isSession = false;
-    }
-    
     try {
         const matrix = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
         if (!matrix) return c.text('No rolling data available.');
@@ -254,7 +248,14 @@ export async function handleGetPlayerSparkline(c) {
 
         if (error) return c.text(error);
 
-        const history = matrix.players[targetId];
+        const history = [...(matrix.players[targetId] || [])];
+
+        // Append live data directly
+        const liveEntry = liveMap.get(targetId);
+        if (liveEntry) {
+            history.push([liveEntry.score, liveEntry.rank]);
+        }
+
         if (!history || history.length === 0) {
             return c.text(`No 24h data for ${playerName}.`);
         }
@@ -262,6 +263,8 @@ export async function handleGetPlayerSparkline(c) {
         // 1. Core Stats & Time Filtering
         let startSP = null, endSP = null, startRank = null, endRank = null;
         const spSeries = [];
+        let spChanged = false;
+        let lastSeenSP = null;
 
         // Matrix has 288 points (5 min each). Calculate how many we need.
         const pointsNeeded = Math.ceil(lookbackMins / ROLLING_HISTORY_FREQUENCY_MINS);
@@ -280,6 +283,11 @@ export async function handleGetPlayerSparkline(c) {
             endSP = sp;
             endRank = rank;
             spSeries.push(sp);
+
+            if (lastSeenSP !== null && sp !== lastSeenSP) {
+                spChanged = true;
+            }
+            lastSeenSP = sp;
         }
 
         if (spSeries.length === 0 || endSP === null) {
@@ -287,7 +295,7 @@ export async function handleGetPlayerSparkline(c) {
         }
 
         // 2. Rendering
-        const BARS = lookbackMins <= 360 ? 12 : 24; 
+        const BARS = 16;
         const chunkSize = Math.max(1, Math.floor(spSeries.length / BARS));
         const sampled = [];
         for (let i = 0; i < spSeries.length; i += chunkSize) {
@@ -317,7 +325,11 @@ export async function handleGetPlayerSparkline(c) {
             durationLabel = lookbackMins >= 1440 ? "24h" : `${lookbackMins}m`;
         }
 
-        return c.text(truncate(`${sparkline} (Last ${durationLabel}: SP: ${endSP} ${spDeltaStr}, Rank: #${endRank} ${rankDeltaStr})`));
+        if (!spChanged) {
+            return c.text(truncate(`Last ${durationLabel}: SP: ${endSP} ${spDeltaStr}, Rank: #${endRank} ${rankDeltaStr}`));
+        } else {
+            return c.text(truncate(`${sparkline} (Last ${durationLabel}: SP: ${endSP} ${spDeltaStr}, Rank: #${endRank} ${rankDeltaStr})`));
+        }
 
     } catch (e) {
         logError('[Twitch Sparkline API]', e);
@@ -331,14 +343,14 @@ export async function handleGetPlayerSparkline(c) {
  */
 function parseUptime(str) {
     if (!str || str.toLowerCase().includes('offline')) return 1440;
-    
+
     let totalMins = 0;
     const hoursMatch = str.match(/(\d+)\s*hour/i);
     const minsMatch = str.match(/(\d+)\s*minute/i);
-    
+
     if (hoursMatch) totalMins += parseInt(hoursMatch[1]) * 60;
     if (minsMatch) totalMins += parseInt(minsMatch[1]);
-    
+
     // Safety: if parse fails or stream just started, return at least 5 mins
     return totalMins > 0 ? totalMins : 5;
 }

@@ -86,6 +86,10 @@
                     const rollData = await rollReq.json();
                     State.rollingHistory = rollData.players?.[State.playerId] || [];
                     
+                    if (State.liveStats && State.liveStats.sp && State.liveStats.rank) {
+                        State.rollingHistory.push([State.liveStats.sp, State.liveStats.rank]);
+                    }
+                    
                     if (State.rollingHistory.length > 0) {
                         UI.toggleChartDisplay('rolling', true);
                         Charts.renderRollingChart(State.rollingHistory);
@@ -511,6 +515,8 @@
                 }
             }
 
+            const isMobile = window.innerWidth < 640;
+
             State.rollingChartInstance = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -543,24 +549,59 @@
                     responsive: true,
                     maintainAspectRatio: false,
                     interaction: { mode: 'index', intersect: false },
+                    layout: { padding: { right: isMobile ? 8 : 4 } },
                     scales: {
                         x: {
                             grid: { color: '#333' },
-                            ticks: { 
-                                color: '#aaa', 
-                                maxRotation: 0, 
-                                autoSkip: true, 
-                                maxTicksLimit: 8 // Fewer ticks for cleaner mobile look
+                            ticks: {
+                                color: '#aaa',
+                                maxRotation: 0,
+                                autoSkip: false, // Turn off autoSkip to take manual control
+                                font: { size: isMobile ? 10 : 12 },
+                                callback: function(val, index) {
+                                    // Manually determine which labels to show
+                                    const total = labels.length;
+                                    const numTicks = isMobile ? 6 : 8; // Changed from 4 to 6
+                                    
+                                    if (total <= numTicks) return this.getLabelForValue(val);
+                                    
+                                    // We want to guarantee index 0 (oldest) and index total-1 (newest)
+                                    // Then evenly space the remaining ticks
+                                    const step = (total - 1) / (numTicks - 1);
+                                    
+                                    // Check if this index is one of our target indices (allow slight rounding slop)
+                                    for (let i = 0; i < numTicks; i++) {
+                                        if (Math.abs(index - Math.round(i * step)) < 0.5) {
+                                            return this.getLabelForValue(val);
+                                        }
+                                    }
+                                    return null;
+                                }
                             }
                         },
-                        yRank: this.getRankAxis(true),
-                        ySP: this.getSPAxis(minSP, maxSP, 'right', false)
+                        yRank: {
+                            ...this.getRankAxis(true),
+                            title: { display: !isMobile, text: 'Rank', color: '#2196F3' },
+                            ticks: {
+                                ...this.getRankAxis(true).ticks,
+                                font: { size: isMobile ? 10 : 12 }
+                            }
+                        },
+                        ySP: {
+                            ...this.getSPAxis(minSP, maxSP, 'right', false),
+                            title: { display: !isMobile, text: 'Snap Points', color: '#ffcc00' },
+                            ticks: {
+                                color: '#ffcc00',
+                                font: { size: isMobile ? 10 : 12 }
+                            }
+                        }
                     },
                     plugins: {
                         legend: { display: false }
                     }
                 }
             });
+
         },
 
         renderHistoricalChart(stats) {

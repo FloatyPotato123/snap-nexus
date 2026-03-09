@@ -5,7 +5,7 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "dev": "npm run build && (npm run build:client -- --watch & npm run build:worker -- --watch & npm run build:css -- --watch & npm run watch:assets & npx wrangler dev)",
+    "dev": "npm run build && (npm run build:client -- --watch & npm run build:worker -- --watch & npm run build:css -- --watch & npm run watch:assets & npx wrangler dev --ip 0.0.0.0)",
     "watch:assets": "node scripts/watch-assets.js",
     "build:client": "esbuild app/src/client/*.js --bundle --outdir=app/public/client --format=iife",
     "build:assets": "cp app/src/assets/* app/public/",

@@ -81,10 +81,10 @@
             
             // 2. Load Rolling History (24h Window)
             try {
-                const rollReq = await fetch('/api/leaderboard/rolling');
+                const rollReq = await fetch(`/api/leaderboard/rolling?id=${State.playerId}`);
                 if (rollReq.ok) {
                     const rollData = await rollReq.json();
-                    State.rollingHistory = rollData.players?.[State.playerId] || [];
+                    State.rollingHistory = rollData.playerHistory || [];
                     
                     if (State.liveStats && State.liveStats.sp && State.liveStats.rank) {
                         State.rollingHistory.push([State.liveStats.sp, State.liveStats.rank]);
@@ -541,7 +541,8 @@
                             yAxisID: 'ySP',
                             fill: true,
                             tension: 0.3,
-                            pointRadius: 2
+                            pointRadius: 0,
+                            pointHitRadius: 10
                         }
                     ]
                 },

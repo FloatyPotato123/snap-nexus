@@ -70,9 +70,10 @@ function formatSearchTextOutput(players) {
 
         // Add aliases (previous names) if available
         if (p.history && p.history.length > 1) {
-            // Filter out the current name to find unique aliases
+            // Filter out the current name to find unique aliases 
+            // and reverse to show MOST RECENT first (matching web UI)
             const uniqueAliases = [...new Set(
-                p.history.map(h => h.name).filter(n => n !== p.name)
+                [...p.history].reverse().map(h => h.name).filter(n => n !== p.name)
             )];
 
             if (uniqueAliases.length > 0) {

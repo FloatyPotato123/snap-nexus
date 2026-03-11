@@ -112,8 +112,17 @@ async function resolvePlayer(target, matrix, liveMap) {
  */
 export async function handleGetRollingHistory(c) {
     try {
+        const id = c.req.query('id');
         const history = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
-        return c.json(history || { players: {} });
+        const matrix = history || { players: {} };
+
+        if (id) {
+            return c.json({
+                playerHistory: matrix.players[id] || []
+            });
+        }
+
+        return c.json(matrix);
     } catch (error) {
         logError('[Rolling API]', error);
         return c.json({ error: 'Failed to fetch history' }, 500);
@@ -188,13 +197,14 @@ export async function handleGetPlayerPlaytime(c) {
         }
 
         const minsPlayed = activeIntervals * ROLLING_HISTORY_FREQUENCY_MINS;
+        const estGames = Math.round(minsPlayed / 4);
         const spDelta = endSP - (startSP || endSP);
         const rankDelta = (startRank || endRank) - endRank;
 
-        const spDeltaStr = spDelta >= 0 ? `▲${spDelta}` : `▼${Math.abs(spDelta)}`;
-        const rankDeltaStr = rankDelta >= 0 ? `▲${rankDelta}` : `▼${Math.abs(rankDelta)}`;
+        const spDeltaStr = spDelta >= 0 ? `+${spDelta}` : `-${Math.abs(spDelta)}`;
+        const rankDeltaStr = rankDelta >= 0 ? `+${rankDelta}` : `-${Math.abs(rankDelta)}`;
 
-        return c.text(truncate(`${playerName} played ~${minsPlayed} mins in last 24h. SP: ${endSP} ${spDeltaStr}, Rank: #${endRank} ${rankDeltaStr}`));
+        return c.text(`(24h) | Playtime: >${minsPlayed}m (>${estGames} games) | SP: ${spDeltaStr} (${startSP} -> ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} -> #${endRank})`);
 
     } catch (error) {
         logError('[Twitch Playtime API]', error);
@@ -294,12 +304,16 @@ export async function handleGetPlayerSparkline(c) {
             return c.text(`No data for ${playerName} in the requested window.`);
         }
 
-        // 2. Rendering
+        // 2. Rendering (16-bar sparkline)
         const BARS = 16;
-        const chunkSize = Math.max(1, Math.floor(spSeries.length / BARS));
         const sampled = [];
-        for (let i = 0; i < spSeries.length; i += chunkSize) {
-            const chunk = spSeries.slice(i, i + chunkSize).filter(n => n !== null);
+        const chunkSize = Math.max(1, spSeries.length / BARS);
+        
+        for (let i = 0; i < BARS; i++) {
+            const start = Math.floor(i * chunkSize);
+            const end = Math.floor((i + 1) * chunkSize);
+            const chunk = spSeries.slice(start, end).filter(n => n !== null);
+            
             if (chunk.length === 0) {
                 sampled.push(null);
             } else {
@@ -311,11 +325,10 @@ export async function handleGetPlayerSparkline(c) {
         const sparkline = renderSparkline(sampled);
         const spDelta = endSP - (startSP || endSP);
         const rankDelta = (startRank || endRank) - endRank;
+        
+        const spDeltaStr = spDelta >= 0 ? `+${spDelta}` : `-${Math.abs(spDelta)}`;
+        const rankDeltaStr = rankDelta >= 0 ? `+${rankDelta}` : `-${Math.abs(rankDelta)}`;
 
-        const spDeltaStr = spDelta >= 0 ? `▲${spDelta}` : `▼${Math.abs(spDelta)}`;
-        const rankDeltaStr = rankDelta >= 0 ? `▲${rankDelta}` : `▼${Math.abs(rankDelta)}`;
-
-        // Option B Formatting: "▃▅▆█ (Last 3h 15m: SP: 9005 ▲23, Rank: #7 ▲1)"
         let durationLabel = "";
         if (isSession) {
             const h = Math.floor(lookbackMins / 60);
@@ -326,9 +339,9 @@ export async function handleGetPlayerSparkline(c) {
         }
 
         if (!spChanged) {
-            return c.text(truncate(`Last ${durationLabel}: SP: ${endSP} ${spDeltaStr}, Rank: #${endRank} ${rankDeltaStr}`));
+            return c.text(`(${durationLabel}) | SP: ${spDeltaStr} (${startSP} -> ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} -> #${endRank})`);
         } else {
-            return c.text(truncate(`${sparkline} (Last ${durationLabel}: SP: ${endSP} ${spDeltaStr}, Rank: #${endRank} ${rankDeltaStr})`));
+            return c.text(`${sparkline} (${durationLabel}) | SP: ${spDeltaStr} (${startSP} -> ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} -> #${endRank})`);
         }
 
     } catch (e) {

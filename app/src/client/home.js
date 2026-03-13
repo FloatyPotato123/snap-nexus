@@ -387,22 +387,7 @@
         // --- MOVERS ---
 
         async function fetchMovers() {
-            const now = new Date();
-            const utcHour = now.getUTCHours();
-            let d1 = new Date();
-            let d2 = new Date();
-
-            if (utcHour < 19) {
-                d1.setDate(d1.getDate() - 1);
-                d2.setDate(d2.getDate() - 2);
-            } else {
-                d2.setDate(d2.getDate() - 1);
-            }
-
-            const date1 = d1.toISOString().split('T')[0];
-            const date2 = d2.toISOString().split('T')[0];
-            const fmt = d => d.toLocaleString('default', { month: 'short', day: 'numeric' });
-            const dateRangeStr = `${fmt(d2)} → ${fmt(d1)}`;
+            const dateRangeStr = "Last 24 Hours";
 
             const dateSpanG = $('movers-date-gainers');
             const dateSpanL = $('movers-date-losers');
@@ -413,7 +398,7 @@
             $('subtitle-losers').innerText = "24 Hour Drop";
 
             try {
-                const req = await fetch(`${CONSTANTS.API.LEADERBOARD_MOVERS}?date1=${date1}&date2=${date2}`);
+                const req = await fetch(`${CONSTANTS.API.LEADERBOARD_MOVERS}?type=rolling`);
                 if (!req.ok) {
                     $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>No data available</td></tr>`;
                     $('losers-table').querySelector('tbody').innerHTML = `<tr><td>No data available</td></tr>`;

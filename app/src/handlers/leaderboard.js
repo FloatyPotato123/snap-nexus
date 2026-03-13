@@ -155,57 +155,83 @@ export async function handleLeaderboard(c) {
  * @returns {Promise<Response>} JSON response with movers data
  */
 export async function handleLeaderboardComparison(c) {
+    const type = c.req.query('type');
     const date1Str = c.req.query('date1');
     const date2Str = c.req.query('date2');
 
-    if (!date1Str || !date2Str) {
+    if (type !== 'rolling' && (!date1Str || !date2Str)) {
         return badRequestResponse(c, ERROR_MESSAGES.MISSING_COMPARISON_DATES);
     }
 
-    // Validate dates
     try {
+        let movers = [];
+        let liveTotal = 0;
 
-    } catch (error) {
-        return badRequestResponse(c, error.message);
-    }
+        if (type === 'rolling') {
+            const [rollingRaw, liveData] = await Promise.all([
+                c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' }),
+                getLiveLeaderboardData()
+            ]);
+            liveTotal = liveData.total;
+            const liveMap = liveData.map;
+            const rollingPlayers = rollingRaw?.players || {};
 
-    try {
-        // Parallel fetch: Leaderboards + Live Data
-        const [d1, d2, { total: liveTotal }] = await Promise.all([
-            c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
-            c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
-            getLiveLeaderboardData()
-        ]);
+            for (const [pid, history] of Object.entries(rollingPlayers)) {
+                const liveEntry = liveMap.get(pid);
+                if (!liveEntry) continue;
 
-        if (!d1 || !d2) {
-            return notFoundResponse(c, 'Data missing for one or both dates.');
-        }
+                // Oldest entry in the rolling window (typically 24h ago)
+                const oldestEntry = history.find(e => e !== null);
+                if (oldestEntry) {
+                    const [oldSP, oldRank] = oldestEntry;
+                    const diff = liveEntry.score - oldSP;
 
-        // Build previous scores map
-        const prevMap = new Map();
-        if (d2.results) {
-            d2.results.forEach(p => prevMap.set(p.playerId || p.id, p.score));
-        }
-
-        // Calculate momentum for all players
-        const movers = [];
-        if (d1.results) {
-            d1.results.forEach(curr => {
-                const pid = curr.playerId || curr.id;
-                const prevScore = prevMap.get(pid);
-
-                if (prevScore !== undefined) {
-                    const diff = curr.score - prevScore;
                     movers.push({
-                        name: curr.playerName || curr.name,
+                        name: liveEntry.name,
                         id: pid,
                         change: diff,
-                        spStart: prevScore,
-                        spEnd: curr.score,
-                        rank: curr.rank || 0
+                        spStart: oldSP,
+                        spEnd: liveEntry.score,
+                        rank: liveEntry.rank
                     });
                 }
-            });
+            }
+        } else {
+            // Original snapshot-based comparison
+            const [d1, d2, liveData] = await Promise.all([
+                c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date1Str), { type: 'json' }),
+                c.env.MARVEL_SNAP_HUB.get(getLeaderboardKey(date2Str), { type: 'json' }),
+                getLiveLeaderboardData()
+            ]);
+            liveTotal = liveData.total;
+
+            if (!d1 || !d2) {
+                return notFoundResponse(c, 'Data missing for one or both dates.');
+            }
+
+            const prevMap = new Map();
+            if (d2.results) {
+                d2.results.forEach(p => prevMap.set(p.playerId || p.id, p.score));
+            }
+
+            if (d1.results) {
+                d1.results.forEach(curr => {
+                    const pid = curr.playerId || curr.id;
+                    const prevScore = prevMap.get(pid);
+
+                    if (prevScore !== undefined) {
+                        const diff = curr.score - prevScore;
+                        movers.push({
+                            name: curr.playerName || curr.name,
+                            id: pid,
+                            change: diff,
+                            spStart: prevScore,
+                            spEnd: curr.score,
+                            rank: curr.rank || 0
+                        });
+                    }
+                });
+            }
         }
 
         // Sort by change (descending)
@@ -217,12 +243,12 @@ export async function handleLeaderboardComparison(c) {
         return c.json({
             topGainers: gainers.slice(0, TOP_MOVERS_LIMIT),
             topLosers: losers.reverse().slice(0, TOP_MOVERS_LIMIT),
-            date1: date1Str,
-            date2: date2Str,
+            date1: date1Str || 'rolling',
+            date2: date2Str || 'rolling',
             totalInfinitePlayers: liveTotal
         });
     } catch (error) {
-        logError('[Leaderboard Comparison]', error, { date1Str, date2Str });
+        logError('[Leaderboard Comparison]', error, { date1Str, date2Str, type });
         return errorResponse(c, ERROR_MESSAGES.FETCH_FAILED);
     }
 }

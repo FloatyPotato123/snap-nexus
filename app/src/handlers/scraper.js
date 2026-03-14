@@ -76,11 +76,14 @@ export async function runDailyScrape(env) {
         // 2. Save raw snapshot to KV for historical reference
         await env.MARVEL_SNAP_HUB.put(storageKey, JSON.stringify(data));
 
-        // 3. Update D1 search index with current player names
+        // 3. Update D1 search index        // a) Player names for search autocomplete
         // This ensures search results are always up-to-date and aliases are tracked
         const seenAt = now.toISOString().split('T')[0];
         const playersToSync = leaderboard
-            .filter(p => (p.id || p.playerId) && (p.name || p.playerName))
+            .filter(p => {
+                const id = p.id || p.playerId;
+                return id && id !== 'undefined' && (p.name || p.playerName);
+            })
             .map(p => ({
                 id: String(p.id || p.playerId),
                 name: p.name || p.playerName
@@ -96,12 +99,15 @@ export async function runDailyScrape(env) {
 
         // b) Individual player ranks and scores for charts
         const statsEntries = leaderboard
-            .map((p, index) => ({
-                playerId: String(p.id || p.playerId),
-                rank: index + 1,
-                score: p.score
-            }))
-            .filter(s => s.playerId);
+            .map((p, index) => {
+                const id = p.id || p.playerId;
+                return {
+                    playerId: id ? String(id) : null,
+                    rank: index + 1,
+                    score: p.score
+                };
+            })
+            .filter(s => s.playerId && s.playerId !== 'undefined');
 
         if (statsEntries.length > 0) {
             await recordPlayerStats(env.DB, seenAt, statsEntries);

@@ -79,33 +79,18 @@
          * Renders a single leaderboard row HTML string.
          */
         function renderLeaderboardRow(p, index, isHistorical) {
-            let indicatorHtml = '';
-
-            // Fallback rank if missing, 0-indexed, or historical
+            // Fallback rank if missing
             const displayRank = (isHistorical || p.rank === 0 || p.rank === undefined || p.rank === null) ? (index + 1) : p.rank;
 
-            if (!isHistorical) {
-                if (p.isNew) {
-                    indicatorHtml = `<span class="indicator-new" title="New entry today">✨</span>`;
-                } else if (p.delta !== 0 && p.delta !== undefined && p.delta !== null) {
-                    const deltaClass = p.delta > 0 ? 'delta-up' : 'delta-down';
-                    const deltaSymbol = p.delta > 0 ? '▲' : '▼';
-                    indicatorHtml = `<span class="rank-delta ${deltaClass}">${deltaSymbol}&nbsp;${Math.abs(p.delta)}</span>`;
-                }
-            }
-
-
-
             return `
-                <tr class="leaderboard-row" onclick="SnapUtils.navigateTo(event, '/player/${p.id || p.playerId}?ref=leaderboard')">
+                <tr class="leaderboard-row">
                     <td class="rank-col">
                         <div class="rank-container">
                             <span class="rank-value">#${displayRank}</span>
-                            ${indicatorHtml}
                         </div>
                     </td>
                     <td class="name-col">
-                        <a href="/player/${p.id || p.playerId}?ref=leaderboard" class="player-link" onclick="event.stopPropagation()">${p.playerName || p.name}</a>
+                        <span class="player-name">${p.playerName || p.name}</span>
                     </td>
                     <td class="score-col">
                         ${(p.score || 0).toLocaleString()}

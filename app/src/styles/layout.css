@@ -187,7 +187,6 @@ nav a:hover {
 
 /* Leaderboard Refinement */
 .leaderboard-row {
-    cursor: pointer;
     transition: background-color 0.15s ease;
 }
 

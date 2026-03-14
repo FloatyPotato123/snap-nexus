@@ -65,16 +65,19 @@ export async function getLiveLeaderboardData() {
         if (data?.results) {
             data.results.forEach((entry, index) => {
                 const rank = index + 1;
-                const id = String(entry.id || entry.playerId);
-
-                if (id) {
-                    newMap.set(id, {
-                        id,
-                        rank,
-                        name: entry.playerName || entry.name,
-                        score: entry.score
-                    });
+                let id = String(entry.id || entry.playerId || '');
+                
+                // Fallback to rank-based ID if real ID is missing to prevent Map collision
+                if (!id || id === 'undefined' || id === '') {
+                    id = `rank-${rank}`;
                 }
+
+                newMap.set(id, {
+                    id,
+                    rank,
+                    name: entry.playerName || entry.name,
+                    score: entry.score
+                });
             });
         }
 
@@ -281,16 +284,15 @@ export async function handleGetLiveLeaderboard(c) {
             }
         }
 
-        // 4. Calculate Rank Deltas
+        // 4. Return results without deltas or "isNew" markers (No longer reliable without IDs)
         const results = Array.from(map.values())
-            .map(p => {
-                const prevRank = prevRankMap.get(String(p.id));
-                const delta = prevRank ? (prevRank - p.rank) : null;
-                const isNew = prevRank === undefined;
-
-                return { ...p, delta, isNew };
-            })
-            .sort((a, b) => a.rank - b.rank);
+            .sort((a, b) => a.rank - b.rank)
+            .map(p => ({
+                id: p.id,
+                rank: p.rank,
+                name: p.name,
+                score: p.score
+            }));
 
         return c.json({
             results,

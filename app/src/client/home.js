@@ -336,7 +336,6 @@
         // Initial Loads
         window.Home.loadSeasonChart().catch(e => console.error("Season Chart Error:", e));
         window.Home.loadHistoryChart().catch(e => console.error("History Chart Error:", e));
-        fetchMovers().catch(e => console.error("Movers Error:", e));
 
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {

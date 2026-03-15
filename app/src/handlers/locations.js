@@ -91,11 +91,7 @@ export async function handleGetHotLocation(c) {
         }
 
         if (next) {
-            const daysUntil = Math.ceil((next.startTime.getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
-            const dateLabel = daysUntil <= 0 ? 'starting soon' : 
-                             (daysUntil === 1 ? 'tomorrow' : 
-                             next.startTime.toLocaleDateString('en-US', { weekday: 'long', timeZone: 'UTC' }));
-            parts.push(`Next: ${next.name} (${dateLabel})`);
+            parts.push(`Next: ${next.name}${next.desc ? ` (${next.desc})` : ''}`);
         }
 
         return c.text(parts.join(' | '));

@@ -3,6 +3,8 @@
  * 
  * Manages high-resolution SP tracking over a rolling 24-hour window.
  * Stores data in a single KV key as an optimized matrix of [sp, rank] pairs.
+ * 
+ * NOTE: Switched to Name-based tracking due to removal of Player IDs from API.
  */
 
 import { getLiveLeaderboardData } from './leaderboard.js';
@@ -28,15 +30,45 @@ export async function runRollingScrape(env) {
         const rawHistory = await env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
         const matrix = rawHistory || { players: {} };
 
-        // 3. Update matrix for each player
-        const allPlayerIds = new Set([
+        // --- MIGRATION: Convert ID-based keys to Name-based keys ---
+        // We do this by checking if any key in the matrix is an ID found in the current live map
+        for (const [pid, entry] of liveMap.entries()) {
+            if (matrix.players[pid] && pid !== entry.name) {
+                // If we have history for this ID but no history for this Name yet, migrate it
+                if (!matrix.players[entry.name]) {
+                    matrix.players[entry.name] = matrix.players[pid];
+                }
+                // Stop tracking the ID explicitly
+                delete matrix.players[pid];
+            }
+        }
+
+        // 3. Update matrix for each player name present in either live data or history
+        const allPlayerNames = new Set([
             ...Object.keys(matrix.players),
-            ...liveMap.keys()
+            ...Array.from(liveMap.values()).map(p => p.name)
         ]);
 
-        for (const pid of allPlayerIds) {
-            const history = matrix.players[pid] || [];
-            const liveEntry = liveMap.get(pid);
+        // Create a map of name -> liveEntry for quick lookup
+        const liveNameMap = new Map();
+        for (const entry of liveMap.values()) {
+            // In case of duplicates, keep the one with the better rank
+            if (!liveNameMap.has(entry.name) || entry.rank < liveNameMap.get(entry.name).rank) {
+                liveNameMap.set(entry.name, entry);
+            }
+        }
+
+        for (const name of allPlayerNames) {
+            // Skip any remaining legacy IDs that didn't match current live players
+            if (name.includes('-') && !liveNameMap.has(name)) {
+                // This looks like a legacy ID (e.g. rank-123 or a long hex ID)
+                // If it's not on the current leaderboard, let it die
+                delete matrix.players[name];
+                continue;
+            }
+
+            const history = matrix.players[name] || [];
+            const liveEntry = liveNameMap.get(name);
 
             // Append new data point: [sp, rank] or null
             if (liveEntry) {
@@ -53,16 +85,16 @@ export async function runRollingScrape(env) {
             // Cleanup: If player has been out of top 1000 for full window, delete them
             const isFullyNull = history.every(v => v === null);
             if (isFullyNull) {
-                delete matrix.players[pid];
+                delete matrix.players[name];
             } else {
-                matrix.players[pid] = history;
+                matrix.players[name] = history;
             }
         }
 
         // 4. Save back to KV
         await env.MARVEL_SNAP_HUB.put(ROLLING_HISTORY_KV_KEY, JSON.stringify(matrix));
 
-        console.log(`[Rolling Scraper] Success: Updated 24h history for ${Object.keys(matrix.players).length} players`);
+        console.log(`[Rolling Scraper] Success: Updated 24h history for ${Object.keys(matrix.players).length} player names`);
 
     } catch (error) {
         logError('[Rolling Scraper]', error);
@@ -74,51 +106,45 @@ export async function runRollingScrape(env) {
 // ============================================================================
 
 /**
- * Helper to resolve a player target (ID or Name) against the live leaderboard.
- * Handles multiple matches by returning a helpful string of options.
+ * Helper to resolve a player target (Name) against the rolling matrix.
  */
-async function resolvePlayer(target, matrix, liveMap) {
-    let targetId = target;
-    let playerName = target;
-
-    // If direct ID lookup fails in matrix, search by name in live leaderboard
-    if (!matrix.players[targetId]) {
-        const searchName = target.toLowerCase();
-        const matches = Array.from(liveMap.values())
-            .filter(p => p.name.toLowerCase().includes(searchName))
-            .sort((a, b) => a.rank - b.rank); // Sort by rank for clarity
-
-        if (matches.length > 1) {
-            const list = matches.map(p => `${p.name} (#${p.rank}: ${p.id})`).join(', ');
-            return { error: truncate(`${list}. Specify unique name or ID`) };
-        } else if (matches.length === 1) {
-            targetId = matches[0].id;
-            playerName = matches[0].name;
-        } else {
-            return { error: `Player "${target}" not found in current Top 1000.` };
+async function resolvePlayer(target, matrix) {
+    const searchName = target.toLowerCase();
+    
+    // Exact match check
+    for (const name of Object.keys(matrix.players)) {
+        if (name.toLowerCase() === searchName) {
+            return { playerName: name };
         }
-    } else {
-        // Found by ID, get the name for the response if available
-        playerName = liveMap.get(targetId)?.name || targetId;
     }
 
-    return { targetId, playerName };
+    // Fuzzy match check (starts with)
+    const matches = Object.keys(matrix.players)
+        .filter(name => name.toLowerCase().includes(searchName))
+        .sort((a, b) => a.length - b.length);
+
+    if (matches.length > 1) {
+        const list = matches.slice(0, 5).join(', ');
+        return { error: truncate(`${list}. Specify unique name.`) };
+    } else if (matches.length === 1) {
+        return { playerName: matches[0] };
+    }
+
+    return { error: `Player "${target}" not found in recent history.` };
 }
 
 /**
  * GET /api/leaderboard/rolling
- * 
- * Returns the full 24h rolling history matrix for profiles.
  */
 export async function handleGetRollingHistory(c) {
     try {
-        const id = c.req.query('id');
+        const name = c.req.query('name');
         const history = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
         const matrix = history || { players: {} };
 
-        if (id) {
+        if (name) {
             return c.json({
-                playerHistory: matrix.players[id] || []
+                playerHistory: matrix.players[name] || []
             });
         }
 
@@ -130,37 +156,127 @@ export async function handleGetRollingHistory(c) {
 }
 
 /**
- * Concise text response for estimating a player's playtime over the last 24 hours.
- * 
- * URL for Nightbot:
- * !addcom !playtime $(urlfetch https://.../playtime?q=$(query))
- * 
- * Output Example: Dekkster played ~120 mins in last 24h. SP: 9150 ▲150, Rank: #42 ▲5
+ * GET /api/player/playtime
  */
 export async function handleGetPlayerPlaytime(c) {
-    return c.text("COMMAND DISABLED: Marvel Snap has removed player identifiers from their API. Individual tracking is currently unavailable.");
+    const q = c.req.query('q');
+    if (!q) return c.text("Error: Missing query parameter 'q'");
+
+    try {
+        const historyData = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
+        const matrix = historyData || { players: {} };
+
+        const { error, playerName } = await resolvePlayer(q, matrix);
+        if (error) return c.text(error);
+
+        const history = matrix.players[playerName];
+        
+        // Calculate playtime: count intervals where SP changed (actual matches played)
+        let activePoints = 0;
+        for (let i = 1; i < history.length; i++) {
+            const prev = history[i - 1];
+            const curr = history[i];
+            
+            // If SP changed between two consecutive points, they played during this interval
+            if (prev && curr && prev[0] !== curr[0]) {
+                activePoints++;
+            }
+        }
+        
+        const totalMins = activePoints * ROLLING_HISTORY_FREQUENCY_MINS;
+        
+        const validHistory = history.filter(h => h !== null);
+        if (validHistory.length === 0) return c.text(`${playerName} has no recent data.`);
+
+        const [startSP, startRank] = validHistory[0];
+        const [endSP, endRank] = validHistory[validHistory.length - 1];
+        
+        const spDelta = endSP - startSP;
+        const rankDelta = startRank - endRank;
+
+        const spDeltaStr = spDelta >= 0 ? `+${spDelta}` : `-${Math.abs(spDelta)}`;
+        const rankDeltaStr = rankDelta >= 0 ? `+${rankDelta}` : `-${Math.abs(rankDelta)}`;
+        const estGames = Math.round(totalMins / 4);
+
+        return c.text(`(24h) | Playtime: >${totalMins}m (>${estGames} games) | SP: ${spDeltaStr} (${startSP} -> ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} -> #${endRank})`);
+    } catch (error) {
+        logError('[Playtime API]', error);
+        return c.text("Error calculating playtime.");
+    }
 }
 
 /**
- * Returns a Unicode sparkline (trend graph) for a player.
- * 
- * Resolves player via 'q' (name/ID search) or path 'id', then applies an optional
- * 'window' param (minutes or Nightbot uptime string) to slice the lookback period.
- * If no window is given, defaults to 24h.
- * 
- * Nightbot commands:
- *   !sp     → ?q=$(querystring)
- *   _huskysp → ?q=PLAYER_ID&window=$(querystring)
- * 
- * Output Example: ▂▂▃▅▆▇█ (Last 3h 15m: SP: 9005 ▲23, Rank: #7 ▲1)
+ * GET /api/player/sparkline
  */
 export async function handleGetPlayerSparkline(c) {
-    return c.text("COMMAND DISABLED: Marvel Snap has removed player identifiers from their API. Individual tracking is currently unavailable.");
+    const q = c.req.query('q');
+    const window = c.req.query('window');
+    const id = c.req.param('id'); // Support for direct path
+    
+    const target = q || id;
+    if (!target) return c.text("Error: Missing player name");
+
+    try {
+        const historyData = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
+        const matrix = historyData || { players: {} };
+
+        const { error, playerName } = await resolvePlayer(target, matrix);
+        if (error) return c.text(error);
+
+        let history = matrix.players[playerName];
+        
+        // Apply window slicing if provided
+        let windowLabel = "24h";
+        if (window) {
+            const mins = parseUptime(window);
+            const sliceSize = Math.ceil(mins / ROLLING_HISTORY_FREQUENCY_MINS);
+            history = history.slice(-sliceSize);
+            windowLabel = window.includes('hour') || window.includes('minute') ? window : `${mins}m`;
+        }
+
+        const validHistory = history.filter(h => h !== null);
+        if (validHistory.length === 0) return c.text(`${playerName}: No data in window.`);
+
+        const spSeries = history.map(h => h ? h[0] : null);
+
+        // 2. Rendering (16-bar sparkline downsampling)
+        const BARS = 16;
+        const sampled = [];
+        const chunkSize = Math.max(1, spSeries.length / BARS);
+
+        for (let i = 0; i < BARS; i++) {
+            const start = Math.floor(i * chunkSize);
+            const end = Math.floor((i + 1) * chunkSize);
+            const chunk = spSeries.slice(start, end).filter(n => n !== null);
+
+            if (chunk.length === 0) {
+                sampled.push(null);
+            } else {
+                const avg = chunk.reduce((a, b) => a + b, 0) / chunk.length;
+                sampled.push(avg);
+            }
+        }
+
+        const spark = renderSparkline(sampled);
+
+        const [startSP, startRank] = validHistory[0];
+        const [endSP, endRank] = validHistory[validHistory.length - 1];
+
+        const spDelta = endSP - startSP;
+        const rankDelta = startRank - endRank;
+
+        const spDeltaStr = spDelta >= 0 ? `+${spDelta}` : `-${Math.abs(spDelta)}`;
+        const rankDeltaStr = rankDelta >= 0 ? `+${rankDelta}` : `-${Math.abs(rankDelta)}`;
+
+        return c.text(`${spark} (${windowLabel}) | SP: ${spDeltaStr} (${startSP} -> ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} -> #${endRank})`);
+    } catch (error) {
+        logError('[Sparkline API]', error);
+        return c.text("Error generating sparkline.");
+    }
 }
 
 /**
  * Parses Nightbot's $(twitch uptime) string into total minutes.
- * Handles: "3 hours, 15 minutes", "45 minutes", "1 hour", etc.
  */
 function parseUptime(str) {
     if (!str || str.toLowerCase().includes('offline')) return 1440;
@@ -172,7 +288,6 @@ function parseUptime(str) {
     if (hoursMatch) totalMins += parseInt(hoursMatch[1]) * 60;
     if (minsMatch) totalMins += parseInt(minsMatch[1]);
 
-    // Safety: if parse fails or stream just started, return at least 5 mins
     return totalMins > 0 ? totalMins : 5;
 }
 
@@ -180,23 +295,25 @@ function parseUptime(str) {
  * Renders a list of numbers as a Unicode sparkline.
  */
 function renderSparkline(numbers) {
-    if (numbers.length === 0) return '';
+    const valid = numbers.filter(n => n !== null);
+    if (valid.length === 0) return '';
+    
     const ticks = ['▂', '▃', '▄', '▅', '▆', '▇', '█'];
-    const min = Math.min(...numbers.filter(n => n !== null));
-    const max = Math.max(...numbers.filter(n => n !== null));
+    const min = Math.min(...valid);
+    const max = Math.max(...valid);
     const range = max - min;
 
-    if (range === 0) return ticks[ticks.length - 1].repeat(numbers.length);
+    if (range === 0) return ticks[0].repeat(numbers.length);
 
     return numbers.map(n => {
-        if (n === null) return ' '; // Gap in data (leaderboard drop)
+        if (n === null) return ' ';
         const index = Math.floor(((n - min) / range) * (ticks.length - 1));
         return ticks[index];
     }).join('');
 }
 
 /**
- * Truncates a string to a specific limit, adding "..." if needed.
+ * Truncates a string to a specific limit.
  */
 function truncate(str, limit = 400) {
     if (str.length <= limit) return str;

@@ -17,6 +17,7 @@ import {
     LIVE_LEADERBOARD_CACHE_TTL_MS,
     TOP_MOVERS_LIMIT,
     ROLLING_HISTORY_KV_KEY,
+    ROLLING_HISTORY_SIZE,
     getLeaderboardApiUrl,
     ERROR_MESSAGES
 } from '../config.js';
@@ -179,11 +180,18 @@ export async function handleLeaderboardComparison(c) {
             const liveMap = liveData.map;
             const rollingPlayers = rollingRaw?.players || {};
 
-            for (const [pid, history] of Object.entries(rollingPlayers)) {
-                const liveEntry = liveMap.get(pid);
+            // Create a name-based lookup for current live players
+            const liveNameMap = new Map();
+            for (const p of liveMap.values()) {
+                liveNameMap.set(p.name, p);
+            }
+
+            // 1. Calculate Gainers (Those in rolling history)
+            for (const [name, history] of Object.entries(rollingPlayers)) {
+                const liveEntry = liveNameMap.get(name);
                 if (!liveEntry) continue;
 
-                // Oldest entry in the rolling window (typically 24h ago)
+                // For gainer delta/sparkline, we use the oldest available non-null entry
                 const oldestEntry = history.find(e => e !== null);
                 if (oldestEntry) {
                     const [oldSP, oldRank] = oldestEntry;
@@ -191,7 +199,7 @@ export async function handleLeaderboardComparison(c) {
 
                     movers.push({
                         name: liveEntry.name,
-                        id: pid,
+                        id: liveEntry.id,
                         change: diff,
                         spStart: oldSP,
                         spEnd: liveEntry.score,
@@ -199,6 +207,41 @@ export async function handleLeaderboardComparison(c) {
                     });
                 }
             }
+
+            // 2. Identify "New on Board" (New names in Top 1000)
+            const newOnBoard = [];
+            for (const p of liveMap.values()) {
+                const history = rollingPlayers[p.name];
+                
+                // A player is "new" if they were not in the Top 1000 at the START of the 24h window.
+                // If they have less than ROLLING_HISTORY_SIZE snapshots, they appeared mid-window.
+                // If they have full snapshots but the first one is null, they were out at the start.
+                const isTrulyNew = !history || 
+                                   history.length < ROLLING_HISTORY_SIZE || 
+                                   history[0] === null;
+
+                if (isTrulyNew) {
+                    newOnBoard.push({
+                        name: p.name,
+                        id: p.id,
+                        rank: p.rank,
+                        score: p.score,
+                        isNew: true
+                    });
+                }
+            }
+            newOnBoard.sort((a, b) => a.rank - b.rank);
+
+            // Sort by change (descending)
+            movers.sort((a, b) => b.change - a.change);
+
+            return c.json({
+                topGainers: movers.filter(m => m.change > 0).slice(0, TOP_MOVERS_LIMIT),
+                newOnBoard: newOnBoard.slice(0, TOP_MOVERS_LIMIT),
+                date1: 'rolling',
+                date2: 'rolling',
+                totalInfinitePlayers: liveTotal
+            });
         } else {
             // Original snapshot-based comparison
             const [d1, d2, liveData] = await Promise.all([
@@ -273,26 +316,35 @@ export async function handleGetLiveLeaderboard(c) {
         const rollingRaw = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
         const rollingPlayers = rollingRaw?.players || {};
 
-        // 3. Build Previous Rank Map from the OLDEST entry in rolling history (24h ago)
+        // 3. Build Previous Rank Map from the OLDEST entry in rolling history
+        // Now keyed by Name because rolling history is name-based.
         const prevRankMap = new Map();
-        for (const [pid, history] of Object.entries(rollingPlayers)) {
-            // Find the first non-null entry (the oldest available rank in the 24h window)
-            const oldestEntry = history.find(entry => entry !== null);
-            if (oldestEntry) {
-                const [sp, rank] = oldestEntry;
-                prevRankMap.set(pid, rank);
+        for (const [name, history] of Object.entries(rollingPlayers)) {
+            // A player had a "previous rank" only if they were tracked at the very START of the window.
+            // If the array is shorter than ROLLING_HISTORY_SIZE, they appeared mid-window.
+            if (history.length === ROLLING_HISTORY_SIZE && history[0] !== null) {
+                const [sp, rank] = history[0];
+                prevRankMap.set(name, rank);
             }
         }
 
-        // 4. Return results without deltas or "isNew" markers (No longer reliable without IDs)
+        // 4. Return results with deltas and "isNew" markers
         const results = Array.from(map.values())
             .sort((a, b) => a.rank - b.rank)
-            .map(p => ({
-                id: p.id,
-                rank: p.rank,
-                name: p.name,
-                score: p.score
-            }));
+            .map(p => {
+                const prevRank = prevRankMap.get(p.name);
+                // A player is "new" if they weren't in the Top 1000 at the START of the 24h window.
+                const isNew = !prevRank;
+                
+                return {
+                    id: p.id,
+                    rank: p.rank,
+                    name: p.name,
+                    score: p.score,
+                    delta: prevRank ? (prevRank - p.rank) : 0,
+                    isNew: isNew
+                };
+            });
 
         return c.json({
             results,
@@ -301,6 +353,19 @@ export async function handleGetLiveLeaderboard(c) {
     } catch (error) {
         logError('[Live Leaderboard]', error);
         return errorResponse(c, ERROR_MESSAGES.LEADERBOARD_ERROR);
+    }
+}
+
+/**
+ * GET /api/debug/rolling
+ * Returns the raw rolling history matrix.
+ */
+export async function handleGetRollingDebug(c) {
+    try {
+        const rollingRaw = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
+        return c.json(rollingRaw || { error: 'No rolling history found' });
+    } catch (error) {
+        return c.json({ error: error.message }, 500);
     }
 }
 

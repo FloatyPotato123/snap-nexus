@@ -384,28 +384,25 @@
         }
 
         // --- MOVERS ---
-
         async function fetchMovers() {
             const dateRangeStr = "Last 24 Hours";
 
-            const dateSpanG = $('movers-date-gainers');
-            const dateSpanL = $('movers-date-losers');
+            const dateSpanN = $('subtitle-newbie');
+            const dateSpanG = $('subtitle-gainers');
+            if (dateSpanN) dateSpanN.innerText = dateRangeStr;
             if (dateSpanG) dateSpanG.innerText = dateRangeStr;
-            if (dateSpanL) dateSpanL.innerText = dateRangeStr;
-
-            $('subtitle-gainers').innerText = "24 Hour Gain";
-            $('subtitle-losers').innerText = "24 Hour Drop";
 
             try {
                 const req = await fetch(`${CONSTANTS.API.LEADERBOARD_MOVERS}?type=rolling`);
                 if (!req.ok) {
+                    $('newbie-table').querySelector('tbody').innerHTML = `<tr><td>No data available</td></tr>`;
                     $('gainers-table').querySelector('tbody').innerHTML = `<tr><td>No data available</td></tr>`;
-                    $('losers-table').querySelector('tbody').innerHTML = `<tr><td>No data available</td></tr>`;
                     return;
                 }
                 const data = await req.json();
 
-                const renderRows = (list, isGain) => {
+                // Helper to render gainer/looser rows (Original look)
+                const renderGainerRows = (list) => {
                     if (!list || !list.length) return "<tr><td>No data</td></tr>";
                     return list.slice(0, 10).map((p, i) => {
                         const spContext = (p.spStart && p.spEnd)
@@ -419,14 +416,34 @@
                         <td style="text-align:right;">
                             <div class="mover-cell-right">
                                 ${spContext}
-                                <span class="${isGain ? 'gainer' : 'loser'}">${isGain ? '+' : ''}${p.change}</span>
+                                <span class="gainer">+${p.change}</span>
                             </div>
                         </td>
                     </tr>`;
                     }).join('');
                 };
-                $('gainers-table').querySelector('tbody').innerHTML = renderRows(data.topGainers, true);
-                $('losers-table').querySelector('tbody').innerHTML = renderRows(data.topLosers, false);
+
+                // Helper to render new-on-board rows (Rank-based)
+                const renderNewbieRows = (list) => {
+                    if (!list || !list.length) return "<tr><td>No data</td></tr>";
+                    return list.slice(0, 10).map((p, i) => {
+                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${escapeHtml(p.id)}?ref=home')">
+                        <td>
+                            <span class="text-muted" style="margin-right:8px; font-size:0.9em;">${i + 1}</span>
+                            <a href="/player/${escapeHtml(p.id)}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${escapeHtml(p.name)}</a>
+                        </td>
+                        <td style="text-align:right;">
+                            <div class="mover-cell-right">
+                                <span class="text-muted" style="font-size:0.8rem;">${p.score} SP</span>
+                                <span class="badge secondary">#${p.rank}</span>
+                            </div>
+                        </td>
+                    </tr>`;
+                    }).join('');
+                };
+
+                $('newbie-table').querySelector('tbody').innerHTML = renderNewbieRows(data.newOnBoard);
+                $('gainers-table').querySelector('tbody').innerHTML = renderGainerRows(data.topGainers);
 
                 if (data.totalInfinitePlayers) {
                     const headerCont = $('infinite-header-container');
@@ -440,6 +457,9 @@
                 console.error("Movers fetch error:", e);
             }
         }
+
+        // Trigger Movers load
+        fetchMovers();
     });
 
     // Make functions globally available as well

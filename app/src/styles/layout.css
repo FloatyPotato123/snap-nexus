@@ -341,6 +341,22 @@ table th {
 }
 
 /* Movers Grid Visual Refinement */
+#movers-section {
+    margin-top: 40px;
+}
+
+.movers-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 30px;
+}
+
+@media (max-width: 1024px) {
+    .movers-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .mover-card {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid var(--pico-muted-border-color);

@@ -79,18 +79,30 @@
          * Renders a single leaderboard row HTML string.
          */
         function renderLeaderboardRow(p, index, isHistorical) {
+            const { escapeHtml } = window.SnapUtils;
             // Fallback rank if missing
             const displayRank = (isHistorical || p.rank === 0 || p.rank === undefined || p.rank === null) ? (index + 1) : p.rank;
+
+            let deltaHtml = '';
+            if (!isHistorical && p.isNew) {
+                deltaHtml = `<span class="new-icon" title="New In Top 1000" style="margin-left: 8px; font-size: 0.9rem; vertical-align: middle;">✨</span>`;
+            } else if (!isHistorical && p.delta !== 0 && p.delta !== undefined) {
+                const isUp = p.delta > 0;
+                const icon = isUp ? '▲' : '▼';
+                const colorClass = isUp ? 'gainer' : 'loser';
+                deltaHtml = `<span class="rank-delta ${colorClass}" style="margin-left:8px; font-size:0.8rem; font-weight:bold;">${icon}${Math.abs(p.delta)}</span>`;
+            }
 
             return `
                 <tr class="leaderboard-row">
                     <td class="rank-col">
-                        <div class="rank-container">
+                        <div class="rank-container" style="display:flex; align-items:center;">
                             <span class="rank-value">#${displayRank}</span>
+                            ${deltaHtml}
                         </div>
                     </td>
                     <td class="name-col">
-                        <span class="player-name">${p.playerName || p.name}</span>
+                        <span class="player-name">${escapeHtml(p.name)}</span>
                     </td>
                     <td class="score-col">
                         ${(p.score || 0).toLocaleString()}

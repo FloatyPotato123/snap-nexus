@@ -10,6 +10,7 @@ import {
     handleLeaderboard,
     handleLeaderboardComparison,
     handleGetLiveLeaderboard,
+    handleGetRollingDebug,
     handleDebugSnapshot
 } from "./handlers/leaderboard.js";
 import {
@@ -74,6 +75,7 @@ api.get("/leaderboard/live", (c) => handleGetLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/seasons", (c) => handleSeasonHistory(c));
 api.get("/leaderboard/rolling", (c) => handleGetRollingHistory(c));
+api.get("/debug/rolling", (c) => handleGetRollingDebug(c));
 api.get("/debug/snapshot", (c) => handleDebugSnapshot(c));
 
 // Mount API under /api

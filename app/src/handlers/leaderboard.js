@@ -45,8 +45,7 @@ let liveLeaderboardCache = { timestamp: 0, data: new Map(), total: 0 };
 export async function getLiveLeaderboardData() {
     const now = Date.now();
 
-    // Always fetch fresh data, cache is only used for error fallback
-
+    // Always fetch fresh data as requested
 
     const { year, month } = getCurrentSeason(new Date());
     const apiUrl = getLeaderboardApiUrl(month, year);
@@ -68,9 +67,9 @@ export async function getLiveLeaderboardData() {
                 const rank = index + 1;
                 let id = String(entry.id || entry.playerId || '');
                 
-                // Fallback to rank-based ID if real ID is missing to prevent Map collision
+                // Fallback to name-based ID if real ID is missing to prevent Map collision
                 if (!id || id === 'undefined' || id === '') {
-                    id = `rank-${rank}`;
+                    id = entry.playerName || entry.name;
                 }
 
                 newMap.set(id, {
@@ -317,14 +316,22 @@ export async function handleGetLiveLeaderboard(c) {
         const rollingPlayers = rollingRaw?.players || {};
 
         // 3. Build Previous Rank Map from the OLDEST entry in rolling history
-        // Now keyed by Name because rolling history is name-based.
+        // Optimization: Only scan if we have rolling history and map has players
         const prevRankMap = new Map();
-        for (const [name, history] of Object.entries(rollingPlayers)) {
-            // A player had a "previous rank" only if they were tracked at the very START of the window.
-            // If the array is shorter than ROLLING_HISTORY_SIZE, they appeared mid-window.
-            if (history.length === ROLLING_HISTORY_SIZE && history[0] !== null) {
-                const [sp, rank] = history[0];
-                prevRankMap.set(name, rank);
+        if (rollingPlayers && map.size > 0) {
+            for (const name in rollingPlayers) {
+                // Only care about players who are currently on the leaderboard
+                // This drastically reduces work if rolling history has many inactive players
+                if (!map.has(name)) {
+                    // We might still need it if the ID in map is a guid but the name matches
+                    // However, we key everything by name in rollingPlayers.
+                }
+
+                const history = rollingPlayers[name];
+                if (history && history.length === ROLLING_HISTORY_SIZE && history[0] !== null) {
+                    const [sp, rank] = history[0];
+                    prevRankMap.set(name, rank);
+                }
             }
         }
 

@@ -328,15 +328,6 @@
             }
         };
 
-        // --- INITIALIZATION ---
-        initChartDefaults();
-        initTabs();
-        populateSeasonSelector();
-
-        // Initial Loads
-        window.Home.loadSeasonChart().catch(e => console.error("Season Chart Error:", e));
-        window.Home.loadHistoryChart().catch(e => console.error("History Chart Error:", e));
-
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             const dd = $('seasonDropdown');
@@ -458,8 +449,17 @@
             }
         }
 
-        // Trigger Movers load
-        fetchMovers();
+        // --- INITIALIZATION ---
+        initChartDefaults();
+        initTabs();
+        populateSeasonSelector();
+
+        // Initial parallel load
+        Promise.all([
+            window.Home.loadSeasonChart(),
+            window.Home.loadHistoryChart(),
+            fetchMovers()
+        ]).catch(e => console.error("Parallel Load Error:", e));
     });
 
     // Make functions globally available as well

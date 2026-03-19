@@ -300,41 +300,66 @@
         },
 
         updateAdvancedStats(stats) {
-            if (!stats || stats.length < 2) {
+            // Helper to get whole days between two date strings (YYYY-MM-DD)
+            const daysBetween = (d2, d1) => Math.round((new Date(d2) - new Date(d1)) / 86400000);
+
+            let allStats = [...(stats || [])];
+            
+            // 1. Inject live data if it's newer than the last recorded stat
+            if (State.liveStats && State.liveStats.sp) {
+                const today = new Date().toISOString().split('T')[0];
+                const last = allStats.length > 0 ? allStats[allStats.length - 1] : null;
+
+                if (!last || last.date < today) {
+                    allStats.push({
+                        date: today,
+                        rank: State.liveStats.rank,
+                        sp: State.liveStats.sp
+                    });
+                }
+            }
+
+            if (allStats.length < 2) {
                 $('pBestDayBadge').classList.add('d-none');
                 $('pVolatilityBadge').classList.add('d-none');
                 return;
             }
 
-            const first = stats[0];
-            const last = stats[stats.length - 1];
+            const first = allStats[0];
+            const last = allStats[allStats.length - 1];
 
-            // Helper to get whole days between two date strings (YYYY-MM-DD)
-            const daysBetween = (d2, d1) => Math.round((new Date(d2) - new Date(d1)) / 86400000);
-
-            // 1. Daily Average (Total Gain / Days Elapsed)
+            // 2. Daily Average (Total Gain / Days Elapsed)
             const daysElapsed = daysBetween(last.date, first.date) || 1;
-            const mean = (last.sp - first.sp) / daysElapsed;
+            const totalGain = (last.sp || 0) - (first.sp || 0);
+            const mean = totalGain / daysElapsed;
             const avgLabel = mean >= 0 ? `+${Math.round(mean).toLocaleString()}` : `${Math.round(mean).toLocaleString()}`;
 
             $('pVolatility').innerText = `${avgLabel} SP`;
             $('pVolatilityBadge').classList.remove('d-none');
 
-            // 2. Best Day (Max gain on a single day)
+            // 3. Best Day (Max gain on a single day or normalized over gaps)
             const dailyDeltas = [];
-            for (let i = 1; i < stats.length; i++) {
-                const prev = stats[i - 1];
-                const curr = stats[i];
+            for (let i = 1; i < allStats.length; i++) {
+                const prev = allStats[i - 1];
+                const curr = allStats[i];
+                const gap = daysBetween(curr.date, prev.date);
 
-                // Only count as "Best Day" if records are exactly 1 day apart
-                if (daysBetween(curr.date, prev.date) === 1 && prev.sp > 0 && curr.sp > 0) {
-                    dailyDeltas.push(curr.sp - prev.sp);
+                if (gap > 0 && prev.sp > 0 && curr.sp > 0) {
+                    const gain = curr.sp - prev.sp;
+                    // If gap is 1 day, it's a true "Best Day"
+                    // If gap > 1, we still count the average daily gain in that gap as a candidate
+                    // but we cap the gap to avoid misleading spikes over many empty weeks
+                    if (gap === 1) {
+                        dailyDeltas.push(gain);
+                    } else if (gap <= 7) {
+                        dailyDeltas.push(gain / gap);
+                    }
                 }
             }
 
             const maxGain = dailyDeltas.length > 0 ? Math.max(...dailyDeltas) : 0;
-            if (maxGain > 0) {
-                $('pBestDay').innerText = `+${maxGain.toLocaleString()} SP`;
+            if (maxGain > 1) { // Only show if gain is significant (>1 SP)
+                $('pBestDay').innerText = `+${Math.round(maxGain).toLocaleString()} SP`;
                 $('pBestDayBadge').classList.remove('d-none');
             } else {
                 $('pBestDayBadge').classList.add('d-none');

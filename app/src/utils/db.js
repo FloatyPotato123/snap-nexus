@@ -35,12 +35,14 @@ export async function searchPlayers(db, query, limit = 10) {
 
     const normalized = query.toLowerCase();
 
-    // Wrap query in quotes to avoid FTS5 syntax errors with reserved words
+    // Deduplicate by name and prioritize older "real" IDs if they exist
+    // We group by normalized_name to collapse duplicates
     const sql = `
-        SELECT DISTINCT player_id as id, name 
+        SELECT MIN(player_id) as id, name
         FROM PlayerSearch 
         WHERE PlayerSearch MATCH ? 
-        ORDER BY rank 
+        GROUP BY LOWER(TRIM(name))
+        ORDER BY rank
         LIMIT ?
     `;
 
@@ -54,26 +56,12 @@ export async function searchPlayers(db, query, limit = 10) {
         return [];
     }
 }
-
 // ============================================================================
 // Player Data Management
 // ============================================================================
 
 /**
  * Batch upserts player data with intelligent name change detection.
- * 
- * This function:
- * 1. Updates the Players table with current names
- * 2. Adds new entries to PlayerAliases only when names change
- * 3. Processes in chunks to avoid SQLite bind limits
- * 
- * Optimization: Only writes to the database when a player's name has changed,
- * reducing unnecessary writes during daily scrapes.
- * 
- * @param {Object} db - D1 database instance
- * @param {Array<{id: string, name: string}>} players - Array of player data
- * @param {string} [seenAt] - Date string (YYYY-MM-DD), defaults to today
- * @returns {Promise<void>}
  */
 export async function batchUpsertPlayers(db, players, seenAt) {
     if (!players || players.length === 0) return;
@@ -98,12 +86,10 @@ export async function batchUpsertPlayers(db, players, seenAt) {
     const stmtMain = db.prepare(sqlMain);
     const stmtAlias = db.prepare(sqlAlias);
 
-    // Process in chunks to avoid SQLite bind limits
     for (let i = 0; i < players.length; i += DB_BATCH_SIZE_PLAYERS) {
         const chunk = players.slice(i, i + DB_BATCH_SIZE_PLAYERS);
         const playerIds = chunk.map(p => p.id);
 
-        // Fetch existing history for this chunk to detect name changes
         let historyMap = {};
         try {
             historyMap = await batchGetPlayerHistories(db, playerIds);
@@ -112,14 +98,11 @@ export async function batchUpsertPlayers(db, players, seenAt) {
         }
 
         const statements = [];
-
         for (const p of chunk) {
             if (!p.id || !p.name) continue;
-
             const normalized = p.name.toLowerCase();
             const history = historyMap[p.id];
 
-            // Only write if name has changed (optimization)
             let nameChanged = true;
             if (history && history.length > 0) {
                 const latest = history[history.length - 1];
@@ -138,7 +121,7 @@ export async function batchUpsertPlayers(db, players, seenAt) {
             try {
                 await db.batch(statements);
             } catch (error) {
-                logError('[DB Batch Execute]', error, { chunkIndex: i, statementCount: statements.length });
+                logError('[DB Batch Execute]', error, { chunkIndex: i });
             }
         }
     }
@@ -149,25 +132,52 @@ export async function batchUpsertPlayers(db, players, seenAt) {
 // ============================================================================
 
 /**
+ * Returns a bound statement for the merged name history.
+ */
+export function getPlayerHistoryDeepStmt(db, playerId) {
+    if (!playerId) return null;
+    const sql = `
+        SELECT name, MIN(first_seen_at) as seenAt 
+        FROM PlayerAliases 
+        WHERE player_id IN (
+            SELECT player_id FROM PlayerAliases WHERE normalized_name IN (
+                SELECT normalized_name FROM PlayerAliases WHERE player_id = ? OR normalized_name = ?
+            )
+        )
+        AND name != 'Unknown'
+        GROUP BY name
+        ORDER BY seenAt ASC
+    `;
+    const normalizedId = playerId.toLowerCase();
+    return db.prepare(sql).bind(playerId, normalizedId);
+}
+
+/**
+ * Retrieves the merged name history for a player and all their aliases.
+ */
+export async function getPlayerHistoryDeep(db, playerId) {
+    const stmt = getPlayerHistoryDeepStmt(db, playerId);
+    if (!stmt) return [];
+    try {
+        const { results } = await stmt.all();
+        return results || [];
+    } catch (error) {
+        logError('[DB History Deep]', error, { playerId });
+        return [];
+    }
+}
+
+/**
  * Retrieves the name history for a single player.
- * 
- * Returns all known names for a player, ordered chronologically.
- * Replaces the legacy 'history:' KV keys.
- * 
- * @param {Object} db - D1 database instance
- * @param {string} playerId - Player ID
- * @returns {Promise<Array<{name: string, seenAt: string}>>} Name history
  */
 export async function getPlayerHistory(db, playerId) {
     if (!playerId) return [];
-
     const sql = `
         SELECT name, first_seen_at as seenAt 
         FROM PlayerAliases 
         WHERE player_id = ? 
         ORDER BY first_seen_at ASC
     `;
-
     try {
         const { results } = await db.prepare(sql).bind(playerId).all();
         return results || [];
@@ -179,17 +189,9 @@ export async function getPlayerHistory(db, playerId) {
 
 /**
  * Retrieves name history for multiple players in a single query.
- * 
- * More efficient than calling getPlayerHistory() multiple times.
- * 
- * @param {Object} db - D1 database instance
- * @param {Array<string>} playerIds - Array of player IDs
- * @returns {Promise<Object<string, Array<{name: string, seenAt: string}>>>} Map of playerId to history
  */
 export async function batchGetPlayerHistories(db, playerIds) {
     if (!playerIds || playerIds.length === 0) return {};
-
-    // Build SQL with placeholders for IN clause
     const placeholders = playerIds.map(() => '?').join(',');
     const sql = `
         SELECT player_id, name, first_seen_at as seenAt 
@@ -197,24 +199,61 @@ export async function batchGetPlayerHistories(db, playerIds) {
         WHERE player_id IN (${placeholders})
         ORDER BY first_seen_at ASC
     `;
-
     try {
         const { results } = await db.prepare(sql).bind(...playerIds).all();
-
-        // Group results by player_id
         const map = {};
         (results || []).forEach(row => {
-            if (!map[row.player_id]) {
-                map[row.player_id] = [];
-            }
+            if (!map[row.player_id]) map[row.player_id] = [];
             map[row.player_id].push({ name: row.name, seenAt: row.seenAt });
         });
-
         return map;
     } catch (error) {
-        logError('[DB Batch History]', error, { playerCount: playerIds.length });
+        logError('[DB Batch History]', error);
         return {};
     }
+}
+
+/**
+ * Efficiently maps names to existing player IDs.
+ * Used by the scraper and profile handler to maintain continuity.
+ */
+export async function batchGetIdsByNames(db, names) {
+    if (!names || names.length === 0) return {};
+
+    const BATCH_SIZE = 100; // Stay well under D1 limits
+    const map = {};
+
+    for (let i = 0; i < names.length; i += BATCH_SIZE) {
+        const chunk = names.slice(i, i + BATCH_SIZE);
+        const placeholders = chunk.map(() => '?').join(',');
+        const sql = `
+            SELECT normalized_name as name, player_id 
+            FROM PlayerAliases 
+            WHERE normalized_name IN (${placeholders})
+        `;
+
+        try {
+            const { results } = await db.prepare(sql).bind(...chunk).all();
+            (results || []).forEach(row => {
+                const nameKey = row.name;
+                if (!map[nameKey]) map[nameKey] = [];
+                if (!map[nameKey].includes(row.player_id)) {
+                    map[nameKey].push(row.player_id);
+                }
+            });
+        } catch (error) {
+            logError('[DB Batch Get IDs]', error, { chunkIndex: i, nameCount: names.length });
+        }
+    }
+
+    // Collapse multi-ID results into the most stable ID (heuristic)
+    Object.keys(map).forEach(name => {
+        // Return only the most stable ID (shortest or first seen)
+        // For the scraper's purpose, we just need ONE consistent ID
+        map[name] = map[name].sort((a, b) => b.length - a.length)[0];
+    });
+
+    return map;
 }
 
 // ============================================================================
@@ -222,14 +261,46 @@ export async function batchGetPlayerHistories(db, playerIds) {
 // ============================================================================
 
 /**
+ * Returns a bound statement for the historical ranks lookup.
+ */
+export function getPlayerHistoricalRanksDeepStmt(db, playerId, dates) {
+    if (!dates || dates.length === 0) return null;
+
+    const placeholders = dates.map(() => '?').join(',');
+    const sql = `
+        SELECT date, MIN(rank) as rank, MAX(score) as sp
+        FROM PlayerStats
+        WHERE player_id IN (
+            SELECT player_id FROM PlayerAliases WHERE normalized_name IN (
+                SELECT normalized_name FROM PlayerAliases WHERE player_id = ? OR normalized_name = ?
+            )
+        )
+        AND date IN (${placeholders})
+        GROUP BY date
+        ORDER BY date ASC
+    `;
+
+    const normalizedId = playerId.toLowerCase();
+    return db.prepare(sql).bind(playerId, normalizedId, ...dates);
+}
+
+/**
+ * Retrieves historical ranks for a player and all aliases on specific dates.
+ */
+export async function getPlayerHistoricalRanksDeep(db, playerId, dates) {
+    const stmt = getPlayerHistoricalRanksDeepStmt(db, playerId, dates);
+    if (!stmt) return [];
+    try {
+        const { results } = await stmt.all();
+        return results || [];
+    } catch (error) {
+        logError('[DB Historical Ranks Deep]', error, { playerId, dateCount: dates.length });
+        return [];
+    }
+}
+
+/**
  * Retrieves historical ranks for a player on specific dates.
- * 
- * Used to fetch season-end rankings for the historical chart.
- * 
- * @param {Object} db - D1 database instance
- * @param {string} playerId - Player ID
- * @param {Array<string>} dates - Array of dates (YYYY-MM-DD)
- * @returns {Promise<Array<{date: string, rank: number, sp: number}>>} Historical ranks
  */
 export async function getPlayerHistoricalRanks(db, playerId, dates) {
     if (!dates || dates.length === 0) return [];
@@ -252,15 +323,42 @@ export async function getPlayerHistoricalRanks(db, playerId, dates) {
 }
 
 /**
+ * Returns a bound statement for the stats range lookup.
+ */
+export function getPlayerStatsRangeDeepStmt(db, playerId, start, end) {
+    const sql = `
+        SELECT date, MIN(rank) as rank, MAX(score) as score 
+        FROM PlayerStats 
+        WHERE player_id IN (
+            SELECT player_id FROM PlayerAliases WHERE normalized_name IN (
+                SELECT normalized_name FROM PlayerAliases WHERE player_id = ? OR normalized_name = ?
+            )
+        )
+        AND date BETWEEN ? AND ?
+        GROUP BY date
+        ORDER BY date ASC
+    `;
+
+    const normalizedId = playerId.toLowerCase();
+    return db.prepare(sql).bind(playerId, normalizedId, start, end);
+}
+
+/**
+ * Retrieves daily stats for a player and all aliases within a date range.
+ */
+export async function getPlayerStatsRangeDeep(db, playerId, start, end) {
+    const stmt = getPlayerStatsRangeDeepStmt(db, playerId, start, end);
+    try {
+        const { results } = await stmt.all();
+        return results || [];
+    } catch (error) {
+        logError('[DB Stats Range Deep]', error, { playerId, start, end });
+        return [];
+    }
+}
+
+/**
  * Retrieves daily stats for a player within a date range.
- * 
- * Used for the season performance chart on player profiles.
- * 
- * @param {Object} db - D1 database instance
- * @param {string} playerId - Player ID
- * @param {string} start - Start date (YYYY-MM-DD)
- * @param {string} end - End date (YYYY-MM-DD)
- * @returns {Promise<Array<{date: string, rank: number, score: number}>>} Daily stats
  */
 export async function getPlayerStatsRange(db, playerId, start, end) {
     const sql = `

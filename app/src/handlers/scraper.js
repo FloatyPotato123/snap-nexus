@@ -14,7 +14,7 @@
 
 import { getCurrentSeason, getSeasonStartForMonth } from '../utils/seasons.js';
 import { getLeaderboardKey } from '../utils/keys.js';
-import { batchUpsertPlayers, recordDailyTotal, recordPlayerStats } from '../utils/db.js';
+import { batchUpsertPlayers, recordDailyTotal, recordPlayerStats, batchGetIdsByNames } from '../utils/db.js';
 import { logError } from '../utils/errors.js';
 import {
     getLeaderboardApiUrl,
@@ -76,18 +76,30 @@ export async function runDailyScrape(env) {
         // 2. Save raw snapshot to KV for historical reference
         await env.MARVEL_SNAP_HUB.put(storageKey, JSON.stringify(data));
 
-        // 3. Update D1 search index        // a) Player names for search autocomplete
-        // This ensures search results are always up-to-date and aliases are tracked
+        // 3. Update D1 Search Index and Player Stats
+        // First, fetch existing player IDs for all names to ensure continuity if official IDs are missing
+        const allNames = leaderboard.map(p => p.name || p.playerName).filter(Boolean);
+        const existingIdMap = await batchGetIdsByNames(env.DB, allNames);
+
         const seenAt = now.toISOString().split('T')[0];
+        
+        // a) Player names for search autocomplete
         const playersToSync = leaderboard
-            .filter(p => {
-                const id = p.id || p.playerId;
-                return id && id !== 'undefined' && (p.name || p.playerName);
-            })
-            .map(p => ({
-                id: String(p.id || p.playerId),
-                name: p.name || p.playerName
-            }));
+            .filter(p => (p.name || p.playerName))
+            .map(p => {
+                const name = p.name || p.playerName;
+                let id = p.id || p.playerId;
+                
+                // Fallback: If no official ID, try to reuse an existing ID for this name
+                if (!id || id === 'undefined') {
+                    id = existingIdMap[name] || name;
+                }
+                
+                return {
+                    id: String(id),
+                    name: name
+                };
+            });
 
         if (playersToSync.length > 0) {
             await batchUpsertPlayers(env.DB, playersToSync, seenAt);
@@ -100,14 +112,20 @@ export async function runDailyScrape(env) {
         // b) Individual player ranks and scores for charts
         const statsEntries = leaderboard
             .map((p, index) => {
-                const id = p.id || p.playerId;
+                const name = p.name || p.playerName;
+                let id = p.id || p.playerId;
+                
+                if (!id || id === 'undefined') {
+                    id = existingIdMap[name] || name;
+                }
+                
                 return {
                     playerId: id ? String(id) : null,
                     rank: index + 1,
                     score: p.score
                 };
             })
-            .filter(s => s.playerId && s.playerId !== 'undefined');
+            .filter(s => s.playerId);
 
         if (statsEntries.length > 0) {
             await recordPlayerStats(env.DB, seenAt, statsEntries);

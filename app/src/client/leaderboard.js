@@ -94,15 +94,14 @@
             }
 
             return `
-                <tr class="leaderboard-row">
+                <tr class="leaderboard-row card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${encodeURIComponent(p.id)}?ref=leaderboard')">
                     <td class="rank-col">
-                        <div class="rank-container" style="display:flex; align-items:center;">
+                        <div class="rank-container">
                             <span class="rank-value">#${displayRank}</span>
-                            ${deltaHtml}
                         </div>
                     </td>
                     <td class="name-col">
-                        <span class="player-name">${escapeHtml(p.name)}</span>
+                        <a href="/player/${encodeURIComponent(p.id)}?ref=leaderboard" class="player-name" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${p.playerName || p.name}</a>
                     </td>
                     <td class="score-col">
                         ${(p.score || 0).toLocaleString()}

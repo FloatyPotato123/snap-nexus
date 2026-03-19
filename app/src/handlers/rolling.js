@@ -109,17 +109,25 @@ export async function runRollingScrape(env) {
  * Helper to resolve a player target (Name) against the rolling matrix.
  */
 async function resolvePlayer(target, matrix) {
-    const searchName = target.toLowerCase();
-    
-    // Exact match check
-    for (const name of Object.keys(matrix.players)) {
-        if (name.toLowerCase() === searchName) {
-            return { playerName: name };
-        }
+    if (!target || !matrix || !matrix.players) return { error: 'Invalid data' };
+
+    // 1. Direct O(1) Lookup (Most common case - exact case match)
+    if (matrix.players[target]) {
+        return { playerName: target };
     }
 
-    // Fuzzy match check (starts with)
-    const matches = Object.keys(matrix.players)
+    const searchName = target.toLowerCase();
+    const playerNames = Object.keys(matrix.players);
+    
+    // 2. Case-insensitive Exact Match
+    const exactCaseInsensitive = playerNames.find(name => name.toLowerCase() === searchName);
+    if (exactCaseInsensitive) {
+        return { playerName: exactCaseInsensitive };
+    }
+
+    // 3. Fuzzy match check (includes)
+    // Only perform this more expensive scan if exact matches failed
+    const matches = playerNames
         .filter(name => name.toLowerCase().includes(searchName))
         .sort((a, b) => a.length - b.length);
 
@@ -139,12 +147,20 @@ async function resolvePlayer(target, matrix) {
 export async function handleGetRollingHistory(c) {
     try {
         const name = c.req.query('name');
+        const id = c.req.query('id'); // Support existing profile links using 'id'
+        const target = name || id;
+        
         const history = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
         const matrix = history || { players: {} };
-
-        if (name) {
+        
+        if (target) {
+            // Check for exact matching or fuzzy match
+            const { playerName, error } = await resolvePlayer(target, matrix);
+            if (error) {
+                return c.json({ playerHistory: [] });
+            }
             return c.json({
-                playerHistory: matrix.players[name] || []
+                playerHistory: matrix.players[playerName] || []
             });
         }
 

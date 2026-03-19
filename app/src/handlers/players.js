@@ -11,9 +11,16 @@
 import {
     searchPlayers,
     getPlayerHistory,
+    getPlayerHistoryDeep,
+    getPlayerHistoryDeepStmt,
     getPlayerStatsRange,
+    getPlayerStatsRangeDeep,
+    getPlayerStatsRangeDeepStmt,
     batchGetPlayerHistories,
-    getPlayerHistoricalRanks
+    getPlayerHistoricalRanks,
+    getPlayerHistoricalRanksDeep,
+    getPlayerHistoricalRanksDeepStmt,
+    batchGetIdsByNames
 } from '../utils/db.js';
 import { getCurrentSeason, getSeasonStart, getSeasonEnd } from '../utils/seasons.js';
 import { getHistoricalSeasonEndKeys } from './history.js';
@@ -37,9 +44,9 @@ import {
  * @returns {string} Most recent player name or "Unknown"
  */
 function getCurrentNameFromHistory(history) {
-    if (!history || history.length === 0) return 'Unknown';
+    if (!history || history.length === 0) return null;
     // Database query already returns history ordered chronologically (ASC)
-    return history[history.length - 1].name || 'Unknown';
+    return history[history.length - 1].name || null;
 }
 
 /**
@@ -153,22 +160,35 @@ export async function handlePlayerHistory(c) {
             }
         }
 
-        // 4. Merge results and deduplicate by player ID
+        // 4. Merge results and deduplicate by NAME
+        // Since IDs are now unreliable (mix of official and name-based),
+        // we merge by normalized name to avoid confusing the user with duplicates.
         const finalResultsMap = new Map();
 
         // Add D1 results first
         for (const r of rawResults) {
-            finalResultsMap.set(r.id, {
+            const key = r.name.toLowerCase().trim();
+            finalResultsMap.set(key, {
                 id: r.id,
                 name: r.name,
                 source: 'db'
             });
         }
 
-        // Add live results (they take precedence or add new players)
+        // Add live results (they take precedence for rank and current name)
         for (const m of liveMatches) {
-            finalResultsMap.set(m.id, {
-                id: m.id,
+            const key = m.name.toLowerCase().trim();
+            const existing = finalResultsMap.get(key);
+            
+            // Prefer the official ID if we have it in D1, otherwise use the live ID
+            let finalId = m.id;
+            if (existing && existing.id.length > m.id.length) {
+                // Heuristic: longer IDs are usually the official ones
+                finalId = existing.id;
+            }
+
+            finalResultsMap.set(key, {
+                id: m.name, // Link to name-based profile for consistency
                 name: m.name,
                 source: 'live',
                 liveEntry: m.liveEntry
@@ -288,13 +308,22 @@ export async function handleGetPlayerProfile(c) {
         const historicalKeys = getHistoricalSeasonEndKeys();
         const historicalDates = historicalKeys.map(k => k.date);
 
-        // Parallel fetch all required data
-        const [history, d1Stats, d1HistoricalResults, { map: liveMap }] = await Promise.all([
-            getPlayerHistory(db, id),
-            getPlayerStatsRange(db, id, startDateStr, endDateStr),
-            getPlayerHistoricalRanks(db, id, historicalDates),
+        // 1. Prepare D1 statements for batching
+        const stmtHistory = getPlayerHistoryDeepStmt(db, id);
+        const stmtStats = getPlayerStatsRangeDeepStmt(db, id, startDateStr, endDateStr);
+        const stmtRanks = getPlayerHistoricalRanksDeepStmt(db, id, historicalDates);
+
+        // 2. Execute Batch D1 and Live Data concurrently
+        const [batchResults, { map: liveMap }] = await Promise.all([
+            db.batch([stmtHistory, stmtStats, stmtRanks].filter(Boolean)),
             getLiveLeaderboardData()
         ]);
+
+        // Unpack batch results (careful with ordering if some stmts were filtered)
+        // Since we know all 3 are returned for a valid target, we can unpack directly
+        let history = batchResults[0]?.results || [];
+        const d1Stats = batchResults[1]?.results || [];
+        const d1HistoricalResults = batchResults[2]?.results || [];
 
         // Format current season stats for frontend
         const currentSeasonStats = d1Stats.map(s => ({
@@ -314,15 +343,28 @@ export async function handleGetPlayerProfile(c) {
         });
 
         // Determine current name from history
-        const currentName = getCurrentNameFromHistory(history);
+        const currentName = getCurrentNameFromHistory(history) || (id.length < 30 ? id : "Unknown");
 
         // Get live stats if player is on current leaderboard
         let currentRank = null;
         let currentSP = null;
         let finalName = currentName;
 
-        if (liveMap.has(id)) {
-            const liveData = liveMap.get(id);
+        // Try direct ID lookup first
+        let liveData = liveMap.get(id);
+        
+        // If not found by ID, and ID looks like a name, try searching liveMap by name
+        if (!liveData && id.length < 30) {
+            const normalizedId = id.toLowerCase();
+            for (const entry of liveMap.values()) {
+                if (entry.name.toLowerCase() === normalizedId) {
+                    liveData = entry;
+                    break;
+                }
+            }
+        }
+
+        if (liveData) {
             currentRank = liveData.rank;
             currentSP = liveData.score;
             finalName = liveData.name;
@@ -336,10 +378,11 @@ export async function handleGetPlayerProfile(c) {
                     seenAt: new Date().toISOString().split('T')[0]
                 });
             }
+            history = safeHistory;
         }
 
         // Return 404 only if player has absolutely no data
-        if (!history || (history.length === 0 && !liveMap.has(id) && currentSeasonStats.length === 0)) {
+        if (!history || (history.length === 0 && !liveData && currentSeasonStats.length === 0)) {
             return notFoundResponse(c, ERROR_MESSAGES.PLAYER_NOT_FOUND);
         }
 

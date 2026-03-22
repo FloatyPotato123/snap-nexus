@@ -313,10 +313,25 @@ export async function handleGetPlayerProfile(c) {
         const stmtHistory = getPlayerHistoryDeepStmt(db, id);
         const stmtStats = getPlayerStatsRangeDeepStmt(db, id, startDateStr, endDateStr);
         const stmtRanks = getPlayerHistoricalRanksDeepStmt(db, id, historicalDates);
+        
+        // 4. Theoretical Overlap Detection (Same-Day Collision)
+        // We use a subquery to find if multiple IDs for this name were active on the SAME day.
+        const stmtOverlap = db.prepare(`
+            SELECT COUNT(*) as overlapDays
+            FROM (
+                SELECT s.date
+                FROM PlayerStats s
+                JOIN PlayerAliases a ON s.player_id = a.player_id
+                WHERE a.normalized_name = (SELECT normalized_name FROM Players WHERE id = ?)
+                AND s.date > date('now', '-30 days')
+                GROUP BY s.date
+                HAVING COUNT(DISTINCT s.player_id) > 1
+            )
+        `).bind(id);
 
         // 2. Execute Batch D1 and Live Data concurrently
         const [batchResults, { map: liveMap }, collisionsRaw] = await Promise.all([
-            db.batch([stmtHistory, stmtStats, stmtRanks].filter(Boolean)),
+            db.batch([stmtHistory, stmtStats, stmtRanks, stmtOverlap].filter(Boolean)),
             getLiveLeaderboardData(),
             c.env.MARVEL_SNAP_HUB.get(ROLLING_COLLISIONS_KV_KEY, { type: 'json' })
         ]);
@@ -390,20 +405,9 @@ export async function handleGetPlayerProfile(c) {
             return notFoundResponse(c, ERROR_MESSAGES.PLAYER_NOT_FOUND);
         }
 
-        // 3. Robust Collision Check (KV + D1 History)
-        let isCollision = !!collisions[finalName];
-        if (!isCollision) {
-            // Check D1 for historical collisions (multiple IDs for this name)
-            const collisionCheck = await db.prepare(`
-                SELECT COUNT(DISTINCT player_id) as idCount 
-                FROM PlayerAliases 
-                WHERE normalized_name = ?
-            `).bind(finalName.toLowerCase().trim()).first();
-            
-            if (collisionCheck && collisionCheck.idCount > 1) {
-                isCollision = true;
-            }
-        }
+        // 3. Collision Check (Live KV + Historical Overlap)
+        const d1OverlapResults = batchResults[3]?.results?.[0] || { overlapDays: 0 };
+        const isCollision = !!collisions[finalName.toLowerCase()] || (d1OverlapResults.overlapDays > 0);
 
         return c.json({
             id: id,

@@ -45,7 +45,10 @@ let liveLeaderboardCache = { timestamp: 0, data: new Map(), total: 0 };
 export async function getLiveLeaderboardData() {
     const now = Date.now();
 
-    // Always fetch fresh data as requested
+    if (liveLeaderboardCache && now - liveLeaderboardCache.timestamp < LIVE_LEADERBOARD_CACHE_TTL_MS) {
+        const c = liveLeaderboardCache;
+        return { map: c.data, total: c.total, collisions: c.collisions };
+    }
 
     const { year, month } = getCurrentSeason(new Date());
     const apiUrl = getLeaderboardApiUrl(month, year);
@@ -53,10 +56,10 @@ export async function getLiveLeaderboardData() {
     try {
         const res = await fetch(apiUrl);
 
-        // If API fails, return stale cache
         if (!res.ok) {
             logError('[Leaderboard]', new Error(`API returned ${res.status}`));
-            return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
+            const c = liveLeaderboardCache || { data: new Map(), total: 0, collisions: new Set() };
+            return { map: c.data, total: c.total, collisions: c.collisions };
         }
 
         const data = await res.json();
@@ -101,7 +104,8 @@ export async function getLiveLeaderboardData() {
     } catch (error) {
         logError('[Leaderboard]', error, { apiUrl });
         // Return stale cache on error
-        return { map: liveLeaderboardCache.data, total: liveLeaderboardCache.total };
+        const c = liveLeaderboardCache || { data: new Map(), total: 0, collisions: new Set() };
+        return { map: c.data, total: c.total, collisions: c.collisions };
     }
 }
 
@@ -326,29 +330,26 @@ export async function handleLeaderboardComparison(c) {
  */
 export async function handleGetLiveLeaderboard(c) {
     try {
-        // 1. Fetch Live Data
-        const { map, total } = await getLiveLeaderboardData();
+        // 1 & 2. Fetch Live Data and Rolling 24h History in parallel for performance
+        const [liveData, rollingRaw] = await Promise.all([
+            getLiveLeaderboardData(),
+            c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' })
+        ]);
 
-        // 2. Fetch Rolling 24h History for comparison
-        const rollingRaw = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
+        const { map, total, collisions } = liveData;
         const rollingPlayers = rollingRaw?.players || {};
 
         // 3. Build Previous Rank Map from the OLDEST entry in rolling history
-        // Optimization: Only scan if we have rolling history and map has players
         const prevRankMap = new Map();
         if (rollingPlayers && map.size > 0) {
-            for (const name in rollingPlayers) {
-                // Only care about players who are currently on the leaderboard
-                // This drastically reduces work if rolling history has many inactive players
-                if (!map.has(name)) {
-                    // We might still need it if the ID in map is a guid but the name matches
-                    // However, we key everything by name in rollingPlayers.
-                }
-
-                const history = rollingPlayers[name];
-                if (history && history.length === ROLLING_HISTORY_SIZE && history[0] !== null) {
+            // Iterate over current live players and find their starting rank in the 24h window
+            for (const p of map.values()) {
+                const cleanName = (p.name || '').trim();
+                const history = rollingPlayers[cleanName];
+                // Use the oldest available point in the current window (usually history[0])
+                if (history && history.length > 0 && history[0] !== null) {
                     const [sp, rank] = history[0];
-                    prevRankMap.set(name, rank);
+                    prevRankMap.set(cleanName, rank);
                 }
             }
         }
@@ -357,7 +358,8 @@ export async function handleGetLiveLeaderboard(c) {
         const results = Array.from(map.values())
             .sort((a, b) => a.rank - b.rank)
             .map(p => {
-                const prevRank = prevRankMap.get(p.name);
+                const cleanName = (p.name || '').trim();
+                const prevRank = prevRankMap.get(cleanName);
                 // A player is "new" if they weren't in the Top 1000 at the START of the 24h window.
                 const isNew = !prevRank;
                 

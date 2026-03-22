@@ -187,9 +187,11 @@
             document.title = `${data.name} | Snap Nexus`;
             
             // Collision Warning
+            const warning = document.getElementById('collisionWarning');
             if (data.isCollision) {
-                const warning = document.getElementById('collisionWarning');
                 if (warning) warning.classList.remove('d-none');
+            } else {
+                if (warning) warning.classList.add('d-none');
             }
 
             if (data.currentRank) {

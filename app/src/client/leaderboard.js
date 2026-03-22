@@ -85,11 +85,11 @@
 
             let deltaHtml = '';
             if (!isHistorical && p.isNew) {
-                deltaHtml = `<span class="new-icon" title="New In Top 1000" style="margin-left: 8px; font-size: 0.9rem; vertical-align: middle;">✨</span>`;
+                deltaHtml = `<span class="indicator-new" title="New In Top 1000" style="margin-left: 8px; font-size: 0.9rem; vertical-align: middle;">✨</span>`;
             } else if (!isHistorical && p.delta !== 0 && p.delta !== undefined) {
                 const isUp = p.delta > 0;
                 const icon = isUp ? '▲' : '▼';
-                const colorClass = isUp ? 'gainer' : 'loser';
+                const colorClass = isUp ? 'delta-up' : 'delta-down';
                 deltaHtml = `<span class="rank-delta ${colorClass}" style="margin-left:8px; font-size:0.8rem; font-weight:bold;">${icon}${Math.abs(p.delta)}</span>`;
             }
 
@@ -98,6 +98,7 @@
                     <td class="rank-col">
                         <div class="rank-container">
                             <span class="rank-value">#${displayRank}</span>
+                            ${deltaHtml}
                         </div>
                     </td>
                     <td class="name-col">

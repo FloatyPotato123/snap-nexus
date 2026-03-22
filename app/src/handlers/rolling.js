@@ -32,7 +32,9 @@ export async function runRollingScrape(env) {
         if (!matrix.collisions) matrix.collisions = {};
 
         // --- MIGRATION: Convert ID-based keys to Name-based keys ---
-        // ... (lines 35-44 unchanged)
+        // This block handles cases where a player ID might have been replaced by a name
+        // in the live data, but the history still holds the old ID.
+        // It attempts to transfer the history from the old ID to the new name.
         for (const [pid, entry] of liveMap.entries()) {
             if (matrix.players[pid] && pid !== entry.name) {
                 if (!matrix.players[entry.name]) {
@@ -50,8 +52,8 @@ export async function runRollingScrape(env) {
             }
         }
 
-        // Prune old collision markers (older than 24h + small buffer)
-        const collisionExpiry = nowMs - (24 * 60 * 60 * 1000 + 600000);
+        // Prune old collision markers (older than 30 days + small buffer)
+        const collisionExpiry = nowMs - (30 * 24 * 60 * 60 * 1000 + 600000); // 30 days + 10 mins buffer
         for (const name in matrix.collisions) {
             if (matrix.collisions[name] < collisionExpiry) {
                 delete matrix.collisions[name];

@@ -61,30 +61,43 @@ export async function getLiveLeaderboardData() {
 
         const data = await res.json();
         const newMap = new Map();
+        const collisions = new Set();
+        const seenNames = new Set();
 
         if (data?.results) {
             data.results.forEach((entry, index) => {
                 const rank = index + 1;
+                const name = entry.playerName || entry.name;
                 let id = String(entry.id || entry.playerId || '');
                 
-                // Fallback to name-based ID if real ID is missing to prevent Map collision
-                if (!id || id === 'undefined' || id === '') {
-                    id = entry.playerName || entry.name;
+                // Track collisions (names that appear more than once)
+                if (name) {
+                    if (seenNames.has(name)) {
+                        collisions.add(name);
+                    }
+                    seenNames.add(name);
                 }
 
+                // Fallback to name-based ID if real ID is missing to prevent Map collision
+                if (!id || id === 'undefined' || id === '') {
+                    id = name;
+                }
+
+                // If collision exists, the Map will naturally keep the LAST one processed
+                // but we'll have marked the name as a collision for downstream logic.
                 newMap.set(id, {
                     id,
                     rank,
-                    name: entry.playerName || entry.name,
+                    name,
                     score: entry.score
                 });
             });
         }
 
         const globalTotal = data?.total || 0;
-        liveLeaderboardCache = { timestamp: now, data: newMap, total: globalTotal };
+        liveLeaderboardCache = { timestamp: now, data: newMap, total: globalTotal, collisions };
 
-        return { map: newMap, total: globalTotal };
+        return { map: newMap, total: globalTotal, collisions };
     } catch (error) {
         logError('[Leaderboard]', error, { apiUrl });
         // Return stale cache on error
@@ -186,7 +199,12 @@ export async function handleLeaderboardComparison(c) {
             }
 
             // 1. Calculate Gainers (Those in rolling history)
+            const collisions = rollingRaw?.collisions || {};
+
             for (const [name, history] of Object.entries(rollingPlayers)) {
+                // EXCLUSION: If this name is a known collision, skip it for movers
+                if (collisions[name]) continue;
+
                 const liveEntry = liveNameMap.get(name);
                 if (!liveEntry) continue;
 

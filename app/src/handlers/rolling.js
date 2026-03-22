@@ -23,23 +23,38 @@ import { logError } from '../utils/errors.js';
  */
 export async function runRollingScrape(env) {
     try {
-        // 1. Fetch current top 1000
-        const { map: liveMap } = await getLiveLeaderboardData();
+        // 1. Fetch current top 1000 and identify collisions
+        const { map: liveMap, collisions: currentCollisions } = await getLiveLeaderboardData();
 
         // 2. Load existing history from KV
         const rawHistory = await env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
-        const matrix = rawHistory || { players: {} };
+        const matrix = rawHistory || { players: {}, collisions: {} };
+        if (!matrix.collisions) matrix.collisions = {};
 
         // --- MIGRATION: Convert ID-based keys to Name-based keys ---
-        // We do this by checking if any key in the matrix is an ID found in the current live map
+        // ... (lines 35-44 unchanged)
         for (const [pid, entry] of liveMap.entries()) {
             if (matrix.players[pid] && pid !== entry.name) {
-                // If we have history for this ID but no history for this Name yet, migrate it
                 if (!matrix.players[entry.name]) {
                     matrix.players[entry.name] = matrix.players[pid];
                 }
-                // Stop tracking the ID explicitly
                 delete matrix.players[pid];
+            }
+        }
+
+        // --- UPDATE COLLISIONS ---
+        const nowMs = Date.now();
+        if (currentCollisions && currentCollisions.size > 0) {
+            for (const name of currentCollisions) {
+                matrix.collisions[name.toLowerCase()] = nowMs;
+            }
+        }
+
+        // Prune old collision markers (older than 24h + small buffer)
+        const collisionExpiry = nowMs - (24 * 60 * 60 * 1000 + 600000);
+        for (const name in matrix.collisions) {
+            if (matrix.collisions[name] < collisionExpiry) {
+                delete matrix.collisions[name];
             }
         }
 
@@ -49,10 +64,8 @@ export async function runRollingScrape(env) {
             ...Array.from(liveMap.values()).map(p => p.name)
         ]);
 
-        // Create a map of name -> liveEntry for quick lookup
         const liveNameMap = new Map();
         for (const entry of liveMap.values()) {
-            // In case of duplicates, keep the one with the better rank
             if (!liveNameMap.has(entry.name) || entry.rank < liveNameMap.get(entry.name).rank) {
                 liveNameMap.set(entry.name, entry);
             }
@@ -61,8 +74,6 @@ export async function runRollingScrape(env) {
         for (const name of allPlayerNames) {
             // Skip any remaining legacy IDs that didn't match current live players
             if (name.includes('-') && !liveNameMap.has(name)) {
-                // This looks like a legacy ID (e.g. rank-123 or a long hex ID)
-                // If it's not on the current leaderboard, let it die
                 delete matrix.players[name];
                 continue;
             }
@@ -70,31 +81,33 @@ export async function runRollingScrape(env) {
             const history = matrix.players[name] || [];
             const liveEntry = liveNameMap.get(name);
 
-            // Append new data point: [sp, rank] or null
             if (liveEntry) {
                 history.push([liveEntry.score, liveEntry.rank]);
             } else {
                 history.push(null);
             }
 
-            // Prune to history size
             if (history.length > ROLLING_HISTORY_SIZE) {
                 history.shift();
             }
 
-            // Cleanup: If player has been out of top 1000 for full window, delete them
             const isFullyNull = history.every(v => v === null);
             if (isFullyNull) {
                 delete matrix.players[name];
+                // Also clean up collision marker if player is gone from history
+                delete matrix.collisions[name];
             } else {
                 matrix.players[name] = history;
             }
         }
 
-        // 4. Save back to KV
-        await env.MARVEL_SNAP_HUB.put(ROLLING_HISTORY_KV_KEY, JSON.stringify(matrix));
+        // 4. Save back to KV (Big matrix for Movers/Charts, Small object for Profile warnings)
+        await Promise.all([
+            env.MARVEL_SNAP_HUB.put(ROLLING_HISTORY_KV_KEY, JSON.stringify(matrix)),
+            env.MARVEL_SNAP_HUB.put(ROLLING_COLLISIONS_KV_KEY, JSON.stringify(matrix.collisions))
+        ]);
 
-        console.log(`[Rolling Scraper] Success: Updated 24h history for ${Object.keys(matrix.players).length} player names`);
+        console.log(`[Rolling Scraper] Success: Updated 24h history (${Object.keys(matrix.players).length} names) and collisions (${Object.keys(matrix.collisions).length} names)`);
 
     } catch (error) {
         logError('[Rolling Scraper]', error);

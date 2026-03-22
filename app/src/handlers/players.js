@@ -30,7 +30,8 @@ import { logError } from '../utils/errors.js';
 import { errorResponse, notFoundResponse, badRequestResponse } from '../utils/response.js';
 import {
     SEARCH_RESULT_LIMIT_DEFAULT,
-    ERROR_MESSAGES
+    ERROR_MESSAGES,
+    ROLLING_COLLISIONS_KV_KEY
 } from '../config.js';
 
 // ============================================================================
@@ -314,11 +315,14 @@ export async function handleGetPlayerProfile(c) {
         const stmtRanks = getPlayerHistoricalRanksDeepStmt(db, id, historicalDates);
 
         // 2. Execute Batch D1 and Live Data concurrently
-        const [batchResults, { map: liveMap }] = await Promise.all([
+        const [batchResults, { map: liveMap }, collisionsRaw] = await Promise.all([
             db.batch([stmtHistory, stmtStats, stmtRanks].filter(Boolean)),
-            getLiveLeaderboardData()
+            getLiveLeaderboardData(),
+            c.env.MARVEL_SNAP_HUB.get(ROLLING_COLLISIONS_KV_KEY, { type: 'json' })
         ]);
 
+        const collisions = collisionsRaw || {};
+        
         // Unpack batch results (careful with ordering if some stmts were filtered)
         // Since we know all 3 are returned for a valid target, we can unpack directly
         let history = batchResults[0]?.results || [];
@@ -386,6 +390,21 @@ export async function handleGetPlayerProfile(c) {
             return notFoundResponse(c, ERROR_MESSAGES.PLAYER_NOT_FOUND);
         }
 
+        // 3. Robust Collision Check (KV + D1 History)
+        let isCollision = !!collisions[finalName];
+        if (!isCollision) {
+            // Check D1 for historical collisions (multiple IDs for this name)
+            const collisionCheck = await db.prepare(`
+                SELECT COUNT(DISTINCT player_id) as idCount 
+                FROM PlayerAliases 
+                WHERE normalized_name = ?
+            `).bind(finalName.toLowerCase().trim()).first();
+            
+            if (collisionCheck && collisionCheck.idCount > 1) {
+                isCollision = true;
+            }
+        }
+
         return c.json({
             id: id,
             name: finalName,
@@ -393,7 +412,8 @@ export async function handleGetPlayerProfile(c) {
             currentSP,
             history: history || [],
             currentSeasonStats,
-            historicalSeasonRanks: historicalRanks
+            historicalSeasonRanks: historicalRanks,
+            isCollision: isCollision
         });
 
     } catch (error) {

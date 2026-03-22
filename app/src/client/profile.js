@@ -185,6 +185,12 @@
             }
 
             document.title = `${data.name} | Snap Nexus`;
+            
+            // Collision Warning
+            if (data.isCollision) {
+                const warning = document.getElementById('collisionWarning');
+                if (warning) warning.classList.remove('d-none');
+            }
 
             if (data.currentRank) {
                 $('pCoreStats').classList.remove('d-none');

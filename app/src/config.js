@@ -90,6 +90,11 @@ export const SEASON_ROLLOVER_BUFFER_MINUTES = 15;
 export const ROLLING_HISTORY_KV_KEY = 'leaderboard:rolling_24h';
 
 /**
+ * KV key for currently flagged name collisions (names shared by multiple players)
+ */
+export const ROLLING_COLLISIONS_KV_KEY = 'leaderboard:collisions';
+
+/**
  * Frequency of rolling updates (in minutes)
  */
 export const ROLLING_HISTORY_FREQUENCY_MINS = 5;

@@ -9,9 +9,8 @@ import { handleRandomDeck, handleStressDeck, handleDecodeDeck } from "./handlers
 import {
     handleLeaderboard,
     handleLeaderboardComparison,
-    handleGetLiveLeaderboard,
-    handleGetRollingDebug,
-    handleDebugSnapshot
+    handleLiveLeaderboard,
+    handleGetRollingDebug
 } from "./handlers/leaderboard.js";
 import {
     handlePlayerHistory,
@@ -71,15 +70,19 @@ api.get("/player/:id", (c) => handleGetPlayerProfile(c));
 api.get("/cards/new-releases", (c) => getWeeklyCardReleases(c));
 api.get("/season/stats", (c) => handleHistoryRange(c));
 api.get("/leaderboard/daily", (c) => handleLeaderboard(c));
-api.get("/leaderboard/live", (c) => handleGetLiveLeaderboard(c));
+api.get("/leaderboard/live", (c) => handleLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/seasons", (c) => handleSeasonHistory(c));
 api.get("/leaderboard/rolling", (c) => handleGetRollingHistory(c));
 api.get("/debug/rolling", (c) => handleGetRollingDebug(c));
-api.get("/debug/snapshot", (c) => handleDebugSnapshot(c));
 
 // Mount API under /api
 app.route("/api", api);
+
+app.onError((err, c) => {
+    console.error('[Global Error]:', err);
+    return c.json({ error: 'Internal Server Error', message: err.message }, 500);
+});
 
 export default {
     fetch: app.fetch,

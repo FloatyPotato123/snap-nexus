@@ -24,7 +24,7 @@ import {
 } from '../utils/db.js';
 import { getCurrentSeason, getSeasonStart, getSeasonEnd } from '../utils/seasons.js';
 import { getHistoricalSeasonEndKeys } from './history.js';
-import { getLiveLeaderboardData } from './leaderboard.js';
+import { getLiveLeaderboardData } from '../utils/live-data.js';
 import { logError } from '../utils/errors.js';
 
 import { errorResponse, notFoundResponse, badRequestResponse } from '../utils/response.js';

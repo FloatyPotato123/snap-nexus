@@ -11,6 +11,7 @@
 import { getLeaderboardKey } from '../utils/keys.js';
 import { getCurrentSeason } from '../utils/seasons.js';
 import { logError } from '../utils/errors.js';
+import { getLiveLeaderboardData } from '../utils/live-data.js';
 
 import { errorResponse, notFoundResponse, badRequestResponse } from '../utils/response.js';
 import {
@@ -18,96 +19,15 @@ import {
     TOP_MOVERS_LIMIT,
     ROLLING_HISTORY_KV_KEY,
     ROLLING_HISTORY_SIZE,
+    ROLLING_COLLISIONS_KV_KEY,
     getLeaderboardApiUrl,
     ERROR_MESSAGES
 } from '../config.js';
 
-// ============================================================================
-// Cache State
-// ============================================================================
+const ROLLING_SHARD_COUNT = 10;
+const getShardKey = (id) => `${ROLLING_HISTORY_KV_KEY}_shard_${id}`;
+const MOVERS_CACHE_KEY = 'leaderboard:movers_cache_v3';
 
-/**
- * In-memory cache for live leaderboard data
- * @type {{timestamp: number, data: Map<string, Object>, total: number}}
- */
-let liveLeaderboardCache = { timestamp: 0, data: new Map(), total: 0 };
-
-// ============================================================================
-// Helper Functions
-// ============================================================================
-
-/**
- * Fetches live Top 1000 ranks and global Infinite total from the official API.
- * Results are cached for 1 minute to reduce API calls.
- * 
- * @returns {Promise<{map: Map<string, {id: string, rank: number, name: string, score: number}>, total: number}>}
- */
-export async function getLiveLeaderboardData() {
-    const now = Date.now();
-
-    if (liveLeaderboardCache && now - liveLeaderboardCache.timestamp < LIVE_LEADERBOARD_CACHE_TTL_MS) {
-        const c = liveLeaderboardCache;
-        return { map: c.data, total: c.total, collisions: c.collisions };
-    }
-
-    const { year, month } = getCurrentSeason(new Date());
-    const apiUrl = getLeaderboardApiUrl(month, year);
-
-    try {
-        const res = await fetch(apiUrl);
-
-        if (!res.ok) {
-            logError('[Leaderboard]', new Error(`API returned ${res.status}`));
-            const c = liveLeaderboardCache || { data: new Map(), total: 0, collisions: new Set() };
-            return { map: c.data, total: c.total, collisions: c.collisions };
-        }
-
-        const data = await res.json();
-        const newMap = new Map();
-        const collisions = new Set();
-        const seenNames = new Set();
-
-        if (data?.results) {
-            data.results.forEach((entry, index) => {
-                const rank = index + 1;
-                const name = entry.playerName || entry.name;
-                let id = String(entry.id || entry.playerId || '');
-                
-                // Track collisions (names that appear more than once)
-                if (name) {
-                    if (seenNames.has(name)) {
-                        collisions.add(name);
-                    }
-                    seenNames.add(name);
-                }
-
-                // Fallback to name-based ID if real ID is missing to prevent Map collision
-                if (!id || id === 'undefined' || id === '') {
-                    id = name;
-                }
-
-                // If collision exists, the Map will naturally keep the LAST one processed
-                // but we'll have marked the name as a collision for downstream logic.
-                newMap.set(id, {
-                    id,
-                    rank,
-                    name,
-                    score: entry.score
-                });
-            });
-        }
-
-        const globalTotal = data?.total || 0;
-        liveLeaderboardCache = { timestamp: now, data: newMap, total: globalTotal, collisions };
-
-        return { map: newMap, total: globalTotal, collisions };
-    } catch (error) {
-        logError('[Leaderboard]', error, { apiUrl });
-        // Return stale cache on error
-        const c = liveLeaderboardCache || { data: new Map(), total: 0, collisions: new Set() };
-        return { map: c.data, total: c.total, collisions: c.collisions };
-    }
-}
 
 // ============================================================================
 // API Handlers
@@ -184,45 +104,51 @@ export async function handleLeaderboardComparison(c) {
     }
 
     try {
-        let movers = [];
+        const nowMs = Date.now();
         let liveTotal = 0;
+        const movers = [];
 
         if (type === 'rolling') {
-            const [rollingRaw, liveData] = await Promise.all([
-                c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' }),
-                getLiveLeaderboardData()
-            ]);
-            liveTotal = liveData.total;
-            const liveMap = liveData.map;
-            const rollingPlayers = rollingRaw?.players || {};
-
-            // Create a name-based lookup for current live players
-            const liveNameMap = new Map();
-            for (const p of liveMap.values()) {
-                liveNameMap.set(p.name, p);
+            // 1. Try to fetch from cache first
+            const cachedData = await c.env.MARVEL_SNAP_HUB.get(MOVERS_CACHE_KEY, { type: 'json' });
+            if (cachedData && (nowMs - cachedData.updatedAt < 300000)) { // 5 minutes cache
+                return c.json(cachedData.data);
             }
 
-            // 1. Calculate Gainers (Those in rolling history)
-            const collisions = rollingRaw?.collisions || {};
+            // 2. Cache miss: Load all shards + live data
+            const shardKeys = Array.from({length: ROLLING_SHARD_COUNT}, (_, i) => getShardKey(i));
+            const [shardRaws, liveData, collisionsRaw] = await Promise.all([
+                Promise.all(shardKeys.map(k => c.env.MARVEL_SNAP_HUB.get(k, { type: 'json' }))),
+                getLiveLeaderboardData(),
+                c.env.MARVEL_SNAP_HUB.get(ROLLING_COLLISIONS_KV_KEY, { type: 'json' })
+            ]);
 
+            const collisions = collisionsRaw || {};
+            liveTotal = liveData.total;
+            const liveMap = liveData.map;
+            const liveNameMap = new Map();
+            for (const p of liveMap.values()) liveNameMap.set(p.name, p);
+
+            // Merge shards
+            const rollingPlayers = {};
+            for (const s of shardRaws) {
+                if (s?.players) Object.assign(rollingPlayers, s.players);
+            }
+
+            // Calculate Movers
             for (const [name, history] of Object.entries(rollingPlayers)) {
-                // EXCLUSION: If this name is a known collision, skip it for movers
                 if (collisions[name]) continue;
-
                 const liveEntry = liveNameMap.get(name);
                 if (!liveEntry) continue;
 
-                // For gainer delta/sparkline, we use the oldest available non-null entry
                 const oldestEntry = history.find(e => e !== null);
                 if (oldestEntry) {
-                    const [oldSP, oldRank] = oldestEntry;
-                    const diff = liveEntry.score - oldSP;
-
+                    const diff = liveEntry.score - oldestEntry[0];
                     movers.push({
                         name: liveEntry.name,
                         id: liveEntry.id,
                         change: diff,
-                        spStart: oldSP,
+                        spStart: oldestEntry[0],
                         spEnd: liveEntry.score,
                         rank: liveEntry.rank
                     });
@@ -253,16 +179,26 @@ export async function handleLeaderboardComparison(c) {
             }
             newOnBoard.sort((a, b) => a.rank - b.rank);
 
-            // Sort by change (descending)
+            // Sort and Split Movers
             movers.sort((a, b) => b.change - a.change);
+            const topGainers = movers.filter(m => m.change > 0).slice(0, 100);
+            const topLosers = movers.filter(m => m.change < 0).reverse().slice(0, 100);
 
-            return c.json({
-                topGainers: movers.filter(m => m.change > 0).slice(0, TOP_MOVERS_LIMIT),
-                newOnBoard: newOnBoard.slice(0, TOP_MOVERS_LIMIT),
-                date1: 'rolling',
-                date2: 'rolling',
-                totalInfinitePlayers: liveTotal
-            });
+            // 4. Return and Cache results
+            const result = {
+                topGainers,
+                topLosers,
+                newOnBoard: newOnBoard.sort((a, b) => a.rank - b.rank).slice(0, 50),
+                total: liveTotal,
+                updatedAt: nowMs
+            };
+
+            await c.env.MARVEL_SNAP_HUB.put(MOVERS_CACHE_KEY, JSON.stringify({
+                updatedAt: nowMs,
+                data: result
+            }));
+
+            return c.json(result);
         } else {
             // Original snapshot-based comparison
             const [d1, d2, liveData] = await Promise.all([
@@ -328,28 +264,33 @@ export async function handleLeaderboardComparison(c) {
  * @param {Object} c - Hono context
  * @returns {Promise<Response>} JSON response with live leaderboard and deltas
  */
-export async function handleGetLiveLeaderboard(c) {
+export async function handleLiveLeaderboard(c) {
     try {
-        // 1 & 2. Fetch Live Data and Rolling 24h History in parallel for performance
-        const [liveData, rollingRaw] = await Promise.all([
+        // 1 & 2. Fetch Live Data and all shards in parallel
+        const shardKeys = Array.from({length: ROLLING_SHARD_COUNT}, (_, i) => getShardKey(i));
+        const [liveData, shardRaws] = await Promise.all([
             getLiveLeaderboardData(),
-            c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' })
+            Promise.all(shardKeys.map(k => c.env.MARVEL_SNAP_HUB.get(k, { type: 'json' })))
         ]);
 
-        const { map, total, collisions } = liveData;
-        const rollingPlayers = rollingRaw?.players || {};
+        const { map, total } = liveData;
+        
+        // Merge shards
+        const rollingPlayers = {};
+        for (const s of shardRaws) {
+            if (s?.players) Object.assign(rollingPlayers, s.players);
+        }
 
         // 3. Build Previous Rank Map from the OLDEST entry in rolling history
         const prevRankMap = new Map();
         if (rollingPlayers && map.size > 0) {
-            // Iterate over current live players and find their starting rank in the 24h window
             for (const p of map.values()) {
-                const cleanName = (p.name || '').trim();
-                const history = rollingPlayers[cleanName];
-                // Use the oldest available point in the current window (usually history[0])
-                if (history && history.length > 0 && history[0] !== null) {
-                    const [sp, rank] = history[0];
-                    prevRankMap.set(cleanName, rank);
+                const history = rollingPlayers[p.name];
+                if (history && history.length > 0) {
+                    const oldestEntry = history.find(e => e !== null);
+                    if (oldestEntry && oldestEntry[1] !== undefined) {
+                        prevRankMap.set(p.name, oldestEntry[1]); // Index 1 is Rank
+                    }
                 }
             }
         }
@@ -378,8 +319,9 @@ export async function handleGetLiveLeaderboard(c) {
             total
         });
     } catch (error) {
+        console.error('[Live Leaderboard Error]:', error);
         logError('[Live Leaderboard]', error);
-        return errorResponse(c, ERROR_MESSAGES.LEADERBOARD_ERROR);
+        return errorResponse(c, error.message || ERROR_MESSAGES.LEADERBOARD_ERROR);
     }
 }
 
@@ -396,36 +338,4 @@ export async function handleGetRollingDebug(c) {
     }
 }
 
-/**
- * GET /api/debug/snapshot
- * 
- * Debug endpoint to inspect yesterday's snapshot data.
- * 
- * @param {Object} c - Hono context
- * @returns {Promise<Response>} JSON response with snapshot metadata
- */
-export async function handleDebugSnapshot(c) {
-    const yesterday = new Date();
-    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-    const yKey = getLeaderboardKey(yesterday);
 
-    try {
-        const prevData = await c.env.MARVEL_SNAP_HUB.get(yKey, { type: 'json' });
-
-        if (!prevData) {
-            return c.json({ error: 'No data for yesterday', key: yKey });
-        }
-
-        // Show top 5 raw entries for inspection
-        const sample = prevData.results ? prevData.results.slice(0, 5) : [];
-
-        return c.json({
-            key: yKey,
-            total: prevData.results ? prevData.results.length : 0,
-            sample: sample
-        });
-    } catch (error) {
-        logError('[Debug Snapshot]', error, { key: yKey });
-        return errorResponse(c, 'Failed to fetch snapshot');
-    }
-}

@@ -7,9 +7,22 @@
  * NOTE: Switched to Name-based tracking due to removal of Player IDs from API.
  */
 
-import { getLiveLeaderboardData } from './leaderboard.js';
-import { ROLLING_HISTORY_KV_KEY, ROLLING_HISTORY_SIZE, ROLLING_HISTORY_FREQUENCY_MINS } from '../config.js';
+import { getLiveLeaderboardData } from '../utils/live-data.js';
+import { ROLLING_HISTORY_KV_KEY, ROLLING_HISTORY_SIZE, ROLLING_HISTORY_FREQUENCY_MINS, ROLLING_COLLISIONS_KV_KEY } from '../config.js';
 import { logError } from '../utils/errors.js';
+
+// --- SHARDING CONFIG ---
+const ROLLING_SHARD_COUNT = 10;
+const getShardID = (name) => {
+    if (!name) return 0;
+    let hash = 0;
+    for (let i = 0; i < name.length; i++) {
+        hash = ((hash << 5) - hash) + name.charCodeAt(i);
+        hash |= 0; // Convert to 32bit integer
+    }
+    return Math.abs(hash) % ROLLING_SHARD_COUNT;
+};
+const getShardKey = (id) => `${ROLLING_HISTORY_KV_KEY}_shard_${id}`;
 
 // ============================================================================
 // Scraper Logic
@@ -23,49 +36,44 @@ import { logError } from '../utils/errors.js';
  */
 export async function runRollingScrape(env) {
     try {
-        // 1. Fetch current top 1000 and identify collisions
+        // 1. Fetch live leaderboard data
         const { map: liveMap, collisions: currentCollisions } = await getLiveLeaderboardData();
+        const nowMs = Date.now();
+        
+        // 2. Fetch all shards + legacy matrix in parallel
+        const shardKeys = Array.from({length: ROLLING_SHARD_COUNT}, (_, i) => getShardKey(i));
+        const [legacyMatrix, ...shards] = await Promise.all([
+            env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' }),
+            ...shardKeys.map(key => env.MARVEL_SNAP_HUB.get(key, { type: 'json' }))
+        ]);
 
-        // 2. Load existing history from KV
-        const rawHistory = await env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
-        const matrix = rawHistory || { players: {}, collisions: {} };
-        if (!matrix.collisions) matrix.collisions = {};
+        // 3. Initialize/Prepare Shards
+        const activeShards = shards.map((s, i) => s || { players: {}, updatedAt: 0, shardID: i });
+        const collisions = legacyMatrix?.collisions || {};
 
-        // --- MIGRATION: Convert ID-based keys to Name-based keys ---
-        // This block handles cases where a player ID might have been replaced by a name
-        // in the live data, but the history still holds the old ID.
-        // It attempts to transfer the history from the old ID to the new name.
-        for (const [pid, entry] of liveMap.entries()) {
-            if (matrix.players[pid] && pid !== entry.name) {
-                if (!matrix.players[entry.name]) {
-                    matrix.players[entry.name] = matrix.players[pid];
+        // 4. MIGRATION: Move players from legacy matrix into proper shards
+        if (legacyMatrix?.players) {
+            for (const [name, history] of Object.entries(legacyMatrix.players)) {
+                const sid = getShardID(name);
+                if (!activeShards[sid].players[name]) {
+                    activeShards[sid].players[name] = history;
                 }
-                delete matrix.players[pid];
             }
+
         }
 
         // --- UPDATE COLLISIONS ---
-        const nowMs = Date.now();
         if (currentCollisions && currentCollisions.size > 0) {
             for (const name of currentCollisions) {
-                matrix.collisions[name.toLowerCase()] = nowMs;
+                collisions[name.toLowerCase()] = nowMs;
             }
         }
-
-        // Prune old collision markers (older than 30 days + small buffer)
-        const collisionExpiry = nowMs - (30 * 24 * 60 * 60 * 1000 + 600000); // 30 days + 10 mins buffer
-        for (const name in matrix.collisions) {
-            if (matrix.collisions[name] < collisionExpiry) {
-                delete matrix.collisions[name];
-            }
+        const collisionExpiry = nowMs - (30 * 24 * 60 * 60 * 1000);
+        for (const name in collisions) {
+            if (collisions[name] < collisionExpiry) delete collisions[name];
         }
 
-        // 3. Update matrix for each player name present in either live data or history
-        const allPlayerNames = new Set([
-            ...Object.keys(matrix.players),
-            ...Array.from(liveMap.values()).map(p => p.name)
-        ]);
-
+        // 5. Build live name map for easier lookup
         const liveNameMap = new Map();
         for (const entry of liveMap.values()) {
             if (!liveNameMap.has(entry.name) || entry.rank < liveNameMap.get(entry.name).rank) {
@@ -73,46 +81,89 @@ export async function runRollingScrape(env) {
             }
         }
 
-        for (const name of allPlayerNames) {
-            // Skip any remaining legacy IDs that didn't match current live players
-            if (name.includes('-') && !liveNameMap.has(name)) {
-                delete matrix.players[name];
-                continue;
-            }
+        // 6. Update Players across all shards
+        const updatedShardIndices = new Set();
+        const allNamesToUpdate = new Set([
+            ...activeShards.flatMap(s => Object.keys(s.players)),
+            ...Array.from(liveNameMap.keys())
+        ]);
 
-            const history = matrix.players[name] || [];
-            const liveEntry = liveNameMap.get(name);
-
-            if (liveEntry) {
-                history.push([liveEntry.score, liveEntry.rank]);
-            } else {
-                history.push(null);
-            }
-
-            if (history.length > ROLLING_HISTORY_SIZE) {
-                history.shift();
-            }
-
-            const isFullyNull = history.every(v => v === null);
-            if (isFullyNull) {
-                delete matrix.players[name];
-                // Also clean up collision marker if player is gone from history
-                delete matrix.collisions[name];
-            } else {
-                matrix.players[name] = history;
+        // 5. GLOBAL MIGRATION: Find any old numeric IDs in ALL shards and link them to Names
+        // This handles cases where ID and Name map to different shards.
+        const idToHistoryMap = new Map();
+        for (const shard of Object.values(activeShards)) {
+            for (const [key, history] of Object.entries(shard.players)) {
+                if (/^\d+$/.test(key)) { // It is a numeric ID
+                    idToHistoryMap.set(key, history);
+                }
             }
         }
 
-        // 4. Save back to KV (Big matrix for Movers/Charts, Small object for Profile warnings)
-        await Promise.all([
-            env.MARVEL_SNAP_HUB.put(ROLLING_HISTORY_KV_KEY, JSON.stringify(matrix)),
-            env.MARVEL_SNAP_HUB.put(ROLLING_COLLISIONS_KV_KEY, JSON.stringify(matrix.collisions))
-        ]);
+        // 6. Process live players 
+        for (const entry of liveMap.values()) {
+            const playerName = entry.name;
+            const playerID = entry.id;
+            if (!playerName) continue;
 
-        console.log(`[Rolling Scraper] Success: Updated 24h history (${Object.keys(matrix.players).length} names) and collisions (${Object.keys(matrix.collisions).length} names)`);
+            const sid = getShardID(playerName);
+            const activeShard = activeShards[sid];
+            
+            // If Name has no history, try to pull from the ID-to-History map
+            if (!activeShard.players[playerName] && playerID && idToHistoryMap.has(playerID)) {
+                activeShard.players[playerName] = idToHistoryMap.get(playerID);
+                updatedShardIndices.add(sid);
+                // Mark the old ID for deletion in its original shard
+                const oldSid = getShardID(playerID); // This might be wrong logic but actually we just delete all numeric IDs later
+            }
+
+            let history = activeShard.players[playerName] || new Array(ROLLING_HISTORY_SIZE).fill(null);
+            
+            // Shift left and add new point
+            history.shift();
+            history.push([entry.score, entry.rank]);
+
+            if (history.every(v => v === null)) {
+                delete activeShard.players[playerName];
+            } else {
+                activeShard.players[playerName] = history;
+            }
+            updatedShardIndices.add(sid);
+        }
+
+        // 7. CLEANUP: Delete ALL numeric ID keys from ALL shards (Legacy Cleanup)
+        for (const [sidStr, shard] of Object.entries(activeShards)) {
+            const sid = parseInt(sidStr);
+            let shardChanged = false;
+            for (const key of Object.keys(shard.players)) {
+                if (/^\d+$/.test(key)) {
+                    delete shard.players[key];
+                    shardChanged = true;
+                }
+            }
+            if (shardChanged) {
+                updatedShardIndices.add(sid);
+            }
+        }
+
+        // 7. Save modified shards back to KV
+        const savePromises = [];
+        for (const idx of updatedShardIndices) {
+            const shard = activeShards[idx];
+            shard.updatedAt = nowMs;
+            savePromises.push(env.MARVEL_SNAP_HUB.put(getShardKey(idx), JSON.stringify(shard)));
+        }
+
+        savePromises.push(env.MARVEL_SNAP_HUB.put(ROLLING_COLLISIONS_KV_KEY, JSON.stringify(collisions)));
+        if (legacyMatrix) {
+            savePromises.push(env.MARVEL_SNAP_HUB.delete(ROLLING_HISTORY_KV_KEY));
+        }
+
+        await Promise.all(savePromises);
+        return { success: true };
 
     } catch (error) {
         logError('[Rolling Scraper]', error);
+        return { error: error.message };
     }
 }
 
@@ -121,36 +172,39 @@ export async function runRollingScrape(env) {
 // ============================================================================
 
 /**
- * Helper to resolve a player target (Name) against the rolling matrix.
+ * Helper to resolve a player target (Name) against shards.
  */
-async function resolvePlayer(target, matrix) {
-    if (!target || !matrix || !matrix.players) return { error: 'Invalid data' };
+async function resolvePlayerInShards(target, env) {
+    if (!target) return { error: 'Invalid data' };
 
-    // 1. Direct O(1) Lookup (Most common case - exact case match)
-    if (matrix.players[target]) {
-        return { playerName: target };
-    }
-
-    const searchName = target.toLowerCase();
-    const playerNames = Object.keys(matrix.players);
+    // 1. Try deterministic shard first (Hash lookup)
+    const sid = getShardID(target);
+    const primaryShard = await env.MARVEL_SNAP_HUB.get(getShardKey(sid), { type: 'json' });
     
-    // 2. Case-insensitive Exact Match
-    const exactCaseInsensitive = playerNames.find(name => name.toLowerCase() === searchName);
-    if (exactCaseInsensitive) {
-        return { playerName: exactCaseInsensitive };
+    if (primaryShard?.players?.[target]) {
+        return { playerName: target, matrix: primaryShard };
     }
 
-    // 3. Fuzzy match check (includes)
-    // Only perform this more expensive scan if exact matches failed
-    const matches = playerNames
-        .filter(name => name.toLowerCase().includes(searchName))
-        .sort((a, b) => a.length - b.length);
+    // 2. Case-insensitive exact match in primary shard
+    const searchName = target.toLowerCase();
+    if (primaryShard?.players) {
+        const exactMatch = Object.keys(primaryShard.players).find(n => n.toLowerCase() === searchName);
+        if (exactMatch) return { playerName: exactMatch, matrix: primaryShard };
+    }
 
-    if (matches.length > 1) {
-        const list = matches.slice(0, 5).join(', ');
-        return { error: truncate(`${list}. Specify unique name.`) };
-    } else if (matches.length === 1) {
-        return { playerName: matches[0] };
+    // 3. Fallback: Search ALL shards (Slow, but only for fuzzy/bad case matches)
+    const shardKeys = Array.from({length: ROLLING_SHARD_COUNT}, (_, i) => getShardKey(i));
+    const allShards = await Promise.all(shardKeys.map(k => env.MARVEL_SNAP_HUB.get(k, { type: 'json' })));
+    
+    for (const shard of allShards) {
+        if (!shard?.players) continue;
+        const playerNames = Object.keys(shard.players);
+        
+        const exactMatch = playerNames.find(n => n.toLowerCase() === searchName);
+        if (exactMatch) return { playerName: exactMatch, matrix: shard };
+
+        const fuzzy = playerNames.find(n => n.toLowerCase().includes(searchName));
+        if (fuzzy) return { playerName: fuzzy, matrix: shard };
     }
 
     return { error: `Player "${target}" not found in recent history.` };
@@ -162,24 +216,31 @@ async function resolvePlayer(target, matrix) {
 export async function handleGetRollingHistory(c) {
     try {
         const name = c.req.query('name');
-        const id = c.req.query('id'); // Support existing profile links using 'id'
+        const id = c.req.query('id'); 
         const target = name || id;
-        
-        const history = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
-        const matrix = history || { players: {} };
-        
+
         if (target) {
-            // Check for exact matching or fuzzy match
-            const { playerName, error } = await resolvePlayer(target, matrix);
+            const { playerName, matrix, error } = await resolvePlayerInShards(target, c.env);
             if (error) {
-                return c.json({ playerHistory: [] });
+                return c.json({ playerHistory: [], updatedAt: 0 });
             }
             return c.json({
-                playerHistory: matrix.players[playerName] || []
+                playerHistory: matrix.players[playerName],
+                updatedAt: matrix.updatedAt
             });
         }
 
-        return c.json(matrix);
+        // Default: Return all shards merged (Slow, but only used for debugging/internal)
+        const shardKeys = Array.from({length: ROLLING_SHARD_COUNT}, (_, i) => getShardKey(i));
+        const allShards = await Promise.all(shardKeys.map(k => c.env.MARVEL_SNAP_HUB.get(k, { type: 'json' })));
+        
+        const merged = { players: {}, updatedAt: 0 };
+        for (const s of allShards) {
+            if (!s) continue;
+            Object.assign(merged.players, s.players);
+            if (s.updatedAt > merged.updatedAt) merged.updatedAt = s.updatedAt;
+        }
+        return c.json(merged);
     } catch (error) {
         logError('[Rolling API]', error);
         return c.json({ error: 'Failed to fetch history' }, 500);
@@ -194,10 +255,7 @@ export async function handleGetPlayerPlaytime(c) {
     if (!q) return c.text("Error: Missing query parameter 'q'");
 
     try {
-        const historyData = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
-        const matrix = historyData || { players: {} };
-
-        const { error, playerName } = await resolvePlayer(q, matrix);
+        const { playerName, matrix, error } = await resolvePlayerInShards(q, c.env);
         if (error) return c.text(error);
 
         const history = matrix.players[playerName];
@@ -248,10 +306,7 @@ export async function handleGetPlayerSparkline(c) {
     if (!target) return c.text("Error: Missing player name");
 
     try {
-        const historyData = await c.env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' });
-        const matrix = historyData || { players: {} };
-
-        const { error, playerName } = await resolvePlayer(target, matrix);
+        const { playerName, matrix, error } = await resolvePlayerInShards(target, c.env);
         if (error) return c.text(error);
 
         let history = matrix.players[playerName];

@@ -84,11 +84,32 @@
                 const rollReq = await fetch(`/api/leaderboard/rolling?id=${State.playerId}`);
                 if (rollReq.ok) {
                     const rollData = await rollReq.json();
-                    State.rollingHistory = rollData.playerHistory || [];
-                    
-                    if (State.liveStats && State.liveStats.sp && State.liveStats.rank) {
-                        State.rollingHistory.push([State.liveStats.sp, State.liveStats.rank]);
+                    let history = rollData.playerHistory || [];
+                    const updatedAt = rollData.updatedAt || 0;
+
+                    // Time-aware merging: if history is stale, fill with nulls up to 'now'
+                    if (updatedAt > 0 && State.liveStats && State.liveStats.sp && State.liveStats.rank) {
+                        const now = Date.now();
+                        const diffMs = now - updatedAt;
+                        const intervals = Math.floor(diffMs / (5 * 60 * 1000));
+                        
+                        // If we are more than 1 interval behind, fill with nulls
+                        if (intervals > 0) {
+                            for(let i=0; i<intervals; i++) {
+                                history.push(null);
+                            }
+                        }
+                        
+                        // Limit to 24h size (288 * 5 mins)
+                        if (history.length > 288) {
+                            history = history.slice(history.length - 288);
+                        }
+                        
+                        // Append live stats as the "now" point
+                        history.push([State.liveStats.sp, State.liveStats.rank]);
                     }
+
+                    State.rollingHistory = history;
                     
                     if (State.rollingHistory.length > 0) {
                         UI.toggleChartDisplay('rolling', true);
@@ -520,9 +541,10 @@
             const ctx = chartEl.getContext('2d');
             if (State.rollingChartInstance) State.rollingChartInstance.destroy();
 
-            // Generate labels (HH:MM) chronologically ending at the current 5-minute mark
+            // Generate labels (HH:MM) chronologically ending at NOW
             const now = new Date();
-            now.setMinutes(Math.floor(now.getMinutes() / 5) * 5, 0, 0);
+            // Round down to nearest minute for stability
+            now.setSeconds(0, 0);
             
             const labels = [];
             for (let i = history.length - 1; i >= 0; i--) {

@@ -102,20 +102,11 @@ export async function runRollingScrape(env) {
         // 6. Process live players 
         for (const entry of liveMap.values()) {
             const playerName = entry.name;
-            const playerID = entry.id;
             if (!playerName) continue;
 
             const sid = getShardID(playerName);
             const activeShard = activeShards[sid];
             
-            // If Name has no history, try to pull from the ID-to-History map
-            if (!activeShard.players[playerName] && playerID && idToHistoryMap.has(playerID)) {
-                activeShard.players[playerName] = idToHistoryMap.get(playerID);
-                updatedShardIndices.add(sid);
-                // Mark the old ID for deletion in its original shard
-                const oldSid = getShardID(playerID); // This might be wrong logic but actually we just delete all numeric IDs later
-            }
-
             let history = activeShard.players[playerName] || new Array(ROLLING_HISTORY_SIZE).fill(null);
             
             // Shift left and add new point

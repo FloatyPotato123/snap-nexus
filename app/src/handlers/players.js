@@ -161,39 +161,50 @@ export async function handlePlayerHistory(c) {
             }
         }
 
-        // 4. Merge results and deduplicate by NAME
-        // Since IDs are now unreliable (mix of official and name-based),
-        // we merge by normalized name to avoid confusing the user with duplicates.
+        // 4. Merge results and deduplicate by Current Owner to separate different players with shared names
         const finalResultsMap = new Map();
-
-        // Add D1 results first
-        for (const r of rawResults) {
-            const key = r.name.toLowerCase().trim();
-            finalResultsMap.set(key, {
-                id: r.id,
-                name: r.name,
-                source: 'db'
-            });
-        }
-
-        // Add live results (they take precedence for rank and current name)
-        for (const m of liveMatches) {
-            const key = m.name.toLowerCase().trim();
-            const existing = finalResultsMap.get(key);
+        
+        // Helper to find the "identity key" for a result
+        const getIdentityKey = async (resName, resId) => {
+            const { results: owner } = await db.prepare(`
+                SELECT id FROM Players WHERE normalized_name = ?
+            `).bind(resName.toLowerCase().trim()).all();
             
-            // Prefer the official ID if we have it in D1, otherwise use the live ID
-            let finalId = m.id;
-            if (existing && existing.id.length > m.id.length) {
-                // Heuristic: longer IDs are usually the official ones
-                finalId = existing.id;
-            }
+            // If the name is currently owned by someone (like a UUID), use that as the key
+            if (owner && owner.length > 0) return owner[0].id;
+            // Otherwise, the ID itself is the identity
+            return resId;
+        };
 
-            finalResultsMap.set(key, {
-                id: m.name, // Link to name-based profile for consistency
-                name: m.name,
-                source: 'live',
-                liveEntry: m.liveEntry
-            });
+        // Process all results (DB + Live)
+        const combinedRaw = [
+            ...rawResults.map(r => ({ ...r, source: 'db' })),
+            ...liveMatches.map(m => ({ ...m, source: 'live' }))
+        ];
+
+        for (const r of combinedRaw) {
+            const idKey = await getIdentityKey(r.name, r.id);
+            const existing = finalResultsMap.get(idKey);
+            
+            // Resolve the current display identity for this person
+            const { results: ownerInfo } = await db.prepare(`
+                SELECT name FROM Players WHERE id = ?
+            `).bind(idKey).all();
+            const currentName = ownerInfo?.[0]?.name || r.name;
+            
+            // The display ID should be the current name for pretty URLs
+            const displayId = currentName;
+
+            const useNew = !existing || (displayId.length > (existing.id?.length || 0));
+            if (useNew) {
+                finalResultsMap.set(idKey, {
+                    id: displayId,
+                    name: r.name, // Keep the matched name for context
+                    source: r.source,
+                    liveEntry: r.liveEntry || existing?.liveEntry,
+                    currentName: currentName
+                });
+            }
         }
 
         const uniqueResults = Array.from(finalResultsMap.values()).slice(0, limit);
@@ -229,7 +240,7 @@ export async function handlePlayerHistory(c) {
             }
 
             enrichedResults.push({
-                id: p.id,
+                id: p.id, // This is the 'displayId' (currentName)
                 name: currentName,
                 currentRank: currentRank,
                 history: history
@@ -272,7 +283,7 @@ export async function handlePlayerHistory(c) {
  * @returns {Promise<Response>} JSON response with player profile data
  */
 export async function handleGetPlayerProfile(c) {
-    const id = c.req.param('id');
+    let id = c.req.param('id');
     const qMonth = c.req.query('month');
     const qYear = c.req.query('year');
 
@@ -284,6 +295,63 @@ export async function handleGetPlayerProfile(c) {
     const db = c.env.DB;
 
     try {
+        // Resolve Name to ID if needed (Current Name Ownership)
+        // If the ID is not a UUID (i.e. it's a display name), find the current owner
+        const isLikelyName = id.length < 30 && !/^[0-9a-fA-F-]+$/.test(id);
+        const normalizedInput = id.toLowerCase();
+        let queryIds = [id];
+        let primaryId = id;
+
+        if (isLikelyName) {
+            // 1. Resolve Name -> Current Owner (UUID or Name-ID)
+            const { results: owners } = await db.prepare(`
+                SELECT id, name FROM Players WHERE normalized_name = ?
+            `).bind(normalizedInput).all();
+
+            if (owners && owners.length > 0) {
+                primaryId = owners[0].id;
+                queryIds = [primaryId, id];
+            } else {
+                // 2. Check for Modern Stats before falling back to aliases
+                // If the name ALREADY has recent stats, don't bridge to a legacy UUID
+                const { results: modernStats } = await db.prepare(`
+                    SELECT COUNT(*) as count FROM PlayerStats 
+                    WHERE player_id = ? AND date > date('now', '-30 days')
+                `).bind(id).all();
+
+                if (modernStats?.[0]?.count === 0) {
+                    // Fallback only if no modern stats exist
+                    const { results: fallback } = await db.prepare(`
+                        SELECT player_id as id FROM PlayerAliases 
+                        WHERE normalized_name = ? 
+                        ORDER BY first_seen_at DESC LIMIT 1
+                    `).bind(normalizedInput).all();
+                    if (fallback && fallback.length > 0) {
+                        primaryId = fallback[0].id;
+                        queryIds = [primaryId, id];
+                    }
+                }
+            }
+        }
+
+        // 3. Recursive Bridging: If we found a UUID, find ITS current name to catch name-based stats
+        const finalPrimaryId = primaryId;
+        if (finalPrimaryId.length >= 30 || /^[0-9a-fA-F-]+$/.test(finalPrimaryId)) {
+            const { results: current } = await db.prepare(`
+                SELECT name FROM Players WHERE id = ?
+            `).bind(finalPrimaryId).all();
+            if (current && current.length > 0) {
+                const currentName = current[0].name;
+                if (currentName && currentName !== finalPrimaryId) {
+                    queryIds.push(currentName);
+                }
+            }
+        }
+
+        // Deduplicate query IDs
+        queryIds = [...new Set(queryIds.filter(Boolean))];
+        primaryId = finalPrimaryId;
+
         // Determine which season's stats to fetch
         let targetDate;
         if (qMonth && qYear) {
@@ -310,9 +378,9 @@ export async function handleGetPlayerProfile(c) {
         const historicalDates = historicalKeys.map(k => k.date);
 
         // 1. Prepare D1 statements for batching
-        const stmtHistory = getPlayerHistoryDeepStmt(db, id);
-        const stmtStats = getPlayerStatsRangeDeepStmt(db, id, startDateStr, endDateStr);
-        const stmtRanks = getPlayerHistoricalRanksDeepStmt(db, id, historicalDates);
+        const stmtHistory = getPlayerHistoryDeepStmt(db, queryIds);
+        const stmtStats = getPlayerStatsRangeDeepStmt(db, queryIds, startDateStr, endDateStr);
+        const stmtRanks = getPlayerHistoricalRanksDeepStmt(db, queryIds, historicalDates);
         
         // 4. Theoretical Overlap Detection (Same-Day Collision)
         // We use a subquery to find if multiple IDs for this name were active on the SAME day.
@@ -327,7 +395,7 @@ export async function handleGetPlayerProfile(c) {
                 GROUP BY s.date
                 HAVING COUNT(DISTINCT s.player_id) > 1
             )
-        `).bind(id);
+        `).bind(primaryId);
 
         // 2. Execute Batch D1 and Live Data concurrently
         const [batchResults, { map: liveMap }, collisionsRaw] = await Promise.all([
@@ -362,24 +430,33 @@ export async function handleGetPlayerProfile(c) {
         });
 
         // Determine current name from history
-        const currentName = getCurrentNameFromHistory(history) || (id.length < 30 ? id : "Unknown");
+        const currentName = getCurrentNameFromHistory(history) || (primaryId.length < 30 ? primaryId : "Unknown");
 
         // Get live stats if player is on current leaderboard
         let currentRank = null;
         let currentSP = null;
         let finalName = currentName;
 
-        // Try direct ID lookup first
-        let liveData = liveMap.get(id);
+        // Try all query IDs in liveMap
+        let liveData = null;
+        for (const qId of queryIds) {
+            liveData = liveMap.get(qId);
+            if (liveData) break;
+        }
         
-        // If not found by ID, and ID looks like a name, try searching liveMap by name
-        if (!liveData && id.length < 30) {
-            const normalizedId = id.toLowerCase();
-            for (const entry of liveMap.values()) {
-                if (entry.name.toLowerCase() === normalizedId) {
-                    liveData = entry;
-                    break;
+        // If not found by ID, and any ID looks like a name, try searching liveMap by name
+        if (!liveData) {
+            for (const qId of queryIds) {
+                if (qId.length < 30) {
+                    const normalizedId = qId.toLowerCase();
+                    for (const entry of liveMap.values()) {
+                        if (entry.name.toLowerCase() === normalizedId) {
+                            liveData = entry;
+                            break;
+                        }
+                    }
                 }
+                if (liveData) break;
             }
         }
 
@@ -410,7 +487,7 @@ export async function handleGetPlayerProfile(c) {
         const isCollision = !!collisions[finalName.toLowerCase()] || (d1OverlapResults.overlapDays > 0);
 
         return c.json({
-            id: id,
+            id: primaryId,
             name: finalName,
             currentRank,
             currentSP,

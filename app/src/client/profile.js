@@ -248,7 +248,11 @@
 
             if (historyCard) historyCard.classList.remove('d-none');
 
-            const historyList = [...history].sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
+            const currentName = ($('pName').dataset.rawName || '').toLowerCase().trim();
+            const historyList = [...history]
+                .filter(h => h.name && h.name.toLowerCase().trim() !== currentName)
+                .sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
+            
             const { escapeHtml } = window.SnapUtils;
             let html = historyList.map((h, i) => {
                 const isCurrent = i === 0;
@@ -260,6 +264,12 @@
                     </div>
                 `;
             }).join('');
+            
+            if (historyList.length === 0) {
+                if (historyCard) historyCard.classList.add('d-none');
+                return;
+            }
+
             $('historyTimeline').innerHTML = html;
         },
 
@@ -687,7 +697,10 @@
                     interaction: { mode: 'index', intersect: false },
                     scales: {
                         x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
-                        y: this.getRankAxis(true),
+                        y: {
+                            ...this.getRankAxis(true),
+                            suggestedMax: undefined // Let historical ranks scale freely
+                        },
                         y1: this.getSPAxis(minSP, maxSP, 'right', false)
                     }
                 }

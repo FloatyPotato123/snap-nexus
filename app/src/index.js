@@ -74,7 +74,6 @@ api.get("/leaderboard/live", (c) => handleLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/seasons", (c) => handleSeasonHistory(c));
 api.get("/leaderboard/rolling", (c) => handleGetRollingHistory(c));
-api.get("/debug/rolling", (c) => handleGetRollingDebug(c));
 
 // Mount API under /api
 app.route("/api", api);

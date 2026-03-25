@@ -35,13 +35,11 @@ export async function searchPlayers(db, query, limit = 10) {
 
     const normalized = query.toLowerCase();
 
-    // Deduplicate by name and prioritize older "real" IDs if they exist
-    // We group by normalized_name to collapse duplicates
+    // Return unique IDs that match the name
     const sql = `
-        SELECT MIN(player_id) as id, name
+        SELECT player_id as id, name
         FROM PlayerSearch 
         WHERE PlayerSearch MATCH ? 
-        GROUP BY LOWER(TRIM(name))
         ORDER BY rank
         LIMIT ?
     `;
@@ -132,37 +130,33 @@ export async function batchUpsertPlayers(db, players, seenAt) {
 // ============================================================================
 
 /**
- * Returns a bound statement for the merged name history.
+ * Returns a bound statement for the deep history lookup.
  */
-export function getPlayerHistoryDeepStmt(db, playerId) {
-    if (!playerId) return null;
+export function getPlayerHistoryDeepStmt(db, playerIds) {
+    if (!playerIds || playerIds.length === 0) return null;
+    const placeholders = playerIds.map(() => '?').join(',');
     const sql = `
         SELECT name, MIN(first_seen_at) as seenAt 
         FROM PlayerAliases 
-        WHERE player_id IN (
-            SELECT player_id FROM PlayerAliases WHERE normalized_name IN (
-                SELECT normalized_name FROM PlayerAliases WHERE player_id = ? OR normalized_name = ?
-            )
-        )
+        WHERE player_id IN (${placeholders})
         AND name != 'Unknown'
         GROUP BY name
         ORDER BY seenAt ASC
     `;
-    const normalizedId = playerId.toLowerCase();
-    return db.prepare(sql).bind(playerId, normalizedId);
+    return db.prepare(sql).bind(...playerIds);
 }
 
 /**
- * Retrieves the merged name history for a player and all their aliases.
+ * Retrieves the full name history for a player including all aliases.
  */
-export async function getPlayerHistoryDeep(db, playerId) {
-    const stmt = getPlayerHistoryDeepStmt(db, playerId);
+export async function getPlayerHistoryDeep(db, playerIds) {
+    const stmt = getPlayerHistoryDeepStmt(db, Array.isArray(playerIds) ? playerIds : [playerIds]);
     if (!stmt) return [];
     try {
         const { results } = await stmt.all();
         return results || [];
     } catch (error) {
-        logError('[DB History Deep]', error, { playerId });
+        logError('[DB History Deep]', error, { playerIds });
         return [];
     }
 }
@@ -226,32 +220,24 @@ export async function batchGetIdsByNames(db, names) {
     for (let i = 0; i < names.length; i += BATCH_SIZE) {
         const chunk = names.slice(i, i + BATCH_SIZE);
         const placeholders = chunk.map(() => '?').join(',');
+        
+        // Prioritize the ID that CURRENTLY has this name in the Players table.
+        // This stops us from pulling in "Gamer" just because they used the name months ago.
         const sql = `
-            SELECT normalized_name as name, player_id 
-            FROM PlayerAliases 
+            SELECT id as player_id, normalized_name as name
+            FROM Players
             WHERE normalized_name IN (${placeholders})
         `;
 
         try {
             const { results } = await db.prepare(sql).bind(...chunk).all();
             (results || []).forEach(row => {
-                const nameKey = row.name;
-                if (!map[nameKey]) map[nameKey] = [];
-                if (!map[nameKey].includes(row.player_id)) {
-                    map[nameKey].push(row.player_id);
-                }
+                map[row.name] = row.player_id;
             });
         } catch (error) {
             logError('[DB Batch Get IDs]', error, { chunkIndex: i, nameCount: names.length });
         }
     }
-
-    // Collapse multi-ID results into the most stable ID (heuristic)
-    Object.keys(map).forEach(name => {
-        // Return only the most stable ID (shortest or first seen)
-        // For the scraper's purpose, we just need ONE consistent ID
-        map[name] = map[name].sort((a, b) => b.length - a.length)[0];
-    });
 
     return map;
 }
@@ -261,27 +247,22 @@ export async function batchGetIdsByNames(db, names) {
 // ============================================================================
 
 /**
- * Returns a bound statement for the historical ranks lookup.
+ * Returns a bound statement for historical season ranks deep lookup.
  */
-export function getPlayerHistoricalRanksDeepStmt(db, playerId, dates) {
-    if (!dates || dates.length === 0) return null;
-
-    const placeholders = dates.map(() => '?').join(',');
+export function getPlayerHistoricalRanksDeepStmt(db, playerIds, dates) {
+    if (!playerIds || playerIds.length === 0 || !dates || dates.length === 0) return null;
+    const idPlaceholders = playerIds.map(() => '?').join(',');
+    const datePlaceholders = dates.map(() => '?').join(',');
     const sql = `
         SELECT date, MIN(rank) as rank, MAX(score) as sp
-        FROM PlayerStats
-        WHERE player_id IN (
-            SELECT player_id FROM PlayerAliases WHERE normalized_name IN (
-                SELECT normalized_name FROM PlayerAliases WHERE player_id = ? OR normalized_name = ?
-            )
-        )
-        AND date IN (${placeholders})
+        FROM PlayerStats 
+        WHERE player_id IN (${idPlaceholders})
+        AND date IN (${datePlaceholders})
         GROUP BY date
         ORDER BY date ASC
     `;
 
-    const normalizedId = playerId.toLowerCase();
-    return db.prepare(sql).bind(playerId, normalizedId, ...dates);
+    return db.prepare(sql).bind(...playerIds, ...dates);
 }
 
 /**
@@ -325,22 +306,19 @@ export async function getPlayerHistoricalRanks(db, playerId, dates) {
 /**
  * Returns a bound statement for the stats range lookup.
  */
-export function getPlayerStatsRangeDeepStmt(db, playerId, start, end) {
+export function getPlayerStatsRangeDeepStmt(db, playerIds, start, end) {
+    if (!playerIds || playerIds.length === 0) return null;
+    const placeholders = playerIds.map(() => '?').join(',');
     const sql = `
         SELECT date, MIN(rank) as rank, MAX(score) as score 
         FROM PlayerStats 
-        WHERE player_id IN (
-            SELECT player_id FROM PlayerAliases WHERE normalized_name IN (
-                SELECT normalized_name FROM PlayerAliases WHERE player_id = ? OR normalized_name = ?
-            )
-        )
+        WHERE player_id IN (${placeholders})
         AND date BETWEEN ? AND ?
         GROUP BY date
         ORDER BY date ASC
     `;
 
-    const normalizedId = playerId.toLowerCase();
-    return db.prepare(sql).bind(playerId, normalizedId, start, end);
+    return db.prepare(sql).bind(...playerIds, start, end);
 }
 
 /**

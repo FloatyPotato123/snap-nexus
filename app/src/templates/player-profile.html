@@ -169,6 +169,29 @@
         <!-- Tab 2: Rolling 24h -->
         <div id="tab-p-rolling" class="tab-content d-none">
             <article>
+                <header class="grid">
+                    <div id="rollingStatsSummary" class="rolling-summary-grid d-none"></div>
+                    <div class="text-right flex-end-gap">
+                        <button id="shareRollingGraphBtn" class="btn-icon-only"
+                            onclick="SnapProfile.copyRollingGraphImage()" title="Copy Image">
+                            <!-- Default: Copy/Camera -->
+                            <svg id="copyRollingIcon" class="icon-svg" viewBox="0 0 24 24">
+                                <path
+                                    d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+                                <circle cx="12" cy="13" r="3" />
+                            </svg>
+                            <!-- Success: Check -->
+                            <svg id="copyRollingSuccessIcon" class="icon-svg d-none" viewBox="0 0 24 24">
+                                <polyline points="20 6 9 17 4 12"></polyline>
+                            </svg>
+                            <!-- Error: X -->
+                            <svg id="copyRollingErrorIcon" class="icon-svg d-none" viewBox="0 0 24 24">
+                                <line x1="18" y1="6" x2="6" y2="18"></line>
+                                <line x1="6" y1="6" x2="18" y2="18"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </header>
                 <div id="rollingChartContainer" class="chart-container">
                     <canvas id="rollingChart"></canvas>
                     <div id="noRollingStats" class="status-msg d-none">No live activity tracked for this player in the last 24h.</div>

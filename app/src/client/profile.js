@@ -78,7 +78,7 @@
             UI.renderBasicInfo(data);
             State.liveStats = { rank: data.currentRank, sp: data.currentSP };
             UI.renderHistory(data.history || []);
-            
+
             // 2. Load Rolling History (24h Window)
             try {
                 const rollReq = await fetch(`/api/leaderboard/rolling?id=${State.playerId}`);
@@ -92,25 +92,25 @@
                         const now = Date.now();
                         const diffMs = now - updatedAt;
                         const intervals = Math.floor(diffMs / (5 * 60 * 1000));
-                        
+
                         // If we are more than 1 interval behind, fill with nulls
                         if (intervals > 0) {
-                            for(let i=0; i<intervals; i++) {
+                            for (let i = 0; i < intervals; i++) {
                                 history.push(null);
                             }
                         }
-                        
+
                         // Limit to 24h size (288 * 5 mins)
                         if (history.length > 288) {
                             history = history.slice(history.length - 288);
                         }
-                        
+
                         // Append live stats as the "now" point
                         history.push([State.liveStats.sp, State.liveStats.rank]);
                     }
 
                     State.rollingHistory = history;
-                    
+
                     if (State.rollingHistory.length > 0) {
                         UI.toggleChartDisplay('rolling', true);
                         Charts.renderRollingChart(State.rollingHistory);
@@ -206,7 +206,7 @@
             }
 
             document.title = `${data.name} | Snap Nexus`;
-            
+
             // Collision Warning
             const warning = document.getElementById('collisionWarning');
             if (data.isCollision) {
@@ -252,7 +252,7 @@
             const historyList = [...history]
                 .filter(h => h.name && h.name.toLowerCase().trim() !== currentName)
                 .sort((a, b) => new Date(b.seenAt) - new Date(a.seenAt));
-            
+
             const { escapeHtml } = window.SnapUtils;
             let html = historyList.map((h, i) => {
                 const isCurrent = i === 0;
@@ -264,7 +264,7 @@
                     </div>
                 `;
             }).join('');
-            
+
             if (historyList.length === 0) {
                 if (historyCard) historyCard.classList.add('d-none');
                 return;
@@ -343,7 +343,7 @@
             const daysBetween = (d2, d1) => Math.round((new Date(d2) - new Date(d1)) / 86400000);
 
             let allStats = [...(stats || [])];
-            
+
             // 1. Inject live data if it's newer than the last recorded stat
             if (State.liveStats && State.liveStats.sp) {
                 const today = new Date().toISOString().split('T')[0];
@@ -555,7 +555,7 @@
             const now = new Date();
             // Round down to nearest minute for stability
             now.setSeconds(0, 0);
-            
+
             const labels = [];
             for (let i = history.length - 1; i >= 0; i--) {
                 const d = new Date(now.getTime() - (i * 5 * 60 * 1000));
@@ -564,6 +564,40 @@
 
             const spData = history.map(h => h ? h[0] : null);
             const rankData = history.map(h => h ? h[1] : null);
+
+            // Update 24h Summary in UI
+            const summaryEl = $('rollingStatsSummary');
+            if (summaryEl) {
+                const valid = history.filter(h => h && h[0] !== null);
+                if (valid.length >= 2) {
+                    const start = valid[0];
+                    const end = valid[valid.length - 1];
+                    const spDelta = end[0] - start[0];
+                    const rankDelta = start[1] - end[1];
+
+                    const spDeltaStr = (spDelta >= 0 ? '+' : '') + spDelta.toLocaleString();
+                    const rankDeltaStr = (rankDelta >= 0 ? '+' : '') + rankDelta.toLocaleString();
+
+                    const spColor = '#ffcc00';
+                    const rankColor = '#2196F3';
+
+                    summaryEl.innerHTML = `
+                        <div class="rolling-summary-flex">
+                            <div class="rolling-summary-item">
+                                <span class="label" style="color: ${rankColor}">Rank</span>
+                                <div class="value">${rankDeltaStr} <span class="range">(#${start[1].toLocaleString()} → #${end[1].toLocaleString()})</span></div>
+                            </div>
+                            <div class="rolling-summary-item">
+                                <span class="label" style="color: ${spColor}">SP</span>
+                                <div class="value">${spDeltaStr} <span class="range">(${start[0].toLocaleString()} → ${end[0].toLocaleString()})</span></div>
+                            </div>
+                        </div>
+                    `;
+                    summaryEl.classList.remove('d-none');
+                } else {
+                    summaryEl.classList.add('d-none');
+                }
+            }
 
             let allSPs = spData.filter(v => v !== null);
             let minSP, maxSP;
@@ -624,17 +658,17 @@
                                 maxRotation: 0,
                                 autoSkip: false, // Turn off autoSkip to take manual control
                                 font: { size: isMobile ? 10 : 12 },
-                                callback: function(val, index) {
+                                callback: function (val, index) {
                                     // Manually determine which labels to show
                                     const total = labels.length;
                                     const numTicks = isMobile ? 6 : 8; // Changed from 4 to 6
-                                    
+
                                     if (total <= numTicks) return this.getLabelForValue(val);
-                                    
+
                                     // We want to guarantee index 0 (oldest) and index total-1 (newest)
                                     // Then evenly space the remaining ticks
                                     const step = (total - 1) / (numTicks - 1);
-                                    
+
                                     // Check if this index is one of our target indices (allow slight rounding slop)
                                     for (let i = 0; i < numTicks; i++) {
                                         if (Math.abs(index - Math.round(i * step)) < 0.5) {
@@ -647,7 +681,7 @@
                         },
                         yRank: {
                             ...this.getRankAxis(true),
-                            title: { display: !isMobile, text: 'Rank', color: '#2196F3' },
+                            title: { display: true, text: 'Rank', color: '#2196F3' },
                             ticks: {
                                 ...this.getRankAxis(true).ticks,
                                 font: { size: isMobile ? 10 : 12 }
@@ -655,7 +689,7 @@
                         },
                         ySP: {
                             ...this.getSPAxis(minSP, maxSP, 'right', false),
-                            title: { display: !isMobile, text: 'Snap Points', color: '#ffcc00' },
+                            title: { display: true, text: 'Snap Points', color: '#ffcc00' },
                             ticks: {
                                 color: '#ffcc00',
                                 font: { size: isMobile ? 10 : 12 }
@@ -663,11 +697,14 @@
                         }
                     },
                     plugins: {
-                        legend: { display: false }
+                        legend: {
+                            display: true,
+                            labels: { color: '#fff' }
+                        }
                     }
                 }
             });
-
+            State.rollingChartInstance.rawHistory = history;
         },
 
         renderHistoricalChart(stats) {
@@ -840,6 +877,10 @@
 
         copySeasonGraphImage() {
             Exporter.exportChart(State, State.seasonChartInstance);
+        },
+
+        copyRollingGraphImage() {
+            Exporter.exportRollingChart(State, State.rollingChartInstance);
         }
     };
 
@@ -1125,6 +1166,161 @@
                     // Move to next "column"
                     curX += colWidth;
                 });
+            }
+        },
+
+        async exportRollingChart(State, chartInstance) {
+            const btn = $('shareRollingGraphBtn');
+            const icon = $('copyRollingIcon');
+            const successIcon = $('copyRollingSuccessIcon');
+            const errorIcon = $('copyRollingErrorIcon');
+
+            if (!btn || !icon) return;
+
+            btn.setAttribute('aria-busy', 'true');
+            btn.disabled = true;
+
+            const showIcon = (type) => {
+                icon.classList.add('d-none');
+                if (successIcon) successIcon.classList.add('d-none');
+                if (errorIcon) errorIcon.classList.add('d-none');
+
+                if (type === 'success' && successIcon) successIcon.classList.remove('d-none');
+                else if (type === 'error' && errorIcon) errorIcon.classList.remove('d-none');
+                else icon.classList.remove('d-none');
+            };
+
+            try {
+                if (!chartInstance) throw new Error("No chart to copy");
+
+                const promise = this.generateRollingBlob(State, chartInstance);
+                const item = new ClipboardItem({
+                    'image/png': promise
+                });
+
+                await navigator.clipboard.write([item]);
+
+                // Success
+                showIcon('success');
+                btn.classList.add('success');
+                setTimeout(() => {
+                    showIcon('default');
+                    btn.classList.remove('success');
+                }, 2500);
+            } catch (e) {
+                console.error("Rolling export failed:", e);
+                showIcon('error');
+                btn.classList.add('error');
+                alert("Could not copy 24h graph: " + (e.message || "Unknown error"));
+                setTimeout(() => {
+                    showIcon('default');
+                    btn.classList.remove('error');
+                }, 2500);
+            } finally {
+                btn.removeAttribute('aria-busy');
+                btn.disabled = false;
+            }
+        },
+
+        async generateRollingBlob(State, chartInstance) {
+            const stats = this.getRollingHeaderStats(State, chartInstance);
+            const { width, height, dpi, padding } = { width: 1200, height: 600, dpi: 2, padding: 30 };
+            const headerHeight = 135;
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width * dpi; canvas.height = height * dpi;
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true; ctx.imageSmoothingQuality = 'high';
+
+            ctx.fillStyle = '#181c25'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            const chartCanvas = await this.renderHighResChart(chartInstance, width, height, headerHeight, padding, dpi);
+            ctx.drawImage(chartCanvas, padding * dpi, headerHeight * dpi);
+            this.drawRollingHeader(ctx, stats, padding, dpi);
+
+            return new Promise(resolve => canvas.toBlob(resolve, 'image/png'));
+        },
+
+        getRollingHeaderStats(State, chartInstance) {
+            const history = chartInstance.rawHistory || [];
+            const primaryName = $('pName').dataset.rawName || $('pName').innerText;
+
+            // Filter out nulls to find start and end
+            const valid = history.filter(h => h && h[0] !== null);
+            if (valid.length < 1) return { name: primaryName };
+
+            const start = valid[0];
+            const end = valid[valid.length - 1];
+
+            const spDelta = end[0] - start[0];
+            const rankDelta = start[1] - end[1];
+
+            // Calculate date range
+            const now = new Date();
+            const getD = (idx) => new Date(now.getTime() - (history.length - 1 - idx) * 5 * 60 * 1000);
+            const firstDate = getD(history.indexOf(start));
+            const lastDate = getD(history.indexOf(end));
+            const fmt = (d) => d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+            const dateStr = fmt(firstDate) === fmt(lastDate) ? fmt(firstDate) : `${fmt(firstDate)} → ${fmt(lastDate)}`;
+
+            return {
+                name: primaryName,
+                dateRange: dateStr,
+                sp: { start: start[0], end: end[0], delta: spDelta },
+                rank: { start: start[1], end: end[1], delta: rankDelta }
+            };
+        },
+
+        drawRollingHeader(ctx, stats, padding, dpi) {
+            // Draw Date Range (Right Aligned)
+            ctx.textBaseline = 'top';
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = `${28 * dpi}px system-ui, sans-serif`;
+            ctx.textAlign = 'right';
+            ctx.fillText(stats.dateRange || "Last 24 Hours", (1200 - padding) * dpi, padding * dpi + (25 * dpi));
+
+            // Draw Player Name
+            ctx.textAlign = 'left';
+            ctx.fillStyle = '#f8fafc';
+            ctx.font = `bold ${54 * dpi}px system-ui, sans-serif`;
+            ctx.fillText(stats.name, padding * dpi, padding * dpi + (15 * dpi));
+
+            // Draw Delta Line
+            let curX = padding * dpi;
+            const y = padding * dpi + (80 * dpi);
+
+            if (stats.sp && stats.sp.end) {
+                const deltaPrefix = stats.sp.delta >= 0 ? '+' : '';
+                
+                // Draw SP Label (Gold)
+                ctx.fillStyle = '#ffcc00';
+                ctx.font = `bold ${24 * dpi}px system-ui, sans-serif`;
+                ctx.fillText("SP:", curX, y + (3 * dpi)); 
+                curX += ctx.measureText("SP:").width + (10 * dpi);
+
+                // Draw SP Section (Fully colored Gold)
+                ctx.fillStyle = '#ffcc00';
+                ctx.font = `bold ${24 * dpi}px system-ui, sans-serif`;
+                ctx.fillText("SP:", curX, y + (3 * dpi)); 
+                curX += ctx.measureText("SP:").width + (10 * dpi);
+
+                ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
+                const valText = `${deltaPrefix}${stats.sp.delta.toLocaleString()} (${stats.sp.start.toLocaleString()} → ${stats.sp.end.toLocaleString()})`;
+                ctx.fillText(valText, curX, y);
+                curX += ctx.measureText(valText).width + (50 * dpi); // Padding between sections
+            }
+
+            if (stats.rank && stats.rank.end) {
+                const deltaPrefix = stats.rank.delta >= 0 ? '+' : '';
+                
+                // Draw RANK Section (Fully colored Blue)
+                ctx.fillStyle = '#2196F3';
+                ctx.font = `bold ${24 * dpi}px system-ui, sans-serif`;
+                ctx.fillText("RANK:", curX, y + (3 * dpi));
+                curX += ctx.measureText("RANK:").width + (10 * dpi);
+
+                ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
+                const valText = `${deltaPrefix}${stats.rank.delta.toLocaleString()} (#${stats.rank.start.toLocaleString()} → #${stats.rank.end.toLocaleString()})`;
+                ctx.fillText(valText, curX, y);
             }
         }
     };

@@ -189,7 +189,7 @@ export async function handleLeaderboardComparison(c) {
                 topGainers,
                 topLosers,
                 newOnBoard: newOnBoard.sort((a, b) => a.rank - b.rank).slice(0, 50),
-                total: liveTotal,
+                totalInfinitePlayers: liveTotal,
                 updatedAt: nowMs
             };
 

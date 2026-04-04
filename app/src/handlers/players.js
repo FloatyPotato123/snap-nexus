@@ -199,6 +199,7 @@ export async function handlePlayerHistory(c) {
             if (useNew) {
                 finalResultsMap.set(idKey, {
                     id: displayId,
+                    realId: idKey,
                     name: r.name, // Keep the matched name for context
                     source: r.source,
                     liveEntry: r.liveEntry || existing?.liveEntry,
@@ -210,13 +211,13 @@ export async function handlePlayerHistory(c) {
         const uniqueResults = Array.from(finalResultsMap.values()).slice(0, limit);
 
         // 5. Fetch name history for all matched players
-        const playerIds = uniqueResults.map(p => p.id);
+        const playerIds = uniqueResults.map(p => p.realId || p.id);
         const historyMap = await batchGetPlayerHistories(db, playerIds);
 
         // 6. Enrich results with history and live data
         const enrichedResults = [];
         for (const p of uniqueResults) {
-            const history = historyMap[p.id] || [];
+            const history = historyMap[p.realId || p.id] || [];
             let currentName = p.name;
             let currentRank = null;
 

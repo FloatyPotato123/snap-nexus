@@ -5,7 +5,7 @@ import { Buffer } from "buffer";
 
 globalThis.Buffer = Buffer;
 
-import { handleRandomDeck, handleStressDeck, handleDecodeDeck } from "./handlers/deck.js";
+import { handleRandomDeck, handleRandomCards, handleDecodeDeck } from "./handlers/deck.js";
 import {
     handleLeaderboard,
     handleLeaderboardComparison,
@@ -58,8 +58,8 @@ app.get("/leaderboard", (c) => c.html(render(leaderboardHtml, 'Infinite Leaderbo
 // --- API DATA ROUTES ---
 const api = new Hono();
 api.get("/decks/random", (c) => handleRandomDeck(c));
-api.get("/decks/stress", (c) => handleStressDeck(c));
 api.get("/decks/decode", (c) => handleDecodeDeck(c));
+api.get("/cards/random", (c) => handleRandomCards(c));
 
 // Leaderboard/History
 api.get("/player/playtime", (c) => handleGetPlayerPlaytime(c));

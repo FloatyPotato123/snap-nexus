@@ -67,21 +67,21 @@ export async function handleRandomDeck() {
 }
 
 /**
- * Returns 3 random card names for a "Stress" challenge.
+ * Returns n random card names with cost.
  * 
- * Twitch Command: !stress
- * Output Example: Gambit, Deafening Chord, Mister Negative
+ * Twitch Command: !draft [n]
+ * Output Example: (1) Bast, (2) Mysterio, (3) Sage
  */
-export async function handleStressDeck() {
+export async function handleRandomCards(c) {
+    const nStr = c.req.query("n") || c.req.query("count");
+    const n = parseInt(nStr) || 1;
     const allCards = await getAllCards();
     const now = Date.now();
     const playable = allCards.filter(c => c.obtainable && new Date(c.releaseDate) <= now);
-    const randomCards = sampleSize(playable, 3);
+    const randomCards = sampleSize(playable, Math.min(n, playable.length));
 
     // Format: "Card1, Card2, Card3"
     const responseText = randomCards.map(c => c.name).join(", ");
 
-    return new Response(responseText, {
-        headers: { "Content-Type": "text/plain" },
-    });
+    return c.text(responseText);
 }

@@ -99,9 +99,8 @@ export async function runRollingScrape(env) {
             }
         }
 
-        // 6. Process live players 
-        for (const entry of liveMap.values()) {
-            const playerName = entry.name;
+        // 6. Process ALL players (Union of current shards and live map)
+        for (const playerName of allNamesToUpdate) {
             if (!playerName) continue;
 
             const sid = getShardID(playerName);
@@ -109,10 +108,18 @@ export async function runRollingScrape(env) {
             
             let history = activeShard.players[playerName] || new Array(ROLLING_HISTORY_SIZE).fill(null);
             
-            // Shift left and add new point
+            // Shift left
             history.shift();
-            history.push([entry.score, entry.rank]);
 
+            // Add new point if live, otherwise push null to shift the history
+            const liveEntry = liveNameMap.get(playerName);
+            if (liveEntry) {
+                history.push([liveEntry.score, liveEntry.rank]);
+            } else {
+                history.push(null);
+            }
+
+            // CLEANUP: If the entire history window is now null, remove them from the shard
             if (history.every(v => v === null)) {
                 delete activeShard.players[playerName];
             } else {

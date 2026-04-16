@@ -136,3 +136,6 @@ export const ERROR_MESSAGES = {
     NO_CHART_TO_COPY: 'No chart to copy',
     COPY_FAILED: 'Could not copy'
 };
+
+export const KMBEST_CHANNEL_URL = 'https://www.youtube.com/@KMBestInASnap/videos';
+

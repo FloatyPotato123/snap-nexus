@@ -20,6 +20,11 @@ import {
     handleHistoryRange,
     handleSeasonHistory
 } from "./handlers/history.js";
+import {
+    handleKMDecksList,
+    handleKMDeckDetails
+} from "./handlers/youtube.js";
+
 
 import indexHtml from "./templates/index.html";
 import searchHtml from "./templates/player-search.html";
@@ -77,7 +82,12 @@ api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/seasons", (c) => handleSeasonHistory(c));
 api.get("/leaderboard/rolling", (c) => handleGetRollingHistory(c));
 
+// KM Best YouTube Tracking
+api.get("/decks/kmbest", (c) => handleKMDecksList(c));
+api.get("/decks/kmbest/:n", (c) => handleKMDeckDetails(c));
+
 // Mount API under /api
+
 app.route("/api", api);
 
 app.onError((err, c) => {

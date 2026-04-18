@@ -652,9 +652,8 @@
 }
 
 .rolling-summary-item .label {
-    font-size: 0.85rem;
+    font-size: 0.95rem;
     font-weight: 600;
-    text-transform: uppercase;
     color: var(--pico-muted-color);
     margin-bottom: 0px;
     letter-spacing: 0.05em;

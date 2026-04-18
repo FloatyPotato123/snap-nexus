@@ -1288,38 +1288,24 @@
             let curX = padding * dpi;
             const y = padding * dpi + (80 * dpi);
 
-            if (stats.sp && stats.sp.end) {
-                const deltaPrefix = stats.sp.delta >= 0 ? '+' : '';
+            if (stats.rank && stats.rank.end) {
+                const deltaPrefix = stats.rank.delta >= 0 ? '+' : '';
                 
-                // Draw SP Label (Gold)
-                ctx.fillStyle = '#ffcc00';
-                ctx.font = `bold ${24 * dpi}px system-ui, sans-serif`;
-                ctx.fillText("SP:", curX, y + (3 * dpi)); 
-                curX += ctx.measureText("SP:").width + (10 * dpi);
-
-                // Draw SP Section (Fully colored Gold)
-                ctx.fillStyle = '#ffcc00';
-                ctx.font = `bold ${24 * dpi}px system-ui, sans-serif`;
-                ctx.fillText("SP:", curX, y + (3 * dpi)); 
-                curX += ctx.measureText("SP:").width + (10 * dpi);
-
+                // Draw Rank Section (Blue)
+                ctx.fillStyle = '#2196F3';
                 ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
-                const valText = `${deltaPrefix}${stats.sp.delta.toLocaleString()} (${stats.sp.start.toLocaleString()} → ${stats.sp.end.toLocaleString()})`;
+                const valText = `Rank ${deltaPrefix}${stats.rank.delta.toLocaleString()} (#${stats.rank.start.toLocaleString()} → #${stats.rank.end.toLocaleString()})`;
                 ctx.fillText(valText, curX, y);
                 curX += ctx.measureText(valText).width + (50 * dpi); // Padding between sections
             }
 
-            if (stats.rank && stats.rank.end) {
-                const deltaPrefix = stats.rank.delta >= 0 ? '+' : '';
+            if (stats.sp && stats.sp.end) {
+                const deltaPrefix = stats.sp.delta >= 0 ? '+' : '';
                 
-                // Draw RANK Section (Fully colored Blue)
-                ctx.fillStyle = '#2196F3';
-                ctx.font = `bold ${24 * dpi}px system-ui, sans-serif`;
-                ctx.fillText("RANK:", curX, y + (3 * dpi));
-                curX += ctx.measureText("RANK:").width + (10 * dpi);
-
+                // Draw SP Section (Gold)
+                ctx.fillStyle = '#ffcc00';
                 ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
-                const valText = `${deltaPrefix}${stats.rank.delta.toLocaleString()} (#${stats.rank.start.toLocaleString()} → #${stats.rank.end.toLocaleString()})`;
+                const valText = `SP ${deltaPrefix}${stats.sp.delta.toLocaleString()} (${stats.sp.start.toLocaleString()} → ${stats.sp.end.toLocaleString()})`;
                 ctx.fillText(valText, curX, y);
             }
         }

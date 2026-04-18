@@ -137,7 +137,7 @@ export async function handleLeaderboardComparison(c) {
 
             // Calculate Movers
             for (const [name, history] of Object.entries(rollingPlayers)) {
-                if (collisions[name]) continue;
+                if (collisions[name.toLowerCase()]) continue;
                 const liveEntry = liveNameMap.get(name);
                 if (!liveEntry) continue;
 

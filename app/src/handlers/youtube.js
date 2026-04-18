@@ -202,7 +202,7 @@ export async function handleKMDeckDetails(c) {
         });
 
         const cardsString = formattedCards.join(', ');
-        return c.text(`${cardsString} -> CODE: ${deck.code}`);
+        return c.text(`${cardsString} -> ${deck.code}`);
     } catch (e) {
         return c.text(`Error: ${e.message}`);
     }

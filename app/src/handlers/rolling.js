@@ -40,16 +40,17 @@ export async function runRollingScrape(env) {
         const { map: liveMap, collisions: currentCollisions } = await getLiveLeaderboardData();
         const nowMs = Date.now();
         
-        // 2. Fetch all shards + legacy matrix in parallel
+        // 2. Fetch all shards, legacy matrix, and existing collisions in parallel
         const shardKeys = Array.from({length: ROLLING_SHARD_COUNT}, (_, i) => getShardKey(i));
-        const [legacyMatrix, ...shards] = await Promise.all([
+        const [legacyMatrix, existingCollisionsData, ...shards] = await Promise.all([
             env.MARVEL_SNAP_HUB.get(ROLLING_HISTORY_KV_KEY, { type: 'json' }),
+            env.MARVEL_SNAP_HUB.get(ROLLING_COLLISIONS_KV_KEY, { type: 'json' }),
             ...shardKeys.map(key => env.MARVEL_SNAP_HUB.get(key, { type: 'json' }))
         ]);
 
         // 3. Initialize/Prepare Shards
         const activeShards = shards.map((s, i) => s || { players: {}, updatedAt: 0, shardID: i });
-        const collisions = legacyMatrix?.collisions || {};
+        const collisions = existingCollisionsData || legacyMatrix?.collisions || {};
 
         // 4. MIGRATION: Move players from legacy matrix into proper shards
         if (legacyMatrix?.players) {

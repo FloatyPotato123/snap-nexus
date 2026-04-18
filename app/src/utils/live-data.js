@@ -35,14 +35,15 @@ export async function getLiveLeaderboardData() {
         if (data?.results) {
             data.results.forEach((entry, index) => {
                 const rank = index + 1;
-                const name = entry.playerName || entry.name;
+                const name = (entry.playerName || entry.name || '').trim();
                 let id = String(entry.id || entry.playerId || '');
                 
                 if (name) {
-                    if (seenNames.has(name)) {
+                    const lowerName = name.toLowerCase();
+                    if (seenNames.has(lowerName)) {
                         collisions.add(name);
                     }
-                    seenNames.add(name);
+                    seenNames.add(lowerName);
                 }
 
                 if (!id || id === 'undefined' || id === '') {

@@ -399,10 +399,10 @@
                         const spContext = (p.spStart && p.spEnd)
                             ? `<span class="text-muted" style="font-size:0.8rem;">${p.spStart} → ${p.spEnd} SP</span>`
                             : '';
-                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${escapeHtml(p.id)}?ref=home')">
+                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${encodeURIComponent(p.id)}?ref=home')">
                         <td>
                             <span class="text-muted" style="margin-right:8px; font-size:0.9em;">${i + 1}</span>
-                            <a href="/player/${escapeHtml(p.id)}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${escapeHtml(p.name)}</a>
+                            <a href="/player/${encodeURIComponent(p.id)}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${escapeHtml(p.name)}</a>
                         </td>
                         <td style="text-align:right;">
                             <div class="mover-cell-right">
@@ -418,10 +418,10 @@
                 const renderNewbieRows = (list) => {
                     if (!list || !list.length) return "<tr><td>No data</td></tr>";
                     return list.slice(0, 10).map((p, i) => {
-                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${escapeHtml(p.id)}?ref=home')">
+                        return `<tr class="card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${encodeURIComponent(p.id)}?ref=home')">
                         <td>
                             <span class="text-muted" style="margin-right:8px; font-size:0.9em;">${i + 1}</span>
-                            <a href="/player/${escapeHtml(p.id)}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${escapeHtml(p.name)}</a>
+                            <a href="/player/${encodeURIComponent(p.id)}?ref=home" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${escapeHtml(p.name)}</a>
                         </td>
                         <td style="text-align:right;">
                             <div class="mover-cell-right">

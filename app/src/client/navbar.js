@@ -92,7 +92,7 @@
             createPlayerAutocomplete(navSearch, suggestionsBox, {
                 showFooter: true,
                 onSelect: (player) => {
-                    window.location.href = `/player/${player.id}`;
+                    window.location.href = `/player/${encodeURIComponent(player.id)}`;
                 },
                 onHide: () => {
                     selectedIndex = -1;
@@ -113,12 +113,12 @@
                                 const query = navSearch.value.trim();
                                 window.location.href = `/player-search?q=${encodeURIComponent(query)}`;
                             } else {
-                                window.location.href = `/player/${selected.dataset.id}`;
+                                window.location.href = `/player/${encodeURIComponent(selected.dataset.id)}`;
                             }
                         } else if (playerMatches.length === 1) {
                             // Auto-redirect to the only result
                             e.preventDefault();
-                            window.location.href = `/player/${playerMatches[0].dataset.id}`;
+                            window.location.href = `/player/${encodeURIComponent(playerMatches[0].dataset.id)}`;
                         } else {
                             const query = navSearch.value.trim();
                             if (query) {

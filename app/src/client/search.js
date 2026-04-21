@@ -91,7 +91,7 @@
                     : '';
 
                 // Pass params
-                const profileUrl = `/player/${escapeHtml(match.id)}?back_q=${encodeURIComponent(query)}`;
+                const profileUrl = `/player/${encodeURIComponent(match.id)}?back_q=${encodeURIComponent(query)}`;
 
                 // Rank Badge
                 let rankHtml = '';

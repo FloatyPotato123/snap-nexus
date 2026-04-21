@@ -4,7 +4,7 @@
  */
 (function () {
     const pathParts = window.location.pathname.split('/');
-    const playerId = pathParts[pathParts.length - 1];
+    const playerId = decodeURIComponent(pathParts[pathParts.length - 1]);
     let $; // Define $ in closure but init later
 
     const { CONSTANTS } = window.SnapUtils;
@@ -71,7 +71,7 @@
         try {
             populateSeasonSelector();
 
-            const req = await fetch(`${CONSTANTS.API.PLAYER_PROFILE}/${State.playerId}`);
+            const req = await fetch(`${CONSTANTS.API.PLAYER_PROFILE}/${encodeURIComponent(State.playerId)}`);
             if (!req.ok) throw new Error("Player not found");
             const data = await req.json();
 
@@ -81,7 +81,7 @@
 
             // 2. Load Rolling History (24h Window)
             try {
-                const rollReq = await fetch(`/api/leaderboard/rolling?id=${State.playerId}`);
+                const rollReq = await fetch(`/api/leaderboard/rolling?id=${encodeURIComponent(State.playerId)}`);
                 if (rollReq.ok) {
                     const rollData = await rollReq.json();
                     let history = rollData.playerHistory || [];
@@ -161,7 +161,7 @@
 
     async function loadSeasonData(year, month) {
         try {
-            const req = await fetch(`/api/player/${State.playerId}?month=${month}&year=${year}`);
+            const req = await fetch(`/api/player/${encodeURIComponent(State.playerId)}?month=${month}&year=${year}`);
             if (!req.ok) throw new Error("Failed to load season");
             const data = await req.json();
             State.primaryPlayerStats = data.currentSeasonStats || [];
@@ -180,7 +180,7 @@
 
         const promises = State.comparedPlayers.map(async p => {
             try {
-                const res = await fetch(`/api/player/${p.id}?month=${month}&year=${year}`);
+                const res = await fetch(`/api/player/${encodeURIComponent(p.id)}?month=${month}&year=${year}`);
                 if (res.ok) {
                     const data = await res.json();
                     p.stats = data.currentSeasonStats || [];
@@ -817,7 +817,7 @@
             const checked = document.querySelector('.season-check:checked');
             const [year, month] = (checked ? checked.value : `${new Date().getFullYear()}-${new Date().getMonth() + 1}`).split('-');
             try {
-                const res = await fetch(`/api/player/${id}?month=${month}&year=${year}`);
+                const res = await fetch(`/api/player/${encodeURIComponent(id)}?month=${month}&year=${year}`);
                 if (res.ok) {
                     const data = await res.json();
                     player.name = data.name || player.name; // Update from API (fixes "Loading..." on reload)

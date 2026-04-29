@@ -34,7 +34,7 @@ import leaderboardHtml from "./templates/leaderboard.html";
 import navbarHtml from "./templates/components/navbar.html";
 import layoutHtml from "./templates/layout.html";
 
-import { getWeeklyCardReleases } from "./handlers/cards.js";
+import { getWeeklyCardReleases, handleCardHistory } from "./handlers/cards.js";
 import { getRandomUncheckedCards } from "./handlers/spreadsheet.js";
 import { runDailyScrape } from "./handlers/scraper.js";
 import { runRollingScrape, handleGetRollingHistory, handleGetPlayerPlaytime, handleGetPlayerSparkline } from "./handlers/rolling.js";
@@ -74,6 +74,7 @@ api.get("/player/:id/sparkline", (c) => handleGetPlayerSparkline(c));
 api.get("/players/search", (c) => handlePlayerHistory(c));
 api.get("/player/:id", (c) => handleGetPlayerProfile(c));
 api.get("/cards/new-releases", (c) => getWeeklyCardReleases(c));
+api.get("/cards/history", (c) => handleCardHistory(c));
 api.get("/cards/random-win", (c) => getRandomUncheckedCards(c));
 api.get("/season/stats", (c) => handleHistoryRange(c));
 api.get("/leaderboard/daily", (c) => handleLeaderboard(c));

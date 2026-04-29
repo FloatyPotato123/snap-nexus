@@ -138,6 +138,7 @@ function parseKMDescription(text) {
 
 /**
  * Handle: !kmdecks
+ * Twitch Setup: !addcom !kmdecks $(urlfetch https://<worker-domain>/api/decks/kmbest)
  * Output Example: 1. SuGi, 2. Shou, 3. Star-Lord
  */
 export async function handleKMDecksList(c) {
@@ -162,6 +163,7 @@ export async function handleKMDecksList(c) {
 
 /**
  * Handle: !kmdeck <n>
+ * Twitch Setup: !addcom !kmdeck $(urlfetch https://<worker-domain>/api/decks/kmbest/$(querystring))
  * Output Example: (Cost) Card, (Cost) Card -> CODE: XXXXX
  */
 export async function handleKMDeckDetails(c) {

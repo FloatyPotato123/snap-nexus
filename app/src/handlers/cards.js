@@ -135,3 +135,243 @@ function formatCardScheduleText(thisWeek, nextWeek) {
 function cleanDesc(desc) {
     return (desc || "").replace(/<[^>]*>/g, "");
 }
+
+// --- Levenshtein Distance ---
+function levenshtein(a, b) {
+    const matrix = [];
+    for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            if (b.charAt(i - 1) == a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1)
+                );
+            }
+        }
+    }
+    return matrix[b.length][a.length];
+}
+
+function normalizeName(name) {
+    return name.toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+/**
+ * Handle: !cardhistory
+ * Twitch Setup: !addcom !cardhistory $(urlfetch https://<worker-domain>/api/cards/history?q=$(querystring))
+ * Output Example: [5/24/22] 4/2 On Reveal: ... • [1/17/25] 2/4
+ */
+export async function handleCardHistory(c) {
+    try {
+        const query = c.req.query("q");
+        if (!query) {
+            return c.text("Error: Please provide a card name (!cardhistory <name>).");
+        }
+
+        const allCards = await getAllCards();
+        const normalizedQuery = normalizeName(query);
+
+        let bestMatch = null;
+        let bestScore = Infinity;
+
+        for (const card of allCards) {
+            if (!card.name) continue;
+            const normalizedCardName = normalizeName(card.name);
+            
+            // 1. Exact match
+            if (normalizedCardName === normalizedQuery) {
+                bestMatch = card;
+                bestScore = 0;
+                break;
+            }
+
+            // 2. Substring match
+            if (normalizedCardName.includes(normalizedQuery)) {
+                const score = (normalizedCardName.length - normalizedQuery.length) * 0.1;
+                if (score < bestScore) {
+                    bestScore = score;
+                    bestMatch = card;
+                }
+                continue;
+            }
+
+            // 3. Typo match (allow prefix/word typos)
+            // Instead of comparing against the whole name, check if it's close to any prefix
+            const dist = levenshtein(normalizedQuery, normalizedCardName);
+            if (dist < bestScore && dist <= 3) {
+                bestScore = dist;
+                bestMatch = card;
+            }
+            
+            // 4. Also check against individual words (e.g. "ravona" vs "ravonna")
+            const cardWords = card.name.toLowerCase().split(/[^a-z0-9]/).filter(Boolean);
+            for (const word of cardWords) {
+                const wordDist = levenshtein(normalizedQuery, word);
+                if (wordDist < bestScore && wordDist <= 2) {
+                    bestScore = wordDist;
+                    bestMatch = card;
+                }
+            }
+        }
+
+        // Require a reasonable match score (e.g., max 3 typos for short words, or substring match)
+        // If the best score is greater than 3, and the string is short, it's likely garbage.
+        if (!bestMatch || bestScore > 3) {
+            return c.text(`Card "${query}" not found. Please check spelling.`);
+        }
+
+        const cardDefId = bestMatch.cardDefId;
+        const snapFanUrl = `https://snap.fan/cards/${cardDefId}/`;
+
+        const res = await fetch(snapFanUrl);
+        if (!res.ok) {
+            return c.text(`Error: Could not fetch history for ${bestMatch.name} from snap.fan.`);
+        }
+
+        const html = await res.text();
+        const historyMatch = html.match(/<h2 class="mt-4">History<\/h2>[\s\S]*?<tbody>([\s\S]*?)<\/tbody>/);
+        
+        if (!historyMatch) {
+            return c.text(`No balance history found for ${bestMatch.name}.`);
+        }
+
+        const tbody = historyMatch[1];
+        const rows = [...tbody.matchAll(/<tr>([\s\S]*?)<\/tr>/g)];
+        const history = [];
+
+        rows.forEach(r => {
+            const cells = [...r[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(cell => cell[1].trim());
+            if (cells.length >= 4) {
+                let date = cells[0].replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+                let isReleased = false;
+                if (date.includes('Released')) {
+                    date = date.replace('Released', '').trim();
+                    isReleased = true;
+                }
+                
+                // Shorten Date format YYYY-MM-DD -> M/D/YY
+                try {
+                    const [y, m, d] = date.split('-');
+                    date = `${parseInt(m)}/${parseInt(d)}/${y.substring(2)}`;
+                } catch(e) {}
+                
+                const cost = cells[1].replace(/<[^>]+>/g, '').trim();
+                const power = cells[2].replace(/<[^>]+>/g, '').trim();
+                
+                let desc = cells[3].replace(/<\/?(div|p|br|li|ul)[^>]*>/gi, ' ')
+                                   .replace(/<[^>]+>/g, '')
+                                   .replace(/(?:[a-zA-Z]+)?=['"][^'"]*['"]>?/g, '') // remove orphaned attributes
+                                   .replace(/AvX:[^\.]+\.?/ig, '') // removes any AvX sentence
+                                   .replace(/\s+/g, ' ')
+                                   .trim();
+                // Extract "Curr:" part if it exists
+                if (desc.includes("Curr:") && desc.includes("Prev:")) {
+                    desc = desc.substring(desc.indexOf("Curr:") + 5, desc.indexOf("Prev:")).trim();
+                }
+
+                history.push({ date, cost, power, desc, isReleased });
+            }
+        });
+
+        // We want from oldest (Release) to newest
+        let releaseIndex = history.findIndex(h => h.isReleased);
+        if (releaseIndex === -1) releaseIndex = history.length - 1; // Fallback to oldest available
+
+        const rawValidHistory = history.slice(0, releaseIndex + 1).reverse();
+        
+        if (rawValidHistory.length === 0) {
+            return c.text(`No valid history found for ${bestMatch.name}.`);
+        }
+
+        // Filter out minor rewords (but keep numerical/stat changes)
+        const getNumbers = (str) => (str.match(/\d+/g) || []).join(',');
+        const validHistory = [rawValidHistory[0]];
+        
+        for (let i = 1; i < rawValidHistory.length; i++) {
+            const curr = rawValidHistory[i];
+            const prev = validHistory[validHistory.length - 1];
+            
+            if (curr.cost !== prev.cost || curr.power !== prev.power) {
+                validHistory.push(curr);
+                continue;
+            }
+            
+            if (getNumbers(curr.desc) !== getNumbers(prev.desc)) {
+                validHistory.push(curr);
+                continue;
+            }
+            
+            const dist = levenshtein(prev.desc, curr.desc);
+            const percentDiff = dist / Math.max(prev.desc.length, curr.desc.length, 1);
+            
+            if (percentDiff > 0.15) {
+                validHistory.push(curr);
+            }
+        }
+
+        const segments = validHistory.map((item, i) => {
+            let changedDesc = false;
+            let changedStats = false;
+            if (i > 0) {
+                const prev = validHistory[i-1];
+                if (prev.cost !== item.cost || prev.power !== item.power) changedStats = true;
+                if (prev.desc !== item.desc) changedDesc = true;
+            } else {
+                changedStats = true;
+                changedDesc = true;
+            }
+            return {
+                date: item.date,
+                stats: changedStats ? `${item.cost}/${item.power}` : "",
+                desc: changedDesc ? item.desc : ""
+            };
+        });
+
+        // Calculate base length without descriptions
+        let baseLen = segments.map(s => {
+            let len = s.date.length + 2; // "[date]"
+            if (s.stats) len += s.stats.length + 1; // " stats"
+            return len;
+        }).reduce((a, b) => a + b, 0);
+        baseLen += (segments.length - 1) * 3; // " • "
+
+        const descCount = segments.filter(s => s.desc.length > 0).length;
+        let allowedDescLen = descCount > 0 ? Math.floor((390 - baseLen - (descCount * 2)) / descCount) : 0;
+        if (allowedDescLen < 15) allowedDescLen = 15; 
+
+        let lastTruncatedDesc = null;
+        const parts = segments.map(s => {
+            let p = `[${s.date}]`;
+            if (s.stats) p += ` ${s.stats}`;
+            if (s.desc) {
+                let d = s.desc;
+                if (d.length > allowedDescLen) {
+                    d = d.substring(0, allowedDescLen).trim().replace(/\.+$/, '') + "…";
+                }
+                if (d === lastTruncatedDesc) {
+                    p += ` (Text Updated)`;
+                } else {
+                    p += ` ${d}`;
+                    lastTruncatedDesc = d;
+                }
+            }
+            return p;
+        });
+
+        let output = parts.join(" • ");
+        if (output.length > 400) {
+            output = output.substring(0, 397) + "...";
+        }
+        
+        return c.text(output);
+        
+    } catch (e) {
+        console.error(e);
+        return c.text(`Error: Failed to fetch card history. (${e.message})`);
+    }
+}

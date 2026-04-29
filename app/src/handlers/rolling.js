@@ -248,6 +248,7 @@ export async function handleGetRollingHistory(c) {
 
 /**
  * GET /api/player/playtime
+ * Twitch Setup: !addcom !playtime $(urlfetch https://<worker-domain>/api/player/playtime?q=$(querystring))
  */
 export async function handleGetPlayerPlaytime(c) {
     const q = c.req.query('q');
@@ -295,6 +296,7 @@ export async function handleGetPlayerPlaytime(c) {
 
 /**
  * GET /api/player/sparkline
+ * Twitch Setup: !addcom !sp $(urlfetch https://<worker-domain>/api/player/sparkline?q=$(query)&window=$(twitch uptime))
  */
 export async function handleGetPlayerSparkline(c) {
     const q = c.req.query('q');

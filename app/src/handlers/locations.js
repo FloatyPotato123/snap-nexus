@@ -103,7 +103,14 @@ export async function handleGetHotLocation(c) {
 }
 
 function cleanup(str) {
-    return str.replace(/<[^>]*>/g, '').trim();
+    return str.replace(/<[^>]*>/g, '')
+        .replace(/&#x27;/g, "'")
+        .replace(/&#39;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .trim();
 }
 
 function findNextSignificant(schedule, currentIndex) {

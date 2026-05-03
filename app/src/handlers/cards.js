@@ -1,4 +1,5 @@
 import { getAllCards } from "snapdeck";
+import { getAllCardsLive } from "./snap_api.js";
 
 /**
  * Calculates the start of the current "Marvel Snap Week" (Tuesday 19:00 UTC).
@@ -29,7 +30,7 @@ function getSnapWeekStart() {
 
 export async function getWeeklyCardReleases(c) {
     try {
-        const allCards = await getAllCards();
+        const allCards = await getAllCardsLive(c.env);
 
         // Time Ranges
         const thisWeekStart = getSnapWeekStart();
@@ -44,8 +45,7 @@ export async function getWeeklyCardReleases(c) {
         const nextWeekCards = [];
 
         allCards.forEach(card => {
-            // Filter: Must be obtainable
-            if (!card.obtainable || !card.releaseDate) return;
+            if (!card.releaseDate) return;
 
             const releaseDate = new Date(card.releaseDate);
 
@@ -173,7 +173,7 @@ export async function handleCardHistory(c) {
             return c.text("Error: Please provide a card name (!cardhistory <name>).");
         }
 
-        const allCards = await getAllCards();
+        const allCards = await getAllCardsLive(c.env);
         const normalizedQuery = normalizeName(query);
 
         let bestMatch = null;

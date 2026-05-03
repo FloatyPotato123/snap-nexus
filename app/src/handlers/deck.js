@@ -1,5 +1,5 @@
-
 import { getAllCards, generateDeckcodeString, extractDeckcode, parseDeckcode } from "snapdeck";
+import { getAllCardsLive } from "./snap_api.js";
 import { sampleSize } from "lodash-es";
 
 /**
@@ -30,9 +30,16 @@ export async function handleDecodeDeck(c) {
             return c.json({ error: "Failed to parse deck" }, 500);
         }
 
+        // Hydrate with live data to ensure accurate stats/names
+        const allCards = await getAllCardsLive(c.env);
+        const hydratedCards = deck.cards.map(snapdeckCard => {
+            const liveCard = allCards.find(lc => lc.cardDefId === snapdeckCard.cardDefId);
+            return liveCard || snapdeckCard;
+        });
+
         if (format === 'text') {
             // Sort by Cost (Asc) -> Name (Asc)
-            const sorted = deck.cards.sort((a, b) => {
+            const sorted = hydratedCards.sort((a, b) => {
                 const costA = parseInt(a.cost) || 0;
                 const costB = parseInt(b.cost) || 0;
                 if (costA !== costB) return costA - costB;
@@ -42,7 +49,7 @@ export async function handleDecodeDeck(c) {
             return c.text(names);
         }
 
-        return c.json({ cards: deck.cards });
+        return c.json({ cards: hydratedCards });
     } catch (e) {
         if (format === 'text') return c.text(`Error: ${e.message}`);
         return c.json({ error: e.message }, 500);
@@ -55,8 +62,8 @@ export async function handleDecodeDeck(c) {
  * Twitch Command: !deckcode
  * Output Example: UHRydDcsVGhuNSxTcjQsTWRzNixDbGxuV25nQixHcmduNixRazUsU3R0cjcsU2x2clNyZnJGcnN0U3RwczE2LEtkT21nOCxJcm5QdHJ0QixNcnBoNQ==
  */
-export async function handleRandomDeck() {
-    const allCards = await getAllCards();
+export async function handleRandomDeck(c) {
+    const allCards = await getAllCardsLive(c.env);
     const now = Date.now();
     const playable = allCards.filter(c => c.obtainable && new Date(c.releaseDate) <= now);
     const randomDeck = sampleSize(playable, 12);
@@ -75,7 +82,7 @@ export async function handleRandomDeck() {
 export async function handleRandomCards(c) {
     const nStr = c.req.query("n") || c.req.query("count");
     const n = parseInt(nStr) || 1;
-    const allCards = await getAllCards();
+    const allCards = await getAllCardsLive(c.env);
     const now = Date.now();
     const playable = allCards.filter(c => c.obtainable && new Date(c.releaseDate) <= now);
     const randomCards = sampleSize(playable, Math.min(n, playable.length));

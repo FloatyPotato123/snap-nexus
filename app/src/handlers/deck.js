@@ -1,5 +1,5 @@
-import { getAllCards, generateDeckcodeString, extractDeckcode, parseDeckcode } from "snapdeck";
-import { getAllCardsLive } from "./snap_api.js";
+import { generateDeckcodeString, extractDeckcode, parseDeckcode } from "snapdeck";
+import { getAllCardsUntapped as getAllCardsLive } from "./untapped_api.js";
 import { sampleSize } from "lodash-es";
 
 /**

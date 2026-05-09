@@ -1,5 +1,5 @@
-import { getAllCards } from "snapdeck";
-import { getAllCardsLive } from "./snap_api.js";
+
+import { getAllCardsUntapped as getAllCardsLive } from "./untapped_api.js";
 
 /**
  * Calculates the start of the current "Marvel Snap Week" (Tuesday 19:00 UTC).
@@ -28,74 +28,93 @@ function getSnapWeekStart() {
     return weekStart;
 }
 
+const CARDS_CACHE_KEY = "cards_schedule_v2";
+const CACHE_TTL = 3600 * 6; // 6 hours
+
 export async function getWeeklyCardReleases(c) {
     try {
-        const allCards = await getAllCardsLive(c.env);
+        // 1. Try KV Cache first
+        if (c.env && c.env.MARVEL_SNAP_HUB) {
+            const cached = await c.env.MARVEL_SNAP_HUB.get(CARDS_CACHE_KEY, { type: "json" });
+            if (cached) {
+                if (c.req.query('format') === 'text') {
+                    return c.text(formatCardScheduleText(cached.thisWeek, cached.nextWeek));
+                }
+                return c.json(cached);
+            }
+        }
 
-        // Time Ranges
+        // 2. Fetch all cards directly from Untapped
+        const untappedCards = await getAllCardsLive(c.env);
+
+        // 3. Calculate Time Ranges
         const thisWeekStart = getSnapWeekStart();
         const nextWeekStart = new Date(thisWeekStart);
         nextWeekStart.setUTCDate(thisWeekStart.getUTCDate() + 7);
-
         const nextWeekEnd = new Date(nextWeekStart);
         nextWeekEnd.setUTCDate(nextWeekStart.getUTCDate() + 7);
 
-        // Arrays to hold results
-        const thisWeekCards = [];
-        const nextWeekCards = [];
+        // 4. Filter and Format Cards based on Untapped Timestamps
+        const thisWeek = [];
+        const nextWeek = [];
 
-        allCards.forEach(card => {
-            if (!card.releaseDate) return;
+        untappedCards.forEach(uCard => {
+            // Find the release date (if missing or 0, ignore)
+            if (!uCard.releaseDate) return;
+            
+            const releaseDate = new Date(uCard.releaseDate);
+            
+            // Only care about cards releasing this week or next week
+            if (releaseDate >= thisWeekStart && releaseDate < nextWeekEnd) {
+                const enriched = {
+                    name: uCard.name,
+                    releaseDate: releaseDate.toISOString(),
+                    cost: uCard.cost || 0,
+                    power: uCard.power || 0,
+                    description: uCard.description || "Ability unknown.",
+                    cardDefId: uCard.cardDefId,
+                    art: uCard.art,
+                    source: uCard.source || "New Release"
+                };
 
-            const releaseDate = new Date(card.releaseDate);
-
-            // Check ranges
-            if (releaseDate >= thisWeekStart && releaseDate < nextWeekStart) {
-                thisWeekCards.push(card);
-            } else if (releaseDate >= nextWeekStart && releaseDate < nextWeekEnd) {
-                nextWeekCards.push(card);
+                if (releaseDate >= thisWeekStart && releaseDate < nextWeekStart) {
+                    thisWeek.push(enriched);
+                } else if (releaseDate >= nextWeekStart && releaseDate < nextWeekEnd) {
+                    nextWeek.push(enriched);
+                }
             }
         });
 
-        // Helper to format output
-        const formatCard = (card) => {
-            let dateStr = "";
-            try {
-                if (card.releaseDate) {
-                    dateStr = new Date(card.releaseDate).toISOString().split('T')[0];
-                }
-            } catch (ignore) {
-                dateStr = String(card.releaseDate);
-            }
-            return {
-                name: card.name,
-                cost: card.cost,
-                power: card.power,
-                releaseDate: dateStr,
-                obtainable: true,
-                description: card.description,
-                source: card.source
-            };
+        // Optional: Sort by release date so they appear in chronological order
+        thisWeek.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
+        nextWeek.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
+
+        const result = {
+            weekStart: thisWeekStart.toISOString(),
+            thisWeek,
+            nextWeek
         };
 
-        // Check for format query (default: json, optional: text)
+        // Cache the result asynchronously if possible
+        if (c.env && c.env.MARVEL_SNAP_HUB) {
+            c.executionCtx.waitUntil(
+                c.env.MARVEL_SNAP_HUB.put(CARDS_CACHE_KEY, JSON.stringify(result), { expirationTtl: CACHE_TTL })
+            );
+        }
+
         const format = c.req.query('format') || 'json';
 
         if (format === 'text') {
-            return c.text(formatCardScheduleText(thisWeekCards, nextWeekCards));
+            return c.text(formatCardScheduleText(thisWeek, nextWeek));
         }
 
-        // Default: JSON Response
-        return c.json({
-            weekStart: thisWeekStart.toISOString(),
-            thisWeek: thisWeekCards.map(formatCard),
-            nextWeek: nextWeekCards.map(formatCard)
-        });
+        return c.json(result);
 
     } catch (e) {
         return c.text(`Error: Failed to fetch card releases. (${e.message})`, 500);
     }
 }
+
 
 /**
  * Formats the weekly card schedule into a Nightbot-safe text block (<400 chars).
@@ -132,8 +151,22 @@ function formatCardScheduleText(thisWeek, nextWeek) {
     }).join(" • ");
 }
 
+function cleanText(str) {
+    if (!str) return '';
+    return str.replace(/<[^>]*>/g, '')
+        .replace(/&#x27;/g, "'")
+        .replace(/&#39;/g, "'")
+        .replace(/&rsquo;/g, "'")
+        .replace(/&lsquo;/g, "'")
+        .replace(/&quot;/g, '"')
+        .replace(/&ldquo;/g, '"')
+        .replace(/&rdquo;/g, '"')
+        .replace(/&amp;/g, '&')
+        .trim();
+}
+
 function cleanDesc(desc) {
-    return (desc || "").replace(/<[^>]*>/g, "");
+    return cleanText(desc);
 }
 
 // --- Levenshtein Distance ---

@@ -392,7 +392,7 @@
                     heroLoc = listLocs.shift(); // Promote first upcoming to hero
                     heroIsActive = false;
                 }
-                
+
                 // Only show 1 upcoming to fit the height perfectly
                 if (heroLoc && listLocs.length > 1) {
                     listLocs = listLocs.slice(0, 1);
@@ -428,8 +428,10 @@
                     html += `<div class="upcoming-list">`;
                     html += listLocs.map(loc => `
                         <div class="upcoming-item">
-                            <div class="upcoming-label">Upcoming (${new Date(loc.startTime).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })})</div>
-                            <div class="upcoming-name">${loc.name}</div>
+                            <div class="upcoming-header">
+                                <div class="upcoming-name">${loc.name}</div>
+                                <div class="upcoming-label">${new Date(loc.startTime).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                            </div>
                             <div class="upcoming-desc">${loc.description}</div>
                         </div>
                     `).join('');

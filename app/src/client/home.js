@@ -373,6 +373,134 @@
             }
             window.Home.updateTriggerText();
         }
+        // --- DASHBOARD WIDGETS ---
+        async function fetchHotLocation() {
+            const container = $('hot-location-content');
+            if (!container) return;
+
+            try {
+                const res = await fetch('/api/locations/hot');
+                const data = await res.json();
+                
+                let html = '';
+                
+                let heroLoc = data.current;
+                let heroIsActive = true;
+                let listLocs = data.upcoming || [];
+
+                if (!heroLoc && listLocs.length > 0) {
+                    heroLoc = listLocs.shift(); // Promote first upcoming to hero
+                    heroIsActive = false;
+                }
+                
+                // Only show 1 upcoming to fit the height perfectly
+                if (heroLoc && listLocs.length > 1) {
+                    listLocs = listLocs.slice(0, 1);
+                }
+
+                // Show Hero Location
+                if (heroLoc) {
+                    const defId = heroLoc.defId || heroLoc.cardDefId || heroLoc.name.replace(/[^a-zA-Z]/g, '');
+                    
+                    let badgeText = 'ACTIVE NOW';
+                    let badgeClass = 'location-badge location-badge-active';
+                    
+                    if (!heroIsActive) {
+                        const dateStr = new Date(heroLoc.startTime).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+                        badgeText = `UPCOMING (${dateStr})`;
+                        badgeClass = 'location-badge location-badge-future';
+                    }
+
+                    html += `
+                        <div class="location-hero">
+                            <img src="https://static.marvelsnap.pro/locations/${defId}.webp" class="location-hero-img" onerror="this.style.display='none'" alt="${heroLoc.name}">
+                            <div class="location-hero-overlay">
+                                <h4 class="location-name-hero">${heroLoc.name}</h4>
+                                <p class="location-desc-hero">${heroLoc.description}</p>
+                                <span class="${badgeClass}">${badgeText}</span>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Show Upcoming Locations
+                if (listLocs && listLocs.length > 0) {
+                    html += `<div class="upcoming-list">`;
+                    html += listLocs.map(loc => `
+                        <div class="upcoming-item">
+                            <div class="upcoming-label">Upcoming (${new Date(loc.startTime).toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' })})</div>
+                            <div class="upcoming-name">${loc.name}</div>
+                            <div class="upcoming-desc">${loc.description}</div>
+                        </div>
+                    `).join('');
+                    html += `</div>`;
+                }
+
+                container.innerHTML = html || '<div class="status-msg">No location data available.</div>';
+            } catch (e) {
+                console.error("Hot Location fetch error:", e);
+                container.innerHTML = `<div class="error-msg">Failed to load location schedule</div>`;
+            }
+        }
+
+        async function fetchCardSchedule() {
+            const container = $('card-schedule-content');
+            if (!container) return;
+
+            try {
+                const res = await fetch('/api/cards/new-releases');
+                const data = await res.json();
+
+                let html = '';
+
+                const renderSection = (title, cards) => {
+                    if (!cards || cards.length === 0) return '';
+                    let sectionHtml = `<div class="schedule-section">`;
+                    sectionHtml += `<div class="schedule-section-label">${title}</div>`;
+                    sectionHtml += cards.map(card => {
+                        const releaseDateObj = new Date(card.releaseDate);
+                        const dateStr = releaseDateObj.toLocaleDateString(undefined, { timeZone: 'UTC', weekday: 'short', month: 'short', day: 'numeric' });
+                        const defId = card.defId || card.cardDefId || card.name.replace(/[^a-zA-Z]/g, '');
+                        
+                        // Check if card is in the future (compared to now)
+                        // Setting time to 0 to compare just the dates fairly
+                        const now = new Date();
+                        now.setHours(0,0,0,0);
+                        const cardDate = new Date(releaseDateObj);
+                        cardDate.setHours(0,0,0,0);
+                        
+                        const isFuture = cardDate > now;
+                        const releaseText = isFuture ? `Releasing ${dateStr}` : `Released ${dateStr}`;
+                        const metaClass = isFuture ? 'schedule-meta schedule-meta-future' : 'schedule-meta';
+
+                        return `
+                            <div class="schedule-card-item">
+                                <div class="schedule-img-wrapper">
+                                    <img src="https://static.marvelsnap.pro/cards/${defId}.webp" class="schedule-card-img" alt="${card.name}">
+                                </div>
+                                <div class="schedule-info">
+                                    <div class="schedule-header">
+                                        <div class="schedule-name">${card.name}</div>
+                                    </div>
+                                    <div class="schedule-desc">${card.description}</div>
+                                    <div class="${metaClass}">${releaseText}</div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                    sectionHtml += `</div>`;
+                    return sectionHtml;
+                };
+
+                html += renderSection('This Week', data.thisWeek);
+                html += renderSection('Next Week', data.nextWeek);
+
+                container.innerHTML = html || '<div class="status-msg">No upcoming cards found.</div>';
+            } catch (e) {
+                console.error("Card Schedule fetch error:", e);
+                container.innerHTML = `<div class="error-msg">Failed to load card schedule</div>`;
+            }
+        }
 
         // --- MOVERS ---
         async function fetchMovers() {
@@ -458,7 +586,9 @@
         Promise.all([
             window.Home.loadSeasonChart(),
             window.Home.loadHistoryChart(),
-            fetchMovers()
+            fetchMovers(),
+            fetchHotLocation(),
+            fetchCardSchedule()
         ]).catch(e => console.error("Parallel Load Error:", e));
     });
 

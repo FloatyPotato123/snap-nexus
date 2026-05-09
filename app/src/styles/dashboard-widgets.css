@@ -1,0 +1,264 @@
+/* ============================================================================
+   DASHBOARD WIDGETS
+   Structure and layout for the Hot Location and Card Schedule widgets.
+   ============================================================================ */
+
+.dashboard-widgets-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-md, 20px);
+}
+
+@media (max-width: 1024px) {
+    .dashboard-widgets-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.widget-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid var(--pico-muted-border-color, #30363d);
+    border-radius: 12px;
+    padding: 20px;
+    transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.widget-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+}
+
+.widget-card h3 {
+    margin-top: 0;
+    margin-bottom: var(--space-md, 20px);
+    font-weight: 800;
+    color: #ffffff;
+}
+
+.widget-content {
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 5px; /* Prevent scrollbar from overlapping content */
+    
+    /* Firefox: Hide by default, show on hover */
+    scrollbar-width: none;
+}
+
+.widget-content:hover {
+    scrollbar-width: thin;
+    scrollbar-color: var(--pico-muted-color, #8b949e) transparent;
+}
+
+/* Webkit (Chrome/Safari/Edge) Thin Scrollbar */
+.widget-content::-webkit-scrollbar {
+    width: 6px;
+    background-color: transparent;
+}
+
+.widget-content::-webkit-scrollbar-track {
+    background-color: transparent;
+}
+
+.widget-content::-webkit-scrollbar-thumb {
+    background-color: transparent; /* Invisible when not hovering */
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+
+.widget-content:hover::-webkit-scrollbar-thumb {
+    background-color: var(--pico-muted-color, #8b949e);
+}
+
+.skeleton-text {
+    color: var(--pico-muted-color, #8b949e);
+    font-style: italic;
+}
+
+/* --- HOT LOCATION WIDGET --- */
+.location-hero {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    max-height: 220px;
+    border-radius: var(--pico-border-radius, 8px);
+    overflow: hidden;
+    margin-bottom: var(--space-md, 20px);
+    background-color: #000;
+}
+
+.location-hero-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    opacity: 0.5;
+}
+
+.location-hero-overlay {
+    position: absolute;
+    inset: 0;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, transparent 60%);
+}
+
+.location-name-hero {
+    font-size: 1.1rem;
+    font-weight: 800;
+    margin: 0 0 5px 0;
+}
+
+.location-desc-hero {
+    margin: 0 0 8px 0;
+    font-weight: 400;
+    font-size: 0.85rem;
+    color: var(--pico-muted-color, #8b949e);
+}
+
+.location-badge {
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.location-badge-active {
+    color: var(--accent-gold, #ffce2b);
+}
+
+.location-badge-future {
+    color: var(--pico-muted-color, #8b949e);
+}
+
+.upcoming-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md, 20px);
+    border-top: 1px solid var(--pico-border-color, #30363d);
+    padding-top: 15px;
+}
+
+.upcoming-item {
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--pico-border-color, #30363d);
+    padding-bottom: 15px;
+}
+
+.upcoming-item:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+
+.upcoming-label {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--pico-muted-color, #8b949e);
+    margin-bottom: 4px;
+}
+
+.upcoming-name {
+    font-size: 0.95rem;
+    font-weight: 800;
+    margin-bottom: 4px;
+}
+
+.upcoming-desc {
+    font-size: 0.85rem;
+    color: var(--pico-muted-color, #8b949e);
+    margin: 0;
+}
+
+
+/* --- CARD SCHEDULE WIDGET --- */
+.schedule-section {
+    margin-bottom: var(--space-lg, 40px);
+}
+
+.schedule-section:last-child {
+    margin-bottom: 0;
+}
+
+.schedule-section-label {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: var(--pico-muted-color, #8b949e);
+    border-bottom: 1px solid var(--pico-border-color, #30363d);
+    padding-bottom: 8px;
+    margin-bottom: 15px;
+}
+
+.schedule-card-item {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.schedule-card-item:last-child {
+    margin-bottom: 0;
+}
+
+.schedule-img-wrapper {
+    width: 110px;
+    flex-shrink: 0;
+}
+
+.schedule-card-img {
+    width: 100%;
+    height: auto;
+    border-radius: var(--border-radius-sm, 4px);
+}
+
+.schedule-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.schedule-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 6px;
+}
+
+.schedule-name {
+    font-size: 1rem;
+    font-weight: 800;
+    line-height: 1.2;
+}
+
+.schedule-stats {
+    text-align: right;
+    margin-left: 10px;
+    flex-shrink: 0;
+}
+
+.stat-label {
+    font-size: 0.65rem;
+    font-weight: 800;
+    color: var(--pico-muted-color, #8b949e);
+}
+
+.stat-value {
+    font-size: 1.1rem;
+    font-weight: 800;
+}
+
+.schedule-desc {
+    font-size: 0.85rem;
+    color: var(--pico-muted-color, #8b949e);
+    margin-bottom: 8px;
+    line-height: 1.4;
+}
+
+.schedule-meta {
+    font-size: 0.75rem;
+    font-weight: 800;
+    color: var(--accent-gold, #ffce2b);
+    margin-top: auto;
+}
+
+.schedule-meta-future {
+    color: var(--pico-muted-color, #8b949e);
+}

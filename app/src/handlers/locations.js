@@ -12,7 +12,7 @@ import { getAllLocationsUntapped } from './untapped_api.js';
  * 
  * Output Example: Hot Location: F.E.A.S.T. (...) | Next: Chronosphere Sphinx (in 3 days)
  */
-const LOCATIONS_CACHE_KEY = "hot_locations_schedule_v2";
+const LOCATIONS_CACHE_KEY = "hot_locations_schedule_v3";
 const CACHE_TTL = 3600 * 6; // 6 hours
 
 export async function handleGetHotLocation(c) {
@@ -37,7 +37,7 @@ export async function handleGetHotLocation(c) {
         while ((match = regex.exec(html)) !== null) {
             const [_, dateStr, name, __, desc] = match;
             const [m, d, y] = dateStr.split('/').map(Number);
-            const startTime = new Date(Date.UTC(y, m - 1, d, 3, 0, 0));
+            const startTime = new Date(Date.UTC(y, m - 1, d, 19, 0, 0));
             rawSchedule.push({
                 name: cleanup(name),
                 desc: cleanup(desc || ''),

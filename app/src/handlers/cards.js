@@ -378,6 +378,7 @@ export async function handleCardHistory(c) {
         if (allowedDescLen < 15) allowedDescLen = 15; 
 
         let lastTruncatedDesc = null;
+        let lastFullDesc = null;
         const parts = segments.map(s => {
             let p = `[${s.date}]`;
             if (s.stats) p += ` ${s.stats}`;
@@ -386,11 +387,26 @@ export async function handleCardHistory(c) {
                 if (d.length > allowedDescLen) {
                     d = d.substring(0, allowedDescLen).trim().replace(/\.+$/, '') + "…";
                 }
-                if (d === lastTruncatedDesc) {
-                    p += ` (Text Updated)`;
+                if (d === lastTruncatedDesc && lastFullDesc) {
+                    let diffStart = 0;
+                    while (diffStart < lastFullDesc.length && diffStart < s.desc.length && lastFullDesc[diffStart] === s.desc[diffStart]) {
+                        diffStart++;
+                    }
+                    while (diffStart > 0 && s.desc[diffStart - 1] !== ' ') diffStart--;
+                    let diffStr = s.desc.substring(diffStart).trim();
+                    if (diffStr.length === 0) {
+                        p += ` (-Text)`;
+                    } else {
+                        if (diffStr.length > allowedDescLen) {
+                            diffStr = diffStr.substring(0, allowedDescLen).trim().replace(/\.+$/, '') + "…";
+                        }
+                        p += ` …${diffStr}`;
+                    }
+                    lastFullDesc = s.desc;
                 } else {
                     p += ` ${d}`;
                     lastTruncatedDesc = d;
+                    lastFullDesc = s.desc;
                 }
             }
             return p;

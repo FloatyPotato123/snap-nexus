@@ -167,7 +167,7 @@ export async function handlePlayerHistory(c) {
         // Helper to find the "identity key" for a result
         const getIdentityKey = async (resName, resId) => {
             const { results: owner } = await db.prepare(`
-                SELECT id FROM Players WHERE normalized_name = ?
+                SELECT id FROM Players WHERE TRIM(normalized_name) = ?
             `).bind(resName.toLowerCase().trim()).all();
             
             // If the name is currently owned by someone (like a UUID), use that as the key
@@ -306,12 +306,12 @@ export async function handleGetPlayerProfile(c) {
         if (isLikelyName) {
             // 1. Resolve Name -> Current Owner (UUID or Name-ID)
             const { results: owners } = await db.prepare(`
-                SELECT id, name FROM Players WHERE normalized_name = ?
+                SELECT id, name FROM Players WHERE TRIM(normalized_name) = ?
             `).bind(normalizedInput).all();
 
             if (owners && owners.length > 0) {
                 primaryId = owners[0].id;
-                queryIds = [primaryId, id];
+                queryIds = [id, ...owners.map(o => o.id)];
             } else {
                 // 2. Check for Modern Stats before falling back to aliases
                 // If the name ALREADY has recent stats, don't bridge to a legacy UUID
@@ -324,7 +324,7 @@ export async function handleGetPlayerProfile(c) {
                     // Fallback only if no modern stats exist
                     const { results: fallback } = await db.prepare(`
                         SELECT player_id as id FROM PlayerAliases 
-                        WHERE normalized_name = ? 
+                        WHERE TRIM(normalized_name) = ? 
                         ORDER BY first_seen_at DESC LIMIT 1
                     `).bind(normalizedInput).all();
                     if (fallback && fallback.length > 0) {
@@ -337,7 +337,7 @@ export async function handleGetPlayerProfile(c) {
 
         // 3. Recursive Bridging: If we found a UUID, find ITS current name to catch name-based stats
         const finalPrimaryId = primaryId;
-        if (finalPrimaryId.length >= 30 || /^[0-9a-fA-F-]+$/.test(finalPrimaryId)) {
+        if (finalPrimaryId.length >= 28 || /^[0-9a-fA-F-]+$/.test(finalPrimaryId)) {
             const { results: current } = await db.prepare(`
                 SELECT name FROM Players WHERE id = ?
             `).bind(finalPrimaryId).all();

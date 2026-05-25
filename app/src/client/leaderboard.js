@@ -93,8 +93,9 @@
                 deltaHtml = `<span class="rank-delta ${colorClass}" style="margin-left:8px; font-size:0.8rem; font-weight:bold;">${icon}${Math.abs(p.delta)}</span>`;
             }
 
+            const playerId = p.id || p.playerId || p.playerName || p.name;
             return `
-                <tr class="leaderboard-row card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${encodeURIComponent(p.id)}?ref=leaderboard')">
+                <tr class="leaderboard-row card-clickable" onclick="SnapUtils.navigateTo(event, '/player/${encodeURIComponent(playerId)}?ref=leaderboard')">
                     <td class="rank-col">
                         <div class="rank-container">
                             <span class="rank-value">#${displayRank}</span>
@@ -102,7 +103,7 @@
                         </div>
                     </td>
                     <td class="name-col">
-                        <a href="/player/${encodeURIComponent(p.id)}?ref=leaderboard" class="player-name" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${p.playerName || p.name}</a>
+                        <a href="/player/${encodeURIComponent(playerId)}?ref=leaderboard" class="player-name" style="color:inherit; text-decoration:none;" onclick="event.stopPropagation()">${p.playerName || p.name}</a>
                     </td>
                     <td class="score-col">
                         ${(p.score || 0).toLocaleString()}

@@ -78,7 +78,10 @@ export async function runDailyScrape(env) {
 
         // 3. Update D1 Search Index and Player Stats
         // First, fetch existing player IDs for all names to ensure continuity if official IDs are missing
-        const allNames = leaderboard.map(p => p.name || p.playerName).filter(Boolean);
+        const allNames = leaderboard.map(p => {
+            const n = p.name || p.playerName;
+            return n ? n.trim() : null;
+        }).filter(Boolean);
         const existingIdMap = await batchGetIdsByNames(env.DB, allNames);
 
         const seenAt = now.toISOString().split('T')[0];
@@ -87,7 +90,7 @@ export async function runDailyScrape(env) {
         const playersToSync = leaderboard
             .filter(p => (p.name || p.playerName))
             .map(p => {
-                const name = p.name || p.playerName;
+                const name = (p.name || p.playerName).trim();
                 let id = p.id || p.playerId;
                 
                 // Fallback: If no official ID, try to reuse an existing ID for this name
@@ -112,7 +115,7 @@ export async function runDailyScrape(env) {
         // b) Individual player ranks and scores for charts
         const statsEntries = leaderboard
             .map((p, index) => {
-                const name = p.name || p.playerName;
+                const name = (p.name || p.playerName).trim();
                 let id = p.id || p.playerId;
                 
                 if (!id || id === 'undefined') {

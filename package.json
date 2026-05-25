@@ -28,7 +28,7 @@
     "buffer": "^6.0.3",
     "hono": "^4.11.3",
     "lodash-es": "^4.17.22",
-    "snapdeck": "^2.4.8"
+    "snapdeck": "^2.4.10"
   },
   "devDependencies": {
     "esbuild": "^0.18.19",

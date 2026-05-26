@@ -1,4 +1,4 @@
-import { generateDeckcodeString, extractDeckcode, parseDeckcode, getAllCards } from "snapdeck";
+import { generateDeckcodeString, extractDeckcode, parseDeckcode } from "snapdeck";
 import { getAllCardsUntapped as getAllCardsLive } from "./untapped_api.js";
 import { sampleSize } from "lodash-es";
 
@@ -63,10 +63,13 @@ export async function handleDecodeDeck(c) {
  * Output Example: UHRydDcsVGhuNSxTcjQsTWRzNixDbGxuV25nQixHcmduNixRazUsU3R0cjcsU2x2clNyZnJGcnN0U3RwczE2LEtkT21nOCxJcm5QdHJ0QixNcnBoNQ==
  */
 export async function handleRandomDeck(c) {
-    // Use snapdeck's built-in card list which includes shortNames required for generation
-    const allCards = await getAllCards();
+    // Fetch live data directly from Untapped API
+    const allCards = await getAllCardsLive(c.env);
     const now = Date.now();
-    const playable = allCards.filter(c => c.obtainable && new Date(c.releaseDate) <= now);
+    
+    // Filter playable cards
+    const playable = allCards.filter(c => c.obtainable && c.releaseDate && new Date(c.releaseDate) <= now);
+
     const randomDeck = sampleSize(playable, 12);
 
     return new Response(generateDeckcodeString(randomDeck), {

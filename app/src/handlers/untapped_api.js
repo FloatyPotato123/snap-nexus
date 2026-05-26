@@ -52,6 +52,7 @@ function normalizeCard(uCard) {
         url: `https://snap.untapped.gg/en/cards/${uCard.defId}`,
         status: releaseDate && new Date(releaseDate) <= new Date() ? "released" : "unreleased",
         cardDefId: uCard.defId,
+        shortName: uCard.defId.replace(/[aeiouy]/g, "") + uCard.defId.length.toString(16).toUpperCase(),
         obtainable: uCard.collectible || false,
         releaseDate: releaseDate,
         source: source

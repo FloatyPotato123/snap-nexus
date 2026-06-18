@@ -355,7 +355,11 @@ export async function handleGetPlayerSparkline(c) {
         const spDeltaStr = spDelta >= 0 ? `+${spDelta}` : `-${Math.abs(spDelta)}`;
         const rankDeltaStr = rankDelta >= 0 ? `+${rankDelta}` : `-${Math.abs(rankDelta)}`;
 
-        return c.text(`${spark} (${windowLabel}) | SP: ${spDeltaStr} (${startSP} -> ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} -> #${endRank})`);
+        // Build response string, omitting window label if a custom window was supplied
+        const response = window
+          ? `${spark} | SP: ${spDeltaStr} (${startSP} → ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} → #${endRank})`
+          : `${spark} (${windowLabel}) | SP: ${spDeltaStr} (${startSP} → ${endSP}) | Rank: ${rankDeltaStr} (#${startRank} → #${endRank})`;
+        return c.text(response);
     } catch (error) {
         logError('[Sparkline API]', error);
         return c.text("Error generating sparkline.");

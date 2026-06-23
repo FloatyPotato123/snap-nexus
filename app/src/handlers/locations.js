@@ -12,7 +12,7 @@ import { getAllLocationsUntapped } from './untapped_api.js';
  * 
  * Output Example: Hot Location: F.E.A.S.T. (...) | Next: Chronosphere Sphinx (in 3 days)
  */
-const LOCATIONS_CACHE_KEY = "hot_locations_schedule_v3";
+const LOCATIONS_CACHE_KEY = "hot_locations_schedule_v4";
 const CACHE_TTL = 3600 * 6; // 6 hours
 
 export async function handleGetHotLocation(c) {
@@ -30,7 +30,7 @@ export async function handleGetHotLocation(c) {
         if (!res.ok) return c.text('Error fetching schedule.');
 
         const html = await res.text();
-        const regex = /(\d{2}\/\d{2}\/\d{4}).*?>(.*?)<\/a>( - (.*?))?<\/li>/g;
+        const regex = /(\d{2}\/\d{2}\/\d{4}).*?>(.*?)<\/a>( - (.*?))?<\/li>/gs;
         let match;
         const rawSchedule = [];
 

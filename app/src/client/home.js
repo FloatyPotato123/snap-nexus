@@ -494,8 +494,14 @@
                     return sectionHtml;
                 };
 
-                html += renderSection('This Week', data.thisWeek);
-                html += renderSection('Next Week', data.nextWeek);
+                if (data.weeks && data.weeks.length > 0) {
+                    data.weeks.forEach(w => {
+                        html += renderSection(w.label, w.cards);
+                    });
+                } else {
+                    html += renderSection('This Week', data.thisWeek);
+                    html += renderSection('Next Week', data.nextWeek);
+                }
 
                 container.innerHTML = html || '<div class="status-msg">No upcoming cards found.</div>';
             } catch (e) {

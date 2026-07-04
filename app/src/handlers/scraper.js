@@ -39,6 +39,20 @@ import {
  * @returns {Promise<void>}
  */
 export async function runDailyScrape(env) {
+    // Ensure seasons cache is loaded in background jobs
+    if (!globalThis.SEASONS_CACHE && env.DB) {
+        try {
+            const { results } = await env.DB.prepare(
+                "SELECT season_id, start_date, end_date FROM Seasons ORDER BY start_date ASC"
+            ).all();
+            if (results && results.length > 0) {
+                globalThis.SEASONS_CACHE = results;
+            }
+        } catch (e) {
+            console.error("Scraper failed to load seasons from D1:", e);
+        }
+    }
+
     const now = new Date();
     let { year: targetYear, month: targetMonth } = getCurrentSeason(now);
 
@@ -51,6 +65,75 @@ export async function runDailyScrape(env) {
             targetYear--;
         }
     }
+
+    // Probe if the NEXT season month has already started early (for rollover detection)
+    let nextMonth = targetMonth + 1;
+    let nextYear = targetYear;
+    if (nextMonth > 12) {
+        nextMonth = 1;
+        nextYear++;
+    }
+
+    const probeUrl = getLeaderboardApiUrl(nextMonth, nextYear);
+    let newSeasonDetected = false;
+    try {
+        const probeRes = await fetch(probeUrl);
+        if (probeRes.ok) {
+            const probeData = await probeRes.json();
+            if (probeData && probeData.results && probeData.results.length > 0) {
+                newSeasonDetected = true;
+                targetMonth = nextMonth;
+                targetYear = nextYear;
+                console.log(`Detected early season rollover to ${nextYear}-${nextMonth}`);
+            }
+        }
+    } catch (e) {
+        console.error("Scraper failed to probe next season:", e);
+    }
+
+    if (newSeasonDetected && env.DB) {
+        try {
+            const rolloverDate = new Date(now);
+            rolloverDate.setUTCHours(19, 0, 0, 0);
+            // Rollovers always happen on Tuesday (2)
+            while (rolloverDate.getUTCDay() !== 2) {
+                rolloverDate.setUTCDate(rolloverDate.getUTCDate() - 1);
+            }
+            const startDateStr = rolloverDate.toISOString();
+
+            // Estimate end date (First Tuesday of the following month)
+            let followingMonth = nextMonth + 1;
+            let followingYear = nextYear;
+            if (followingMonth > 12) {
+                followingMonth = 1;
+                followingYear++;
+            }
+            const estEnd = getSeasonStartForMonth(followingYear, followingMonth - 1);
+            estEnd.setUTCHours(19, 0, 0, 0);
+            const endDateStr = estEnd.toISOString();
+
+            const newSeasonId = `${nextYear}-${String(nextMonth).padStart(2, '0')}`;
+            const prevMonth = nextMonth === 1 ? 12 : nextMonth - 1;
+            const prevYear = nextMonth === 1 ? nextYear - 1 : nextYear;
+            const prevSeasonId = `${prevYear}-${String(prevMonth).padStart(2, '0')}`;
+
+            // Insert new season and update previous season's end date
+            await env.DB.prepare(
+                "INSERT OR IGNORE INTO Seasons (season_id, start_date, end_date) VALUES (?, ?, ?)"
+            ).bind(newSeasonId, startDateStr, endDateStr).run();
+
+            await env.DB.prepare(
+                "UPDATE Seasons SET end_date = ? WHERE season_id = ?"
+            ).bind(startDateStr, prevSeasonId).run();
+
+            // Invalidate server memory cache
+            globalThis.SEASONS_CACHE = null;
+            console.log(`Successfully registered new season ${newSeasonId} in D1`);
+        } catch (e) {
+            console.error("Failed to register new season in D1:", e);
+        }
+    }
+
 
     const storageKey = getLeaderboardKey(now);
     const apiUrl = getLeaderboardApiUrl(targetMonth, targetYear);

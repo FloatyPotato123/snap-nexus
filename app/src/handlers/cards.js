@@ -1,5 +1,6 @@
 
 import { getAllCardsUntapped as getAllCardsLive } from "./untapped_api.js";
+import { getSeasonEnd, getCurrentSeason } from "../utils/seasons.js";
 
 /**
  * Calculates the start of the current "Marvel Snap Week" (Tuesday 19:00 UTC).
@@ -28,7 +29,7 @@ function getSnapWeekStart() {
     return weekStart;
 }
 
-const CARDS_CACHE_KEY = "cards_schedule_v2";
+const CARDS_CACHE_KEY = "cards_schedule_v3";
 const CACHE_TTL = 3600 * 6; // 6 hours
 
 export async function getWeeklyCardReleases(c) {
@@ -51,48 +52,93 @@ export async function getWeeklyCardReleases(c) {
         const thisWeekStart = getSnapWeekStart();
         const nextWeekStart = new Date(thisWeekStart);
         nextWeekStart.setUTCDate(thisWeekStart.getUTCDate() + 7);
-        const nextWeekEnd = new Date(nextWeekStart);
-        nextWeekEnd.setUTCDate(nextWeekStart.getUTCDate() + 7);
+
+        // Determine if next week crosses into a new season
+        const thisWeekSeason = getCurrentSeason(thisWeekStart);
+        const nextWeekSeason = getCurrentSeason(nextWeekStart);
+        const isNextWeekNewSeason = (thisWeekSeason.year !== nextWeekSeason.year || thisWeekSeason.month !== nextWeekSeason.month);
+
+        // The end of our schedule is the end of the season containing nextWeekStart
+        const scheduleEnd = getSeasonEnd(nextWeekStart);
+
+        // Create weekly buckets
+        const weeklyBuckets = [];
+        let currentWeekStart = new Date(thisWeekStart);
+
+        while (currentWeekStart < scheduleEnd) {
+            const currentWeekEnd = new Date(currentWeekStart);
+            currentWeekEnd.setUTCDate(currentWeekStart.getUTCDate() + 7);
+
+            weeklyBuckets.push({
+                weekStart: new Date(currentWeekStart),
+                weekEnd: new Date(currentWeekEnd),
+                cards: []
+            });
+
+            currentWeekStart = currentWeekEnd;
+        }
 
         // 4. Filter and Format Cards based on Untapped Timestamps
-        const thisWeek = [];
-        const nextWeek = [];
-
         untappedCards.forEach(uCard => {
-            // Find the release date (if missing or 0, ignore)
             if (!uCard.releaseDate) return;
             
             const releaseDate = new Date(uCard.releaseDate);
             
-            // Only care about cards releasing this week or next week
-            if (releaseDate >= thisWeekStart && releaseDate < nextWeekEnd) {
-                const enriched = {
-                    name: uCard.name,
-                    releaseDate: releaseDate.toISOString(),
-                    cost: uCard.cost || 0,
-                    power: uCard.power || 0,
-                    description: uCard.description || "Ability unknown.",
-                    cardDefId: uCard.cardDefId,
-                    art: uCard.art,
-                    source: uCard.source || "New Release"
-                };
-
-                if (releaseDate >= thisWeekStart && releaseDate < nextWeekStart) {
-                    thisWeek.push(enriched);
-                } else if (releaseDate >= nextWeekStart && releaseDate < nextWeekEnd) {
-                    nextWeek.push(enriched);
+            // Place the card in the correct weekly bucket
+            for (let i = 0; i < weeklyBuckets.length; i++) {
+                const wStart = weeklyBuckets[i].weekStart;
+                const wEnd = weeklyBuckets[i].weekEnd;
+                
+                if (releaseDate >= wStart && releaseDate < wEnd) {
+                    weeklyBuckets[i].cards.push({
+                        name: uCard.name,
+                        releaseDate: releaseDate.toISOString(),
+                        cost: uCard.cost || 0,
+                        power: uCard.power || 0,
+                        description: uCard.description || "Ability unknown.",
+                        cardDefId: uCard.cardDefId,
+                        art: uCard.art,
+                        source: uCard.source || "New Release"
+                    });
+                    break;
                 }
             }
         });
 
-        // Optional: Sort by release date so they appear in chronological order
-        thisWeek.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
-        nextWeek.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
+        // Sort cards within each week chronologically
+        weeklyBuckets.forEach(bucket => {
+            bucket.cards.sort((a, b) => new Date(a.releaseDate) - new Date(b.releaseDate));
+        });
+
+        // 5. Build final result JSON structure
+        const thisWeek = weeklyBuckets[0] ? weeklyBuckets[0].cards : [];
+        const nextWeek = weeklyBuckets[1] ? weeklyBuckets[1].cards : [];
+
+        const weeks = weeklyBuckets.map((w, idx) => {
+            let label = "";
+            if (idx === 0) {
+                label = "This Week";
+            } else if (idx === 1) {
+                label = isNextWeekNewSeason ? "Next Week (New Season)" : "Next Week";
+            } else {
+                const startD = w.weekStart;
+                const monthStr = startD.toLocaleDateString("en-US", { month: 'short', timeZone: 'UTC' });
+                const dayStr = startD.toLocaleDateString("en-US", { day: 'numeric', timeZone: 'UTC' });
+                label = `Week of ${monthStr} ${dayStr}`;
+            }
+            return {
+                label,
+                weekStart: w.weekStart.toISOString(),
+                weekEnd: w.weekEnd.toISOString(),
+                cards: w.cards
+            };
+        });
 
         const result = {
             weekStart: thisWeekStart.toISOString(),
             thisWeek,
-            nextWeek
+            nextWeek,
+            weeks
         };
 
         // Cache the result asynchronously if possible

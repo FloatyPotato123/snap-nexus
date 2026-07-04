@@ -26,11 +26,16 @@ import {
 } from "./handlers/youtube.js";
 
 
+
+
+
 import indexHtml from "./templates/index.html";
 import searchHtml from "./templates/player-search.html";
 import profileHtml from "./templates/player-profile.html";
 import decksHtml from "./templates/decks.html";
 import leaderboardHtml from "./templates/leaderboard.html";
+
+
 import navbarHtml from "./templates/components/navbar.html";
 import layoutHtml from "./templates/layout.html";
 
@@ -43,15 +48,44 @@ import { CRON_SCHEDULES } from "./config.js";
 
 const app = new Hono();
 
+// Middleware to load and cache season dates in global memory (1-hour cache)
+let lastSeasonsFetch = 0;
+const SEASONS_CACHE_TTL = 60 * 60 * 1000; // 1 Hour
+
+app.use("*", async (c, next) => {
+    const now = Date.now();
+    if (!globalThis.SEASONS_CACHE || (now - lastSeasonsFetch > SEASONS_CACHE_TTL)) {
+        if (c.env && c.env.DB) {
+            try {
+                const { results } = await c.env.DB.prepare(
+                    "SELECT season_id, start_date, end_date FROM Seasons ORDER BY start_date ASC"
+                ).all();
+                if (results && results.length > 0) {
+                    globalThis.SEASONS_CACHE = results;
+                    lastSeasonsFetch = now;
+                }
+            } catch (e) {
+                console.error("Failed to cache seasons from D1:", e);
+            }
+        }
+    }
+    await next();
+});
+
 // Helper to render with Layout
 function render(content, title = 'Snap Nexus', headScripts = '', footerScripts = '') {
+    let injectedHead = headScripts;
+    if (globalThis.SEASONS_CACHE) {
+        injectedHead = `<script>globalThis.SEASONS_CACHE = ${JSON.stringify(globalThis.SEASONS_CACHE)};</script>` + headScripts;
+    }
     return layoutHtml
         .replace('<!-- TITLE -->', title)
         .replace('<!-- NAV -->', navbarHtml)
         .replace('<!-- CONTENT -->', content)
-        .replace('<!-- HEAD_SCRIPTS -->', headScripts)
+        .replace('<!-- HEAD_SCRIPTS -->', injectedHead)
         .replace('<!-- FOOTER_SCRIPTS -->', footerScripts);
 }
+
 
 // --- UI ROUTES ---
 app.get("/", (c) => c.html(render(indexHtml, 'Infinite Dashboard - Snap Nexus', '', '<script src="/client/home.js"></script>')));
@@ -60,8 +94,13 @@ app.get("/player/:id", (c) => c.html(render(profileHtml, 'Player Profile - Snap 
 app.get("/decks", (c) => c.html(render(decksHtml, 'Deck Generator - Snap Nexus', '', '<script src="/client/decks.js"></script>')));
 app.get("/leaderboard", (c) => c.html(render(leaderboardHtml, 'Infinite Leaderboard - Snap Nexus', '', '<script src="/client/leaderboard.js"></script>')));
 
+
+
 // --- API DATA ROUTES ---
 const api = new Hono();
+
+
+
 api.get("/decks/random", (c) => handleRandomDeck(c));
 api.get("/decks/decode", (c) => handleDecodeDeck(c));
 api.get("/cards/random", (c) => handleRandomCards(c));
@@ -82,6 +121,7 @@ api.get("/leaderboard/live", (c) => handleLiveLeaderboard(c));
 api.get("/leaderboard/movers", (c) => handleLeaderboardComparison(c));
 api.get("/history/seasons", (c) => handleSeasonHistory(c));
 api.get("/leaderboard/rolling", (c) => handleGetRollingHistory(c));
+api.get("/seasons", (c) => c.json(globalThis.SEASONS_CACHE || []));
 
 // KM Best YouTube Tracking
 api.get("/decks/kmbest", (c) => handleKMDecksList(c));

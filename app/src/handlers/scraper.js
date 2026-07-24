@@ -19,7 +19,8 @@ import { logError } from '../utils/errors.js';
 import {
     getLeaderboardApiUrl,
     SEASON_ROLLOVER_BUFFER_MINUTES,
-    SEASON_RESET_HOUR_UTC
+    SEASON_RESET_HOUR_UTC,
+    ROLLING_HISTORY_KV_KEY
 } from '../config.js';
 
 // ============================================================================
@@ -217,6 +218,13 @@ export async function runDailyScrape(env) {
             await recordPlayerStats(env.DB, seenAt, statsEntries);
         }
 
+        // 5. Archive Rolling 24h Data to D1 (Step Compression)
+        try {
+            await archiveRollingDataToD1(env, seenAt, existingIdMap, targetYear, targetMonth);
+        } catch (archiveErr) {
+            console.error('[Scraper] Failed to archive rolling data:', archiveErr);
+        }
+
         console.log(`[Scraper] Success: Scraped ${leaderboard.length} players for ${seenAt}`);
 
     } catch (error) {
@@ -260,5 +268,97 @@ function shouldCapturePreviousSeason(now, year, month) {
 
     // Check if current time is within the buffer window
     return now >= resetTime && now <= bufferEnd;
+}
+
+/**
+ * Archives the last 24h of rolling KV data to D1 with step compression.
+ * Deletes data older than the current season.
+ */
+async function archiveRollingDataToD1(env, dateStr, existingIdMap, currentYear, currentMonth) {
+    const ROLLING_SHARD_COUNT = 10;
+    const shardKeys = Array.from({length: ROLLING_SHARD_COUNT}, (_, i) => `${ROLLING_HISTORY_KV_KEY}_shard_${i}`);
+    
+    const shards = await Promise.all(shardKeys.map(k => env.MARVEL_SNAP_HUB.get(k, { type: 'json' })));
+    
+    const archiveEntries = [];
+    
+    for (const shard of shards) {
+        if (!shard || !shard.players) continue;
+        
+        for (const [name, history] of Object.entries(shard.players)) {
+            // Find player ID
+            const id = existingIdMap[name] || name;
+            
+            // Step Compression Algorithm
+            const compressed = [];
+            let lastSP = null;
+            
+            for (let i = 0; i < history.length; i++) {
+                const pt = history[i];
+                if (!pt) continue;
+                
+                const currentSP = pt[0];
+                const currentRank = pt[1];
+                
+                if (currentSP !== lastSP) {
+                    // SP changed. Save the point immediately preceding this one (if it exists and wasn't just saved)
+                    if (i > 0 && history[i - 1]) {
+                        const prev = history[i - 1];
+                        // Only add the preceding point if it's not the same index we just processed
+                        if (compressed.length === 0 || compressed[compressed.length - 1].t !== (i - 1)) {
+                            compressed.push({ t: i - 1, s: prev[0], r: prev[1] });
+                        }
+                    }
+                    
+                    // Save the new changed point
+                    compressed.push({ t: i, s: currentSP, r: currentRank });
+                    lastSP = currentSP;
+                } else if (i === 0 || i === history.length - 1) {
+                    // Anchor points: Always save the first and last valid points of the day
+                    if (compressed.length === 0 || compressed[compressed.length - 1].t !== i) {
+                        compressed.push({ t: i, s: currentSP, r: currentRank });
+                    }
+                }
+            }
+            
+            if (compressed.length > 0) {
+                archiveEntries.push({
+                    playerId: String(id),
+                    date: dateStr,
+                    historyJson: JSON.stringify(compressed)
+                });
+            }
+        }
+    }
+    
+    // Batch insert into D1
+    if (archiveEntries.length > 0) {
+        // SQLite limits variables per query. A batch of 100 entries has 300 variables.
+        const BATCH_SIZE = 50; 
+        for (let i = 0; i < archiveEntries.length; i += BATCH_SIZE) {
+            const batch = archiveEntries.slice(i, i + BATCH_SIZE);
+            const placeholders = batch.map(() => '(?, ?, ?)').join(',');
+            const values = batch.flatMap(e => [e.playerId, e.date, e.historyJson]);
+            
+            await env.DB.prepare(
+                `INSERT OR REPLACE INTO PlayerRollingHistory (player_id, date, history_json) VALUES ${placeholders}`
+            ).bind(...values).run();
+        }
+        console.log(`[Scraper] Archived rolling data for ${archiveEntries.length} players.`);
+    }
+
+    // Cleanup: Delete data older than the current season's start date
+    // Note: month is 1-12, getSeasonStartForMonth takes 0-11
+    const seasonStart = getSeasonStartForMonth(currentYear, currentMonth - 1);
+    seasonStart.setUTCHours(19, 0, 0, 0);
+    const seasonStartStr = seasonStart.toISOString().split('T')[0];
+    
+    const { success, meta } = await env.DB.prepare(
+        `DELETE FROM PlayerRollingHistory WHERE date < ?`
+    ).bind(seasonStartStr).run();
+    
+    if (success && meta.changes > 0) {
+        console.log(`[Scraper] Cleaned up ${meta.changes} old rolling history records prior to ${seasonStartStr}.`);
+    }
 }
 

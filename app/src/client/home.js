@@ -562,7 +562,7 @@
                         <td style="text-align:right;">
                             <div class="mover-cell-right">
                                 <span class="text-muted" style="font-size:0.8rem;">${p.score} SP</span>
-                                <span class="badge secondary">#${p.rank}</span>
+                                <span class="badge secondary" style="color: #ffcc00 !important;">#${p.rank}</span>
                             </div>
                         </td>
                     </tr>`;

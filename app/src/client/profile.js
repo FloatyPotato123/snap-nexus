@@ -173,7 +173,7 @@
 
             // Refresh comparisons for the new month
             await refreshComparisonData(year, month);
-            UI.updateSeasonChartUI();
+            UI.updateSeasonChartUI(true);
         } catch (e) {
             console.warn("[Profile] Error loading season data:", e);
         }
@@ -189,9 +189,41 @@
                     const data = await res.json();
                     p.stats = data.currentSeasonStats || [];
                     p.liveStats = { rank: data.currentRank, sp: data.currentSP };
+                    p.seasonRollingStats = data.seasonRollingStats || [];
+                    p.rollingHistory = [];
                 }
             } catch (e) {
                 console.warn(`[Profile] Failed to fetch comparison for ${p.name}`, e);
+            }
+            
+            try {
+                const rollReq = await fetch(`/api/leaderboard/rolling?id=${encodeURIComponent(p.id)}`);
+                if (rollReq.ok) {
+                    const rollData = await rollReq.json();
+                    let history = rollData.playerHistory || [];
+                    const updatedAt = rollData.updatedAt || 0;
+
+                    if (updatedAt > 0 && p.liveStats && p.liveStats.sp && p.liveStats.rank) {
+                        const now = Date.now();
+                        const diffMs = now - updatedAt;
+                        const intervals = Math.floor(diffMs / (5 * 60 * 1000));
+
+                        if (intervals > 0) {
+                            for (let i = 0; i < intervals; i++) {
+                                history.push(null);
+                            }
+                        }
+
+                        if (history.length > 288) {
+                            history = history.slice(history.length - 288);
+                        }
+
+                        history.push([p.liveStats.sp, p.liveStats.rank]);
+                    }
+                    p.rollingHistory = history;
+                }
+            } catch (e) {
+                console.warn(`[Profile] Failed to fetch rolling history for ${p.name}`, e);
             }
         });
         await Promise.all(promises);
@@ -294,7 +326,7 @@
             }
         },
 
-        updateSeasonChartUI() {
+        updateSeasonChartUI(animate = false) {
             const isCurrent = this.isViewingCurrentSeason();
             let statsToRender = State.primaryPlayerStats;
 
@@ -310,7 +342,7 @@
                     stats: (isCurrent && p.liveStats?.rank) ? this.mergeLiveStats(p.stats, p.liveStats) : p.stats
                 }));
 
-                Charts.renderSeasonChart(statsToRender, processedComparison);
+                Charts.renderSeasonChart(statsToRender, processedComparison, animate);
                 this.updateAdvancedStats(statsToRender);
             } else {
                 this.toggleChartDisplay('season', false);
@@ -522,21 +554,30 @@
             };
         },
 
-        buildHybridData(stats) {
+        buildHybridData(stats, rollingStats = null, rollingHistory = null) {
             const dataPoints = [];
             const isCurrent = UI.isViewingCurrentSeason();
             let lastHighResTime = 0;
 
-            if (State.seasonRollingStats && State.seasonRollingStats.length > 0) {
-                State.seasonRollingStats.forEach(row => {
+            if (rollingStats && rollingStats.length > 0) {
+                rollingStats.forEach(row => {
                     if (!row.history_json) return;
                     try {
                         const parsed = JSON.parse(row.history_json);
-                        const baseDate = new Date(row.date + 'T19:15:00Z');
+                        const baseDate = new Date(row.date + 'T19:00:00Z');
                         const baseTime = baseDate.getTime();
                         
+                        let maxT = 287; // Default max index for 24h of 5-min intervals
+                        if (parsed.length > 0) {
+                            maxT = parsed[parsed.length - 1].t;
+                        }
+                        
                         parsed.forEach(pt => {
-                            const ptTime = baseTime + (pt.t * 60 * 1000);
+                            // pt.t is the index of the 5-minute interval.
+                            // The highest index (maxT) represents the baseTime (end of the period).
+                            // So we subtract the intervals backwards from baseTime.
+                            const ptTime = baseTime - ((maxT - pt.t) * 5 * 60 * 1000);
+                            
                             if (ptTime > lastHighResTime) lastHighResTime = ptTime;
                             dataPoints.push({
                                 x: ptTime,
@@ -557,25 +598,26 @@
             if (stats && stats.length > 0) {
                 stats.forEach(pt => {
                     if (pt.sp > 0) {
-                        const ptTime = new Date(pt.date + 'T19:15:00Z').getTime();
+                        const ptTime = new Date(pt.date + 'T19:00:00Z').getTime();
                         if (ptTime < minRollingTime) {
                             dataPoints.push({
                                 x: ptTime,
                                 y: pt.sp,
-                                rank: pt.rank
+                                rank: pt.rank,
+                                isDaily: true
                             });
                         }
                     }
                 });
             }
             
-            if (isCurrent && State.rollingHistory && State.rollingHistory.length > 0) {
+            if (isCurrent && rollingHistory && rollingHistory.length > 0) {
                 const now = new Date();
                 now.setSeconds(0, 0);
                 const kvPoints = [];
-                const len = State.rollingHistory.length;
+                const len = rollingHistory.length;
                 for (let i = 0; i < len; i++) {
-                    const h = State.rollingHistory[i];
+                    const h = rollingHistory[i];
                     if (h && h[0] !== null) {
                         kvPoints.push({
                             x: now.getTime() - ((len - 1 - i) * 5 * 60 * 1000),
@@ -596,9 +638,9 @@
             return dataPoints;
         },
 
-        renderSeasonChart(stats, comparedOverride) {
+        renderSeasonChart(stats, comparedOverride, animate = false) {
             const ctx = $('seasonChart').getContext('2d');
-            const rawData = this.buildHybridData(stats);
+            const rawData = this.buildHybridData(stats, State.seasonRollingStats, State.rollingHistory);
             
             // Subsample for full season view to replicate categorical look
             const isCurrent = UI.isViewingCurrentSeason();
@@ -606,22 +648,54 @@
             let primaryData = rawData;
             
             if (isFullSeason) {
-                // Keep only the last point of each day
+                // Keep only the last point of each day using Local Time to prevent day-shifting
                 const dailyPoints = new Map();
                 rawData.forEach(p => {
-                    const date = new Date(p.x).toISOString().split('T')[0];
+                    const d = new Date(p.x);
+                    const date = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
                     dailyPoints.set(date, p);
                 });
                 primaryData = Array.from(dailyPoints.values()).sort((a, b) => a.x - b.x);
+                
+                // Snap full season points to local midnight so they perfectly align with Chart.js gridlines
+                primaryData.forEach(p => {
+                    p.x = new Date(p.x).setHours(0, 0, 0, 0);
+                    p.isDaily = true;
+                });
             }
             
             let minTime, maxTime;
             if (isCurrent) {
                 maxTime = Date.now();
+                const seasonStart = SnapUtils.getSeasonStart(new Date()).getTime();
                 if (State.zoomDays >= 29) {
-                    minTime = SnapUtils.getSeasonStart(new Date()).getTime();
+                    minTime = seasonStart;
                 } else {
                     minTime = maxTime - (State.zoomDays * 24 * 60 * 60 * 1000);
+                    if (minTime < seasonStart) {
+                        minTime = seasonStart;
+                    }
+                }
+                
+                // Crop empty space on the left if the player started playing after the minTime
+                if (primaryData.length > 0 && primaryData[0].x > minTime) {
+                    minTime = primaryData[0].x;
+                }
+                
+                // Dynamically update the slider to be linear with available days
+                const slider = $('seasonZoomSlider');
+                if (slider) {
+                    let availableDays = 30;
+                    if (primaryData.length > 0) {
+                        availableDays = Math.ceil((maxTime - primaryData[0].x) / (24 * 60 * 60 * 1000));
+                        if (availableDays > 30) availableDays = 30;
+                        if (availableDays < 1) availableDays = 1;
+                    }
+                    slider.max = availableDays;
+                    let sv = availableDays - State.zoomDays + 1;
+                    if (sv < 1) sv = 1;
+                    if (sv > availableDays) sv = availableDays;
+                    slider.value = sv;
                 }
             } else {
                 if (primaryData.length > 0) {
@@ -632,6 +706,16 @@
                     minTime = maxTime - (30 * 24 * 60 * 60 * 1000);
                 }
             }
+            
+            if (isFullSeason) {
+                maxTime = new Date(maxTime).setHours(0, 0, 0, 0);
+            }
+            
+            // Cap future points to maxTime so they are drawn exactly on the right edge instead of off-screen
+            // This prevents the 'All' graph from losing its entire final day if the server timestamp is slightly ahead
+            primaryData.forEach(p => {
+                if (p.x > maxTime) p.x = maxTime;
+            });
             
             let visibleData = primaryData.filter(p => p.x >= minTime && p.x <= maxTime);
             const beforeMin = primaryData.filter(p => p.x < minTime);
@@ -644,17 +728,98 @@
             
             UI.updateHybridSummary(visibleData);
 
-            // Meaningful Proportional Scaling (No hardcoded season toggles)
-            let allSPs = visibleData.map(p => p.y);
+            const comparedPlayers = comparedOverride || State.comparedPlayers;
+            State.isComparing = comparedPlayers.length > 0;
+            const datasets = [];
+            
+            if (!State.isComparing) {
+                datasets.push({
+                    label: 'Rank',
+                    data: primaryData.map(p => ({x: p.x, y: p.rank, isDaily: p.isDaily})),
+                    borderColor: '#2196F3',
+                    yAxisID: 'yRank',
+                    borderDash: [5, 5],
+                    stepped: !isFullSeason,
+                    pointRadius: isFullSeason ? 3 : 0,
+                    pointBackgroundColor: '#1e293b',
+                    pointBorderWidth: 2,
+                    tension: isFullSeason ? 0.3 : 0
+                });
+                datasets.push({
+                    label: 'SP',
+                    data: primaryData.map(p => ({x: p.x, y: p.y, isDaily: p.isDaily})),
+                    borderColor: '#ffcc00',
+                    yAxisID: 'ySP',
+                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
+                    fill: 'origin',
+                    stepped: !isFullSeason,
+                    pointRadius: isFullSeason ? 3 : 0,
+                    pointBackgroundColor: '#ffcc00',
+                    tension: isFullSeason ? 0.3 : 0
+                });
+            } else {
+                const primaryName = $('pName').dataset.rawName || 'Player';
+                datasets.push({
+                    label: primaryName,
+                    data: primaryData.map(p => ({x: p.x, y: p.y, isDaily: p.isDaily})),
+                    borderColor: '#ffcc00',
+                    yAxisID: 'ySP',
+                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
+                    fill: 'origin',
+                    stepped: !isFullSeason,
+                    pointRadius: isFullSeason ? 3 : 0,
+                    pointBackgroundColor: '#ffcc00',
+                    tension: isFullSeason ? 0.3 : 0
+                });
+                
+                comparedPlayers.forEach((p, i) => {
+                    const color = SnapUtils.CHART_PALETTE[(i + 1) % SnapUtils.CHART_PALETTE.length];
+                    
+                    let pRawData = this.buildHybridData(p.stats || [], p.seasonRollingStats, p.rollingHistory);
+                    
+                    if (isFullSeason) {
+                        const dailyPoints = new Map();
+                        pRawData.forEach(pt => {
+                            const d = new Date(pt.x);
+                            const date = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+                            dailyPoints.set(date, pt);
+                        });
+                        pRawData = Array.from(dailyPoints.values()).sort((a, b) => a.x - b.x);
+                        pRawData.forEach(pt => {
+                            pt.x = new Date(pt.x).setHours(0, 0, 0, 0);
+                            pt.isDaily = true;
+                        });
+                    }
+
+                    // Cap future points to maxTime so they don't render outside the chart bounds
+                    pRawData.forEach(pt => {
+                        if (pt.x > maxTime) pt.x = maxTime;
+                    });
+                    
+                    datasets.push({
+                        label: p.name,
+                        data: pRawData.map(pt => ({x: pt.x, y: pt.y, isDaily: pt.isDaily})),
+                        borderColor: color.border,
+                        yAxisID: 'ySP',
+                        backgroundColor: color.bg.replace('0.2)', '0.05)'),
+                        fill: 'origin',
+                        stepped: !isFullSeason,
+                        pointRadius: isFullSeason ? 3 : 0,
+                        pointBackgroundColor: color.border,
+                        tension: isFullSeason ? 0.3 : 0
+                    });
+                });
+            }
+
+            // Mainline SP Scaling Logic
+            let allSPs = [].concat(...datasets.filter(ds => ds.yAxisID === 'ySP').map(ds => ds.data.map(d => d.y))).filter(v => v > 0);
             let minSP, maxSP;
             if (allSPs.length > 0) {
                 let dMin = Math.min(...allSPs), dMax = Math.max(...allSPs);
-                let spread = dMax - dMin;
-                if (spread < 50) spread = 50; // Safety minimum for flatlines
-                
-                const padding = spread * 0.15; // 15% padding top and bottom
-                minSP = dMin - padding;
-                maxSP = dMax + padding;
+                if ((dMax - dMin) < 1000) { 
+                    minSP = (dMax + dMin) / 2 - 500; 
+                    maxSP = (dMax + dMin) / 2 + 500; 
+                }
             }
 
             let allRanks = visibleData.map(p => p.rank);
@@ -676,37 +841,11 @@
                 if (maxRank < 100) maxRank = 100;
             }
 
-            const datasets = [
-                {
-                    label: 'Rank',
-                    data: primaryData.map(p => ({x: p.x, y: p.rank})),
-                    borderColor: '#2196F3',
-                    yAxisID: 'yRank',
-                    borderDash: [5, 5],
-                    stepped: isFullSeason ? false : true,
-                    pointRadius: isFullSeason ? 4 : 0,
-                    pointBackgroundColor: '#1e293b',
-                    pointBorderWidth: 2,
-                    tension: isFullSeason ? 0.3 : 0
-                },
-                {
-                    label: 'SP',
-                    data: primaryData.map(p => ({x: p.x, y: p.y})),
-                    borderColor: '#ffcc00',
-                    yAxisID: 'ySP',
-                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
-                    fill: 'origin',
-                    stepped: isFullSeason ? false : true,
-                    pointRadius: isFullSeason ? 4 : 0,
-                    pointBackgroundColor: '#ffcc00',
-                    tension: isFullSeason ? 0.3 : 0
-                }
-            ];
-
             if (State.seasonChartInstance) {
                 State.seasonChartInstance.data.datasets = datasets;
                 State.seasonChartInstance.options.scales.x.min = minTime;
                 State.seasonChartInstance.options.scales.x.max = maxTime;
+                State.seasonChartInstance.options.scales.x.time.tooltipFormat = isFullSeason ? 'MMM d' : 'MMM d, h:mm a';
                 if (minSP !== undefined) {
                     State.seasonChartInstance.options.scales.ySP.suggestedMin = minSP;
                     State.seasonChartInstance.options.scales.ySP.suggestedMax = maxSP;
@@ -714,7 +853,7 @@
                 State.seasonChartInstance.options.scales.yRank.suggestedMax = maxRank;
                 State.seasonChartInstance.options.scales.yRank.suggestedMin = minRank;
                 State.seasonChartInstance.visibleData = visibleData;
-                State.seasonChartInstance.update('none');
+                State.seasonChartInstance.update(animate ? undefined : 'none');
             } else {
                 const rankAxis = this.getRankAxis(true);
                 rankAxis.suggestedMax = maxRank;
@@ -724,9 +863,39 @@
                     type: 'line',
                     data: { datasets },
                     options: {
+                        clip: { left: 0, top: false, right: false, bottom: 0 },
                         responsive: true, maintainAspectRatio: false,
                         layout: { padding: { top: 10 } },
                         interaction: { mode: 'index', intersect: false },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        if (!context || !context.length) return '';
+                                        const pt = context[0].raw;
+                                        if (!pt) return '';
+                                        const date = new Date(pt.x);
+                                        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                                        const month = months[date.getMonth()];
+                                        const day = date.getDate();
+                                        
+                                        // Only hide time if it's explicitly flagged as a daily point
+                                        if (pt.isDaily) {
+                                            return `${month} ${day}`;
+                                        }
+                                        
+                                        let hours = date.getHours();
+                                        const ampm = hours >= 12 ? 'PM' : 'AM';
+                                        hours = hours % 12;
+                                        if (hours === 0) hours = 12;
+                                        let minutes = date.getMinutes();
+                                        if (minutes < 10) minutes = '0' + minutes;
+                                        
+                                        return `${month} ${day}, ${hours}:${minutes} ${ampm}`;
+                                    }
+                                }
+                            }
+                        },
                         scales: {
                             x: {
                                 type: 'time',
@@ -737,7 +906,7 @@
                                         hour: 'MMM d, h a',
                                         day: 'MMM d'
                                     },
-                                    tooltipFormat: 'MMM d, h:mm a'
+                                    tooltipFormat: isFullSeason ? 'MMM d' : 'MMM d, h:mm a'
                                 },
                                 grid: { color: '#333' },
                                 ticks: { color: '#aaa', maxTicksLimit: 10 }
@@ -866,7 +1035,11 @@
             
             const slider = $('seasonZoomSlider');
             if (slider) {
-                slider.value = 31 - days;
+                let max = 30;
+                if (slider.max) max = parseInt(slider.max);
+                let sv = max - days + 1;
+                if (sv < 1) sv = 1;
+                slider.value = sv;
             }
 
             document.querySelectorAll('.zoom-btn').forEach(btn => {
@@ -882,7 +1055,19 @@
         },
         
         handleSeasonZoomSlider(val, isDrag) {
-            this.setSeasonZoom(31 - val);
+            const slider = $('seasonZoomSlider');
+            let max = 30;
+            if (slider && slider.max) max = parseInt(slider.max);
+            
+            const numVal = parseFloat(val);
+            
+            // If the slider is dragged all the way to the left (1 or less), force "All" mode (30 days)
+            // even if the dynamic max days is less than 30.
+            if (numVal <= 1) {
+                this.setSeasonZoom(30);
+            } else {
+                this.setSeasonZoom(max - numVal + 1);
+            }
         },
 
         async addComparedPlayer(id, name) {

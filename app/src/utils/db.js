@@ -322,6 +322,23 @@ export function getPlayerStatsRangeDeepStmt(db, playerIds, start, end) {
 }
 
 /**
+ * Returns a bound statement for the rolling history range lookup.
+ */
+export function getPlayerRollingHistoryRangeDeepStmt(db, playerIds, start, end) {
+    if (!playerIds || playerIds.length === 0) return null;
+    const placeholders = playerIds.map(() => '?').join(',');
+    const sql = `
+        SELECT date, history_json
+        FROM PlayerRollingHistory 
+        WHERE player_id IN (${placeholders})
+        AND date BETWEEN ? AND ?
+        ORDER BY date ASC
+    `;
+
+    return db.prepare(sql).bind(...playerIds, start, end);
+}
+
+/**
  * Retrieves daily stats for a player and all aliases within a date range.
  */
 export async function getPlayerStatsRangeDeep(db, playerId, start, end) {

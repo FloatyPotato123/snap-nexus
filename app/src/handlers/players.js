@@ -16,6 +16,7 @@ import {
     getPlayerStatsRange,
     getPlayerStatsRangeDeep,
     getPlayerStatsRangeDeepStmt,
+    getPlayerRollingHistoryRangeDeepStmt,
     batchGetPlayerHistories,
     getPlayerHistoricalRanks,
     getPlayerHistoricalRanksDeep,
@@ -381,6 +382,7 @@ export async function handleGetPlayerProfile(c) {
         // 1. Prepare D1 statements for batching
         const stmtHistory = getPlayerHistoryDeepStmt(db, queryIds);
         const stmtStats = getPlayerStatsRangeDeepStmt(db, queryIds, startDateStr, endDateStr);
+        const stmtRolling = getPlayerRollingHistoryRangeDeepStmt(db, queryIds, startDateStr, endDateStr);
         const stmtRanks = getPlayerHistoricalRanksDeepStmt(db, queryIds, historicalDates);
         
         // 4. Theoretical Overlap Detection (Same-Day Collision)
@@ -400,7 +402,7 @@ export async function handleGetPlayerProfile(c) {
 
         // 2. Execute Batch D1 and Live Data concurrently
         const [batchResults, { map: liveMap }, collisionsRaw] = await Promise.all([
-            db.batch([stmtHistory, stmtStats, stmtRanks, stmtOverlap].filter(Boolean)),
+            db.batch([stmtHistory, stmtStats, stmtRolling, stmtRanks, stmtOverlap].filter(Boolean)),
             getLiveLeaderboardData(),
             c.env.MARVEL_SNAP_HUB.get(ROLLING_COLLISIONS_KV_KEY, { type: 'json' })
         ]);
@@ -408,10 +410,11 @@ export async function handleGetPlayerProfile(c) {
         const collisions = collisionsRaw || {};
         
         // Unpack batch results (careful with ordering if some stmts were filtered)
-        // Since we know all 3 are returned for a valid target, we can unpack directly
+        // Since we know all 4 are returned for a valid target, we can unpack directly
         let history = batchResults[0]?.results || [];
         const d1Stats = batchResults[1]?.results || [];
-        const d1HistoricalResults = batchResults[2]?.results || [];
+        const d1Rolling = batchResults[2]?.results || [];
+        const d1HistoricalResults = batchResults[3]?.results || [];
 
         // Format current season stats for frontend
         const currentSeasonStats = d1Stats.map(s => ({
@@ -484,7 +487,7 @@ export async function handleGetPlayerProfile(c) {
         }
 
         // 3. Collision Check (Live KV + Historical Overlap)
-        const d1OverlapResults = batchResults[3]?.results?.[0] || { overlapDays: 0 };
+        const d1OverlapResults = batchResults[4]?.results?.[0] || { overlapDays: 0 };
         const isCollision = !!collisions[finalName.toLowerCase()] || (d1OverlapResults.overlapDays > 0);
 
         return c.json({
@@ -494,6 +497,7 @@ export async function handleGetPlayerProfile(c) {
             currentSP,
             history: history || [],
             currentSeasonStats,
+            seasonRollingStats: d1Rolling, // Raw JSON strings from D1
             historicalSeasonRanks: historicalRanks,
             isCollision: isCollision
         });

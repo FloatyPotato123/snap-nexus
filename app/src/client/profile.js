@@ -13,6 +13,8 @@
     const State = {
         playerId,
         primaryPlayerStats: [],
+        seasonRollingStats: null,
+        zoomDays: 30, // Default to Max
         comparedPlayers: [], // Array of { id, name, stats: [], liveStats: {} }
         liveStats: null,
         rollingHistory: null,
@@ -125,6 +127,7 @@
 
             if (data.currentSeasonStats?.length > 0) {
                 State.primaryPlayerStats = data.currentSeasonStats;
+                State.seasonRollingStats = data.seasonRollingStats || [];
                 UI.updateSeasonChartUI();
             } else {
                 UI.toggleChartDisplay('season', false);
@@ -166,6 +169,7 @@
             const data = await req.json();
             State.primaryPlayerStats = data.currentSeasonStats || [];
             State.liveStats = { rank: data.currentRank, sp: data.currentSP };
+            State.seasonRollingStats = data.seasonRollingStats || [];
 
             // Refresh comparisons for the new month
             await refreshComparisonData(year, month);
@@ -407,6 +411,42 @@
             $('pSeasonStats').classList.remove('d-none');
         },
 
+        updateHybridSummary(visibleData) {
+            const summaryEl = $('seasonStatsSummary');
+            if (!summaryEl) return;
+            
+            if (visibleData && visibleData.length >= 2) {
+                const start = visibleData[0];
+                const end = visibleData[visibleData.length - 1];
+                const spDelta = end.y - start.y;
+                const rankDelta = start.rank - end.rank;
+
+                const spDeltaStr = (spDelta >= 0 ? '+' : '') + spDelta.toLocaleString();
+                const rankDeltaStr = (rankDelta >= 0 ? '+' : '') + rankDelta.toLocaleString();
+                
+                // Note: Rank going up (numerically dropping, e.g. 100 to 10) is positive momentum.
+                // wait, if start=100 and end=10, rankDelta = 100 - 10 = 90. It's positive!
+                const rankClass = rankDelta > 0 ? 'positive' : (rankDelta < 0 ? 'negative' : '');
+                const spClass = spDelta > 0 ? 'positive' : (spDelta < 0 ? 'negative' : '');
+
+                summaryEl.innerHTML = `
+                    <div class="rolling-summary-flex">
+                        <div class="rolling-summary-item">
+                            <span class="label" style="color: #2196F3">Rank</span>
+                            <div class="value ${rankClass}">${rankDeltaStr} <span class="range">(#${start.rank.toLocaleString()} → #${end.rank.toLocaleString()})</span></div>
+                        </div>
+                        <div class="rolling-summary-item">
+                            <span class="label" style="color: #ffcc00">SP</span>
+                            <div class="value ${spClass}">${spDeltaStr} <span class="range">(${start.y.toLocaleString()} → ${end.y.toLocaleString()})</span></div>
+                        </div>
+                    </div>
+                `;
+                summaryEl.classList.remove('d-none');
+            } else {
+                summaryEl.classList.add('d-none');
+            }
+        },
+
         updateSeasonTriggerText() {
             const checked = document.querySelector('.season-check:checked');
             const btnText = $('seasonTriggerText');
@@ -482,229 +522,243 @@
             };
         },
 
-        renderSeasonChart(stats, comparedOverride) {
-            const ctx = $('seasonChart').getContext('2d');
-            if (State.seasonChartInstance) State.seasonChartInstance.destroy();
+        buildHybridData(stats) {
+            const dataPoints = [];
+            const isCurrent = UI.isViewingCurrentSeason();
+            let lastHighResTime = 0;
 
-            const comparedPlayers = comparedOverride || State.comparedPlayers;
-
-            const dateMap = new Set();
-            stats.forEach(s => dateMap.add(s.date));
-            comparedPlayers.forEach(p => (p.stats || []).forEach(s => dateMap.add(s.date)));
-            const sortedDates = Array.from(dateMap).sort();
-
-            const labels = sortedDates.map(dStr => {
-                const [y, m, d] = dStr.split('-');
-                return `${parseInt(m)}/${parseInt(d)}`;
-            });
-
-            const alignData = (sList, key) => sortedDates.map(dStr => sList.find(s => s.date === dStr)?.[key] || null);
-
-            State.isComparing = comparedPlayers.length > 0;
-            let datasets = [];
-
-            if (!State.isComparing) {
-                const common = { tension: 0.3, borderWidth: 2, pointRadius: 3, pointBackgroundColor: '#1e293b' };
-                datasets = [
-                    { ...common, label: 'Rank', data: alignData(stats, 'rank'), borderColor: '#2196F3', yAxisID: 'yRank', borderDash: [5, 5], clip: false },
-                    { ...common, label: 'SP', data: alignData(stats, 'sp'), borderColor: '#ffcc00', backgroundColor: 'rgba(255, 204, 0, 0.1)', pointBackgroundColor: '#ffcc00', yAxisID: 'ySP', fill: true }
-                ];
-            } else {
-                const primaryName = $('pName').dataset.rawName;
-                const common = { tension: 0.3, borderWidth: 2, pointRadius: 3, fill: true };
-                datasets.push({ ...common, label: primaryName, data: alignData(stats, 'sp'), borderColor: '#ffcc00', backgroundColor: 'rgba(255, 204, 0, 0.1)', pointBackgroundColor: '#ffcc00', yAxisID: 'ySP' });
-
-                comparedPlayers.forEach((p, i) => {
-                    const color = SnapUtils.CHART_PALETTE[(i + 1) % SnapUtils.CHART_PALETTE.length];
-                    datasets.push({ ...common, label: p.name, data: alignData(p.stats || [], 'sp'), borderColor: color.border, backgroundColor: color.bg.replace('0.2)', '0.05)'), pointBackgroundColor: color.border, yAxisID: 'ySP' });
+            if (State.seasonRollingStats && State.seasonRollingStats.length > 0) {
+                State.seasonRollingStats.forEach(row => {
+                    if (!row.history_json) return;
+                    try {
+                        const parsed = JSON.parse(row.history_json);
+                        const baseDate = new Date(row.date + 'T19:15:00Z');
+                        const baseTime = baseDate.getTime();
+                        
+                        parsed.forEach(pt => {
+                            const ptTime = baseTime + (pt.t * 60 * 1000);
+                            if (ptTime > lastHighResTime) lastHighResTime = ptTime;
+                            dataPoints.push({
+                                x: ptTime,
+                                y: pt.s,
+                                rank: pt.r
+                            });
+                        });
+                    } catch (e) { console.error("Parse error", e); }
                 });
             }
-
-            let allSPs = [].concat(...datasets.filter(ds => ds.yAxisID === 'ySP').map(ds => ds.data)).filter(v => v > 0);
-            let minSP, maxSP;
-            if (allSPs.length > 0) {
-                let dMin = Math.min(...allSPs), dMax = Math.max(...allSPs);
-                if ((dMax - dMin) < 1000) { minSP = (dMax + dMin) / 2 - 500; maxSP = (dMax + dMin) / 2 + 500; }
+            
+            // Merge in daily snapshots for any days prior to our earliest high-res data
+            let minRollingTime = Infinity;
+            if (dataPoints.length > 0) {
+                minRollingTime = Math.min(...dataPoints.map(p => p.x));
             }
-
-            State.seasonChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: { labels, datasets },
-                options: {
-                    responsive: true, maintainAspectRatio: false,
-                    layout: { padding: { top: 0 } },
-                    interaction: { mode: 'index', intersect: false },
-                    scales: {
-                        x: { grid: { color: '#333' }, ticks: { color: '#aaa' } },
-                        yRank: this.getRankAxis(!State.isComparing),
-                        ySP: this.getSPAxis(minSP, maxSP, State.isComparing ? 'left' : 'right', State.isComparing)
-                    },
-                    plugins: { legend: { labels: { color: '#fff' } } }
-                }
-            });
-            State.seasonChartInstance.rawStats = stats;
-        },
-
-        renderRollingChart(history) {
-            const chartEl = $('rollingChart');
-            if (!chartEl) return;
-            const ctx = chartEl.getContext('2d');
-            if (State.rollingChartInstance) State.rollingChartInstance.destroy();
-
-            // Generate labels (HH:MM) chronologically ending at NOW
-            const now = new Date();
-            // Round down to nearest minute for stability
-            now.setSeconds(0, 0);
-
-            const labels = [];
-            for (let i = history.length - 1; i >= 0; i--) {
-                const d = new Date(now.getTime() - (i * 5 * 60 * 1000));
-                labels.push(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-            }
-
-            const spData = history.map(h => h ? h[0] : null);
-            const rankData = history.map(h => h ? h[1] : null);
-
-            // Update 24h Summary in UI
-            const summaryEl = $('rollingStatsSummary');
-            if (summaryEl) {
-                const valid = history.filter(h => h && h[0] !== null);
-                if (valid.length >= 2) {
-                    const start = valid[0];
-                    const end = valid[valid.length - 1];
-                    const spDelta = end[0] - start[0];
-                    const rankDelta = start[1] - end[1];
-
-                    const spDeltaStr = (spDelta >= 0 ? '+' : '') + spDelta.toLocaleString();
-                    const rankDeltaStr = (rankDelta >= 0 ? '+' : '') + rankDelta.toLocaleString();
-
-                    const spColor = '#ffcc00';
-                    const rankColor = '#2196F3';
-
-                    summaryEl.innerHTML = `
-                        <div class="rolling-summary-flex">
-                            <div class="rolling-summary-item">
-                                <span class="label" style="color: ${rankColor}">Rank</span>
-                                <div class="value">${rankDeltaStr} <span class="range">(#${start[1].toLocaleString()} → #${end[1].toLocaleString()})</span></div>
-                            </div>
-                            <div class="rolling-summary-item">
-                                <span class="label" style="color: ${spColor}">SP</span>
-                                <div class="value">${spDeltaStr} <span class="range">(${start[0].toLocaleString()} → ${end[0].toLocaleString()})</span></div>
-                            </div>
-                        </div>
-                    `;
-                    summaryEl.classList.remove('d-none');
-                } else {
-                    summaryEl.classList.add('d-none');
-                }
-            }
-
-            let allSPs = spData.filter(v => v !== null);
-            let minSP, maxSP;
-            if (allSPs.length > 0) {
-                let dMin = Math.min(...allSPs), dMax = Math.max(...allSPs);
-                // Buffer for visual clarity
-                minSP = dMin - 50;
-                maxSP = dMax + 50;
-                // Ensure at least a 500 SP range for a "flatter" look if change is small
-                if (maxSP - minSP < 500) {
-                    const center = (maxSP + minSP) / 2;
-                    minSP = center - 250;
-                    maxSP = center + 250;
-                }
-            }
-
-            const isMobile = window.innerWidth < 640;
-
-            State.rollingChartInstance = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: 'Rank',
-                            data: rankData,
-                            borderColor: '#2196F3',
-                            yAxisID: 'yRank',
-                            borderDash: [5, 5],
-                            tension: 0.3,
-                            pointRadius: 0,
-                            clip: false
-                        },
-                        {
-                            label: 'SP',
-                            data: spData,
-                            borderColor: '#ffcc00',
-                            backgroundColor: 'rgba(255, 204, 0, 0.1)',
-                            pointBackgroundColor: '#ffcc00',
-                            yAxisID: 'ySP',
-                            fill: true,
-                            tension: 0.3,
-                            pointRadius: 0,
-                            pointHitRadius: 10
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: { mode: 'index', intersect: false },
-                    layout: { padding: { right: isMobile ? 8 : 4 } },
-                    scales: {
-                        x: {
-                            grid: { color: '#333' },
-                            ticks: {
-                                color: '#aaa',
-                                maxRotation: 0,
-                                autoSkip: false, // Turn off autoSkip to take manual control
-                                font: { size: isMobile ? 10 : 12 },
-                                callback: function (val, index) {
-                                    // Manually determine which labels to show
-                                    const total = labels.length;
-                                    const numTicks = isMobile ? 6 : 8; // Changed from 4 to 6
-
-                                    if (total <= numTicks) return this.getLabelForValue(val);
-
-                                    // We want to guarantee index 0 (oldest) and index total-1 (newest)
-                                    // Then evenly space the remaining ticks
-                                    const step = (total - 1) / (numTicks - 1);
-
-                                    // Check if this index is one of our target indices (allow slight rounding slop)
-                                    for (let i = 0; i < numTicks; i++) {
-                                        if (Math.abs(index - Math.round(i * step)) < 0.5) {
-                                            return this.getLabelForValue(val);
-                                        }
-                                    }
-                                    return null;
-                                }
-                            }
-                        },
-                        yRank: {
-                            ...this.getRankAxis(true),
-                            title: { display: true, text: 'Rank', color: '#2196F3' },
-                            ticks: {
-                                ...this.getRankAxis(true).ticks,
-                                font: { size: isMobile ? 10 : 12 }
-                            }
-                        },
-                        ySP: {
-                            ...this.getSPAxis(minSP, maxSP, 'right', false),
-                            title: { display: true, text: 'Snap Points', color: '#ffcc00' },
-                            ticks: {
-                                color: '#ffcc00',
-                                font: { size: isMobile ? 10 : 12 }
-                            }
-                        }
-                    },
-                    plugins: {
-                        legend: {
-                            display: true,
-                            labels: { color: '#fff' }
+            
+            if (stats && stats.length > 0) {
+                stats.forEach(pt => {
+                    if (pt.sp > 0) {
+                        const ptTime = new Date(pt.date + 'T19:15:00Z').getTime();
+                        if (ptTime < minRollingTime) {
+                            dataPoints.push({
+                                x: ptTime,
+                                y: pt.sp,
+                                rank: pt.rank
+                            });
                         }
                     }
+                });
+            }
+            
+            if (isCurrent && State.rollingHistory && State.rollingHistory.length > 0) {
+                const now = new Date();
+                now.setSeconds(0, 0);
+                const kvPoints = [];
+                const len = State.rollingHistory.length;
+                for (let i = 0; i < len; i++) {
+                    const h = State.rollingHistory[i];
+                    if (h && h[0] !== null) {
+                        kvPoints.push({
+                            x: now.getTime() - ((len - 1 - i) * 5 * 60 * 1000),
+                            y: h[0],
+                            rank: h[1]
+                        });
+                    }
                 }
-            });
-            State.rollingChartInstance.rawHistory = history;
+                
+                kvPoints.forEach(pt => {
+                    if (pt.x > lastHighResTime) {
+                        dataPoints.push(pt);
+                    }
+                });
+            }
+            
+            dataPoints.sort((a, b) => a.x - b.x);
+            return dataPoints;
+        },
+
+        renderSeasonChart(stats, comparedOverride) {
+            const ctx = $('seasonChart').getContext('2d');
+            const rawData = this.buildHybridData(stats);
+            
+            // Subsample for full season view to replicate categorical look
+            const isCurrent = UI.isViewingCurrentSeason();
+            const isFullSeason = !isCurrent || State.zoomDays >= 29;
+            let primaryData = rawData;
+            
+            if (isFullSeason) {
+                // Keep only the last point of each day
+                const dailyPoints = new Map();
+                rawData.forEach(p => {
+                    const date = new Date(p.x).toISOString().split('T')[0];
+                    dailyPoints.set(date, p);
+                });
+                primaryData = Array.from(dailyPoints.values()).sort((a, b) => a.x - b.x);
+            }
+            
+            let minTime, maxTime;
+            if (isCurrent) {
+                maxTime = Date.now();
+                if (State.zoomDays >= 29) {
+                    minTime = SnapUtils.getSeasonStart(new Date()).getTime();
+                } else {
+                    minTime = maxTime - (State.zoomDays * 24 * 60 * 60 * 1000);
+                }
+            } else {
+                if (primaryData.length > 0) {
+                    minTime = primaryData[0].x;
+                    maxTime = primaryData[primaryData.length - 1].x;
+                } else {
+                    maxTime = Date.now();
+                    minTime = maxTime - (30 * 24 * 60 * 60 * 1000);
+                }
+            }
+            
+            let visibleData = primaryData.filter(p => p.x >= minTime && p.x <= maxTime);
+            const beforeMin = primaryData.filter(p => p.x < minTime);
+            
+            // Critical fix: A stepped chart draws a horizontal line from the last known point before the window.
+            // We MUST include that point's Y-value in our dynamic axis bounds, otherwise the line gets pushed off screen!
+            if (beforeMin.length > 0) {
+                visibleData.unshift(beforeMin[beforeMin.length - 1]);
+            }
+            
+            UI.updateHybridSummary(visibleData);
+
+            // Meaningful Proportional Scaling (No hardcoded season toggles)
+            let allSPs = visibleData.map(p => p.y);
+            let minSP, maxSP;
+            if (allSPs.length > 0) {
+                let dMin = Math.min(...allSPs), dMax = Math.max(...allSPs);
+                let spread = dMax - dMin;
+                if (spread < 50) spread = 50; // Safety minimum for flatlines
+                
+                const padding = spread * 0.15; // 15% padding top and bottom
+                minSP = dMin - padding;
+                maxSP = dMax + padding;
+            }
+
+            let allRanks = visibleData.map(p => p.rank);
+            let maxRank = 100;
+            let minRank = undefined;
+            if (allRanks.length > 0) {
+                let highestRankVal = Math.max(...allRanks); // numerically highest = worst rank
+                let lowestRankVal = Math.min(...allRanks);  // numerically lowest = best rank
+                let spread = highestRankVal - lowestRankVal;
+                
+                if (spread < 10) spread = 10; // Safety minimum for flatlines
+                
+                const padding = spread * 0.15; // 15% padding
+                
+                maxRank = Math.ceil(highestRankVal + padding);
+                minRank = Math.max(1, Math.floor(lowestRankVal - padding));
+                
+                // Keep a baseline floor of 100 so the graph doesn't look squished for high ranks
+                if (maxRank < 100) maxRank = 100;
+            }
+
+            const datasets = [
+                {
+                    label: 'Rank',
+                    data: primaryData.map(p => ({x: p.x, y: p.rank})),
+                    borderColor: '#2196F3',
+                    yAxisID: 'yRank',
+                    borderDash: [5, 5],
+                    stepped: isFullSeason ? false : true,
+                    pointRadius: isFullSeason ? 4 : 0,
+                    pointBackgroundColor: '#1e293b',
+                    pointBorderWidth: 2,
+                    tension: isFullSeason ? 0.3 : 0
+                },
+                {
+                    label: 'SP',
+                    data: primaryData.map(p => ({x: p.x, y: p.y})),
+                    borderColor: '#ffcc00',
+                    yAxisID: 'ySP',
+                    backgroundColor: 'rgba(255, 204, 0, 0.1)',
+                    fill: 'origin',
+                    stepped: isFullSeason ? false : true,
+                    pointRadius: isFullSeason ? 4 : 0,
+                    pointBackgroundColor: '#ffcc00',
+                    tension: isFullSeason ? 0.3 : 0
+                }
+            ];
+
+            if (State.seasonChartInstance) {
+                State.seasonChartInstance.data.datasets = datasets;
+                State.seasonChartInstance.options.scales.x.min = minTime;
+                State.seasonChartInstance.options.scales.x.max = maxTime;
+                if (minSP !== undefined) {
+                    State.seasonChartInstance.options.scales.ySP.suggestedMin = minSP;
+                    State.seasonChartInstance.options.scales.ySP.suggestedMax = maxSP;
+                }
+                State.seasonChartInstance.options.scales.yRank.suggestedMax = maxRank;
+                State.seasonChartInstance.options.scales.yRank.suggestedMin = minRank;
+                State.seasonChartInstance.visibleData = visibleData;
+                State.seasonChartInstance.update('none');
+            } else {
+                const rankAxis = this.getRankAxis(true);
+                rankAxis.suggestedMax = maxRank;
+                if (minRank !== undefined) rankAxis.suggestedMin = minRank;
+
+                State.seasonChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: { datasets },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        layout: { padding: { top: 10 } },
+                        interaction: { mode: 'index', intersect: false },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                min: minTime,
+                                max: maxTime,
+                                time: {
+                                    displayFormats: {
+                                        hour: 'MMM d, h a',
+                                        day: 'MMM d'
+                                    },
+                                    tooltipFormat: 'MMM d, h:mm a'
+                                },
+                                grid: { color: '#333' },
+                                ticks: { color: '#aaa', maxTicksLimit: 10 }
+                            },
+                            ySP: this.getSPAxis(minSP, maxSP, 'right', false),
+                            yRank: rankAxis
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+                State.seasonChartInstance.visibleData = visibleData;
+            }
+            
+            const controls = $('seasonZoomControls');
+            if (controls) {
+                if (isCurrent) {
+                    controls.classList.remove('d-none');
+                } else {
+                    controls.classList.add('d-none');
+                }
+            }
         },
 
         renderHistoricalChart(stats) {
@@ -807,6 +861,30 @@
 
     // --- PUBLIC API ---
     window.SnapProfile = {
+        setSeasonZoom(days) {
+            State.zoomDays = days;
+            
+            const slider = $('seasonZoomSlider');
+            if (slider) {
+                slider.value = 31 - days;
+            }
+
+            document.querySelectorAll('.zoom-btn').forEach(btn => {
+                btn.classList.remove('active');
+                if (btn.innerText.includes(days + 'd') || 
+                   (days == 1 && btn.innerText.includes('24h')) ||
+                   (days == 30 && btn.innerText.includes('All'))) {
+                    btn.classList.add('active');
+                }
+            });
+            
+            UI.updateSeasonChartUI();
+        },
+        
+        handleSeasonZoomSlider(val, isDrag) {
+            this.setSeasonZoom(31 - val);
+        },
+
         async addComparedPlayer(id, name) {
             if (State.comparedPlayers.some(p => p.id === id)) return;
             if (State.comparedPlayers.length >= 5) return alert("Maximum 5 players.");
@@ -945,17 +1023,19 @@
         async generateBlob(State, chartInstance) {
             const playerStats = this.getHeaderStats(State, chartInstance);
             const isComparison = playerStats.length > 1;
+            const isFullSeason = State.zoomDays >= 30;
+            const height = isFullSeason ? 675 : 600;
 
             // Calculate header height based on number of players
             let headerHeight = 120;
             if (isComparison) {
-                if (playerStats.length <= 3) headerHeight = 130; // Final tightening
-                else headerHeight = 170; // Ultra-compact 2-row
-            } else if (playerStats[0]?.rankText) {
-                headerHeight = 130; // Same for single player w/ rank
+                if (playerStats.length <= 3) headerHeight = 150; 
+                else headerHeight = 190; 
+            } else if (playerStats[0]?.rankText || !isFullSeason) {
+                headerHeight = 165;
             }
 
-            const { width, height, dpi, padding } = { width: 1200, height: 675, dpi: 2, padding: 30 };
+            const { width, dpi, padding } = { width: 1200, dpi: 2, padding: 30 };
 
             const canvas = document.createElement('canvas');
             canvas.width = width * dpi; canvas.height = height * dpi;
@@ -990,17 +1070,15 @@
                     stats.rankText = "Rank " + pRank.dataset.rank;
                     if (pRank.dataset.sp) stats.spText = parseInt(pRank.dataset.sp).toLocaleString() + " SP";
                 }
-            } else {
-                const rawStats = chartInstance.rawStats || [];
-                if (rawStats.length > 0) {
-                    const last = rawStats[rawStats.length - 1];
-                    const end = SnapUtils.getSeasonEndForMonth(year, month - 1), endStr = end.toISOString().split('T')[0];
-                    const prev = new Date(end); prev.setUTCDate(prev.getUTCDate() - 1);
-                    const prevStr = prev.toISOString().split('T')[0];
-                    if ((last.date === endStr || last.date === prevStr) && last.rank) {
-                        stats.rankText = "Rank " + last.rank;
-                        if (last.sp) stats.spText = last.sp.toLocaleString() + " SP";
-                    }
+            }
+            
+            // Fallback for MockPlayer or past seasons where pRank is not set
+            if (!stats.rankText) {
+                const visibleData = State.seasonChartInstance?.visibleData || [];
+                if (visibleData.length > 0) {
+                    const last = visibleData[visibleData.length - 1];
+                    stats.rankText = "Rank " + last.rank;
+                    stats.spText = last.y.toLocaleString() + " SP";
                 }
             }
             results.push(stats);
@@ -1062,17 +1140,28 @@
 
             const scale = (obj, size) => {
                 if (!obj) return;
-                if (!obj.font) obj.font = {};
+                obj.font = { ...(obj.font || {}) };
                 obj.font.size = size * dpi; obj.font.family = "'Inter', system-ui, sans-serif";
             };
 
             const opt = newConfig.options;
-            Object.values(opt.scales || {}).forEach(s => {
+            // Shallow clone the scales object container
+            opt.scales = { ...(opt.scales || {}) };
+            
+            Object.keys(opt.scales).forEach(key => {
+                // Shallow clone the specific scale object
+                opt.scales[key] = { ...opt.scales[key] };
+                const s = opt.scales[key];
+                
                 if (s.ticks) {
+                    s.ticks = { ...s.ticks }; // Clone ticks before mutating
                     scale(s.ticks, 14);
                     s.ticks.padding = 10 * dpi;
                 }
-                if (s.title) scale(s.title, 16);
+                if (s.title) {
+                    s.title = { ...s.title }; // Clone title before mutating
+                    scale(s.title, 16);
+                }
             });
 
             if (opt.plugins?.legend?.labels) {
@@ -1100,7 +1189,16 @@
         },
 
         drawHeader(ctx, State, playerStats, padding, dpi) {
-            const season = document.querySelector('.season-check:checked')?.parentElement.querySelector('span').innerText || 'Season';
+            let seasonText = '';
+            if (State.zoomDays >= 30) {
+                seasonText = document.querySelector('.season-check:checked')?.parentElement.querySelector('span').innerText || 'Season';
+            } else {
+                const start = new Date(Date.now() - (State.zoomDays * 24 * 60 * 60 * 1000));
+                const end = new Date();
+                const fmt = d => d.toLocaleString('en-US', { month: 'short', day: 'numeric' });
+                seasonText = `${fmt(start)} → ${fmt(end)}`;
+            }
+            
             const isComparison = playerStats.length > 1;
 
             // Draw Season (Right Aligned)
@@ -1108,7 +1206,7 @@
             ctx.fillStyle = '#94a3b8';
             ctx.font = `${30 * dpi}px system-ui, sans-serif`;
             ctx.textAlign = 'right';
-            ctx.fillText(season, (1200 - padding) * dpi, padding * dpi + (25 * dpi));
+            ctx.fillText(seasonText, (1200 - padding) * dpi, padding * dpi + (25 * dpi));
 
             if (!isComparison) {
                 // Single Player Layout (Large Name)
@@ -1119,9 +1217,10 @@
                 ctx.font = `bold ${54 * dpi}px system-ui, sans-serif`;
                 ctx.fillText(p.name, padding * dpi, padding * dpi + (15 * dpi));
 
-                if (p.rankText || p.spText) {
-                    let curX = padding * dpi;
-                    const y = padding * dpi + (80 * dpi);
+                let curX = padding * dpi;
+                const y = padding * dpi + (80 * dpi);
+                
+                if (State.zoomDays >= 30) {
                     if (p.rankText) {
                         ctx.fillStyle = '#2196F3';
                         ctx.font = `bold ${36 * dpi}px system-ui, sans-serif`;
@@ -1132,6 +1231,33 @@
                         ctx.fillStyle = '#ffcc00';
                         ctx.font = `bold ${36 * dpi}px system-ui, sans-serif`;
                         ctx.fillText(p.spText, curX, y);
+                    }
+                } else {
+                    const valid = State.seasonChartInstance?.visibleData?.filter(h => h && h.y !== null) || [];
+                    if (valid.length >= 2) {
+                        const start = valid[0];
+                        const end = valid[valid.length - 1];
+                        
+                        const spDelta = end.y - start.y;
+                        const rankDelta = start.rank - end.rank;
+
+                        // Restore top baseline to match mainline
+                        ctx.textBaseline = 'top';
+
+                        // Draw Rank Section (Blue)
+                        const rPrefix = rankDelta >= 0 ? '+' : '';
+                        ctx.fillStyle = '#2196F3';
+                        ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
+                        const rText = `Rank ${rPrefix}${rankDelta.toLocaleString()} (#${start.rank.toLocaleString()} → #${end.rank.toLocaleString()})`;
+                        ctx.fillText(rText, curX, y);
+                        curX += ctx.measureText(rText).width + (50 * dpi);
+                        
+                        // Draw SP Section (Gold)
+                        const sPrefix = spDelta >= 0 ? '+' : '';
+                        ctx.fillStyle = '#ffcc00';
+                        ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
+                        const sText = `SP ${sPrefix}${spDelta.toLocaleString()} (${start.y.toLocaleString()} → ${end.y.toLocaleString()})`;
+                        ctx.fillText(sText, curX, y);
                     }
                 }
             } else {

@@ -812,14 +812,24 @@
             }
 
             // Mainline SP Scaling Logic
-            let allSPs = [].concat(...datasets.filter(ds => ds.yAxisID === 'ySP').map(ds => ds.data.map(d => d.y))).filter(v => v > 0);
+            let allSPs = [].concat(...datasets.filter(ds => ds.yAxisID === 'ySP').map(ds => {
+                let inWindow = ds.data.filter(d => d.x >= minTime && d.x <= maxTime);
+                let beforeWindow = ds.data.filter(d => d.x < minTime);
+                if (beforeWindow.length > 0) inWindow.push(beforeWindow[beforeWindow.length - 1]);
+                return inWindow.map(d => d.y);
+            })).filter(v => v > 0);
             let minSP, maxSP;
             if (allSPs.length > 0) {
-                let dMin = Math.min(...allSPs), dMax = Math.max(...allSPs);
-                if ((dMax - dMin) < 1000) { 
-                    minSP = (dMax + dMin) / 2 - 500; 
-                    maxSP = (dMax + dMin) / 2 + 500; 
-                }
+                let highestSPVal = Math.max(...allSPs);
+                let lowestSPVal = Math.min(...allSPs);
+                let spread = highestSPVal - lowestSPVal;
+                
+                if (spread < 100) spread = 100; // Safety minimum for flatlines
+                
+                const padding = spread * 0.15; // 15% padding
+                
+                maxSP = Math.ceil(highestSPVal + padding);
+                minSP = Math.max(0, Math.floor(lowestSPVal - padding));
             }
 
             let allRanks = visibleData.map(p => p.rank);
@@ -1431,18 +1441,32 @@
 
                         // Draw Rank Section (Blue)
                         const rPrefix = rankDelta >= 0 ? '+' : '';
+                        const rTextMain = `Rank ${rPrefix}${rankDelta.toLocaleString()} `;
+                        const rTextSub = `(#${start.rank.toLocaleString()} → #${end.rank.toLocaleString()})`;
+                        
                         ctx.fillStyle = '#2196F3';
                         ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
-                        const rText = `Rank ${rPrefix}${rankDelta.toLocaleString()} (#${start.rank.toLocaleString()} → #${end.rank.toLocaleString()})`;
-                        ctx.fillText(rText, curX, y);
-                        curX += ctx.measureText(rText).width + (50 * dpi);
+                        ctx.fillText(rTextMain, curX, y);
+                        curX += ctx.measureText(rTextMain).width;
+
+                        ctx.fillStyle = 'rgba(33, 150, 243, 0.75)';
+                        ctx.font = `normal ${22 * dpi}px system-ui, sans-serif`;
+                        ctx.fillText(rTextSub, curX, y + (4 * dpi));
+                        curX += ctx.measureText(rTextSub).width + (50 * dpi);
                         
                         // Draw SP Section (Gold)
                         const sPrefix = spDelta >= 0 ? '+' : '';
+                        const sTextMain = `SP ${sPrefix}${spDelta.toLocaleString()} `;
+                        const sTextSub = `(${start.y.toLocaleString()} → ${end.y.toLocaleString()})`;
+
                         ctx.fillStyle = '#ffcc00';
                         ctx.font = `bold ${28 * dpi}px system-ui, sans-serif`;
-                        const sText = `SP ${sPrefix}${spDelta.toLocaleString()} (${start.y.toLocaleString()} → ${end.y.toLocaleString()})`;
-                        ctx.fillText(sText, curX, y);
+                        ctx.fillText(sTextMain, curX, y);
+                        curX += ctx.measureText(sTextMain).width;
+
+                        ctx.fillStyle = 'rgba(255, 204, 0, 0.75)';
+                        ctx.font = `normal ${22 * dpi}px system-ui, sans-serif`;
+                        ctx.fillText(sTextSub, curX, y + (4 * dpi));
                     }
                 }
             } else {

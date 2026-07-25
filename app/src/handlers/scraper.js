@@ -333,8 +333,9 @@ async function archiveRollingDataToD1(env, dateStr, existingIdMap, currentYear, 
     
     // Batch insert into D1
     if (archiveEntries.length > 0) {
-        // SQLite limits variables per query. A batch of 100 entries has 300 variables.
-        const BATCH_SIZE = 50; 
+        // Cloudflare D1 limits the number of variables per query (max ~100 bound parameters).
+        // A batch of 25 entries has 75 variables, keeping us safely under the limit.
+        const BATCH_SIZE = 25; 
         for (let i = 0; i < archiveEntries.length; i += BATCH_SIZE) {
             const batch = archiveEntries.slice(i, i + BATCH_SIZE);
             const placeholders = batch.map(() => '(?, ?, ?)').join(',');

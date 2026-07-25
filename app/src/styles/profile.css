@@ -37,6 +37,7 @@
     justify-content: flex-end;
     align-items: center;
     gap: 1rem;
+    white-space: nowrap;
 }
 
 @media (max-width: 992px) {

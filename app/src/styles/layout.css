@@ -343,7 +343,7 @@ table th {
 
 /* Movers Grid Visual Refinement */
 #movers-section {
-    margin-top: 40px;
+    /* Removed margin-top to use mb-lg consistency from HTML */
 }
 
 .movers-grid {
@@ -462,4 +462,30 @@ table th {
 .card-clickable {
     cursor: pointer;
     transition: background 0.2s ease;
+}
+
+/* ============================================================================
+   RESPONSIVE DESKTOP GRID / MOBILE TABS
+   ============================================================================ */
+
+/* Desktop Grid View */
+@media (min-width: 1025px) {
+    .desktop-grid-mobile-tabs .mobile-only-tabs {
+        display: none !important;
+    }
+    .desktop-grid-mobile-tabs .responsive-tab-item.d-none {
+        display: block !important;
+    }
+}
+
+/* Mobile Tabs View */
+@media (max-width: 1024px) {
+    .desktop-grid-mobile-tabs .responsive-grid {
+        display: block; /* Override grid on mobile so tabs can manage visibility */
+    }
+    .desktop-grid-mobile-tabs .mover-card > h3,
+    #hot-location-widget > h3,
+    #card-schedule-widget > h3 {
+        display: none;
+    }
 }

@@ -1,16 +1,67 @@
 <!-- DASHBOARD WIDGETS -->
-<section class="dashboard-widgets-grid mb-lg">
-    <div id="hot-location-widget" class="widget-card">
-        <h3 class="mb-sm font-1rem">Hot Location</h3>
-        <div id="hot-location-content" class="widget-content">
-            <div class="skeleton-text">Loading locations...</div>
-        </div>
+<section class="tab-container desktop-grid-mobile-tabs mb-lg">
+    <div class="tab-nav mobile-only-tabs">
+        <button class="tab-btn active" data-target="tab-hot-location">Hot Location</button>
+        <button class="tab-btn" data-target="tab-card-schedule">Card Schedule</button>
     </div>
 
-    <div id="card-schedule-widget" class="widget-card">
-        <h3 class="mb-sm font-1rem">Card Schedule</h3>
-        <div id="card-schedule-content" class="widget-content">
-            <div class="skeleton-text">Loading schedule...</div>
+    <div class="dashboard-widgets-grid responsive-grid">
+        <div id="tab-hot-location" class="tab-content responsive-tab-item">
+            <div id="hot-location-widget" class="widget-card h-100">
+                <h3 class="mb-sm font-1rem">Hot Location</h3>
+                <div id="hot-location-content" class="widget-content">
+                    <div class="skeleton-text">Loading locations...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-card-schedule" class="tab-content responsive-tab-item d-none">
+            <div id="card-schedule-widget" class="widget-card h-100">
+                <h3 class="mb-sm font-1rem">Card Schedule</h3>
+                <div id="card-schedule-content" class="widget-content">
+                    <div class="skeleton-text">Loading schedule...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- SECTION 2: MOVERS (New on Board & Biggest Gainers) -->
+<section id="movers-section" class="tab-container desktop-grid-mobile-tabs mb-lg">
+    <div class="tab-nav mobile-only-tabs">
+        <button class="tab-btn active" data-target="tab-gainers">🚀 Biggest Gainers</button>
+        <button class="tab-btn" data-target="tab-newbie">✨ New on Board</button>
+    </div>
+    
+    <div class="movers-grid responsive-grid">
+        <!-- Biggest Gainers (24h) -->
+        <div id="tab-gainers" class="tab-content responsive-tab-item">
+            <div class="mover-card h-100 leaderboard-table-container">
+                <h3 class="mb-sm font-1rem"><span class="movers-header-text">🚀 Biggest Gainers </span><small id="subtitle-gainers"
+                        class="text-muted subtitle-small">Loading...</small></h3>
+                <table id="gainers-table">
+                    <tbody>
+                        <tr>
+                            <td>Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- New on Board (Highest entries vs 24h ago) -->
+        <div id="tab-newbie" class="tab-content responsive-tab-item d-none">
+            <div class="mover-card h-100 leaderboard-table-container">
+                <h3 class="mb-sm font-1rem"><span class="movers-header-text">✨ New on Board </span><small id="subtitle-newbie"
+                        class="text-muted subtitle-small">Loading...</small></h3>
+                <table id="newbie-table">
+                    <tbody>
+                        <tr>
+                            <td>Loading...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
 </section>
@@ -68,35 +119,3 @@
         </article>
     </div>
 </div>
-
-
-<!-- SECTION 2: MOVERS (New on Board & Biggest Gainers) -->
-<section id="movers-section">
-    <div class="movers-grid">
-        <!-- Biggest Gainers (24h) -->
-        <div class="mover-card">
-            <h3 class="mb-sm font-1rem">🚀 Biggest Gainers <small id="subtitle-gainers"
-                    class="text-muted subtitle-small">Loading...</small></h3>
-            <table id="gainers-table">
-                <tbody>
-                    <tr>
-                        <td>Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- New on Board (Highest entries vs 24h ago) -->
-        <div class="mover-card">
-            <h3 class="mb-sm font-1rem">✨ New on Board <small id="subtitle-newbie"
-                    class="text-muted subtitle-small">Loading...</small></h3>
-            <table id="newbie-table">
-                <tbody>
-                    <tr>
-                        <td>Loading...</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>

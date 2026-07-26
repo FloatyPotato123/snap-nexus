@@ -691,10 +691,10 @@
                         if (availableDays > 30) availableDays = 30;
                         if (availableDays < 1) availableDays = 1;
                     }
-                    slider.max = availableDays;
+                    slider.max = availableDays + 0.875;
                     let sv = availableDays - State.zoomDays + 1;
                     if (sv < 1) sv = 1;
-                    if (sv > availableDays) sv = availableDays;
+                    if (sv > slider.max) sv = slider.max;
                     slider.value = sv;
                 }
             } else {
@@ -723,7 +723,10 @@
             // Critical fix: A stepped chart draws a horizontal line from the last known point before the window.
             // We MUST include that point's Y-value in our dynamic axis bounds, otherwise the line gets pushed off screen!
             if (beforeMin.length > 0) {
-                visibleData.unshift(beforeMin[beforeMin.length - 1]);
+                // Clone the anchor point and snap it exactly to the left edge so it doesn't bleed off-screen
+                let anchor = { ...beforeMin[beforeMin.length - 1] };
+                anchor.x = minTime;
+                visibleData.unshift(anchor);
             }
             
             UI.updateHybridSummary(visibleData);
@@ -735,7 +738,7 @@
             if (!State.isComparing) {
                 datasets.push({
                     label: 'Rank',
-                    data: primaryData.map(p => ({x: p.x, y: p.rank, isDaily: p.isDaily})),
+                    data: visibleData.map(p => ({x: p.x, y: p.rank, isDaily: p.isDaily})),
                     borderColor: '#2196F3',
                     yAxisID: 'yRank',
                     borderDash: [5, 5],
@@ -747,7 +750,7 @@
                 });
                 datasets.push({
                     label: 'SP',
-                    data: primaryData.map(p => ({x: p.x, y: p.y, isDaily: p.isDaily})),
+                    data: visibleData.map(p => ({x: p.x, y: p.y, isDaily: p.isDaily})),
                     borderColor: '#ffcc00',
                     yAxisID: 'ySP',
                     backgroundColor: 'rgba(255, 204, 0, 0.1)',
@@ -761,7 +764,7 @@
                 const primaryName = $('pName').dataset.rawName || 'Player';
                 datasets.push({
                     label: primaryName,
-                    data: primaryData.map(p => ({x: p.x, y: p.y, isDaily: p.isDaily})),
+                    data: visibleData.map(p => ({x: p.x, y: p.y, isDaily: p.isDaily})),
                     borderColor: '#ffcc00',
                     yAxisID: 'ySP',
                     backgroundColor: 'rgba(255, 204, 0, 0.1)',
@@ -796,9 +799,17 @@
                         if (pt.x > maxTime) pt.x = maxTime;
                     });
                     
+                    let pVisibleData = pRawData.filter(pt => pt.x >= minTime && pt.x <= maxTime);
+                    const pBeforeMin = pRawData.filter(pt => pt.x < minTime);
+                    if (pBeforeMin.length > 0) {
+                        let anchor = { ...pBeforeMin[pBeforeMin.length - 1] };
+                        anchor.x = minTime;
+                        pVisibleData.unshift(anchor);
+                    }
+                    
                     datasets.push({
                         label: p.name,
-                        data: pRawData.map(pt => ({x: pt.x, y: pt.y, isDaily: pt.isDaily})),
+                        data: pVisibleData.map(pt => ({x: pt.x, y: pt.y, isDaily: pt.isDaily})),
                         borderColor: color.border,
                         yAxisID: 'ySP',
                         backgroundColor: color.bg.replace('0.2)', '0.05)'),
@@ -822,14 +833,23 @@
             if (allSPs.length > 0) {
                 let highestSPVal = Math.max(...allSPs);
                 let lowestSPVal = Math.min(...allSPs);
-                let spread = highestSPVal - lowestSPVal;
+                let trueSpread = highestSPVal - lowestSPVal;
                 
-                if (spread < 100) spread = 100; // Safety minimum for flatlines
+                let padding = trueSpread * 0.10; // 10% padding based on ACTUAL data
                 
-                const padding = spread * 0.15; // 15% padding
+                let targetMax = highestSPVal + padding;
+                let targetMin = lowestSPVal - padding;
+                let targetSpread = targetMax - targetMin;
                 
-                maxSP = Math.ceil(highestSPVal + padding);
-                minSP = Math.max(0, Math.floor(lowestSPVal - padding));
+                if (targetSpread < 100) {
+                    // Force the total mathematical window to be exactly 100
+                    const diff = 100 - targetSpread;
+                    targetMax += diff / 2;
+                    targetMin -= diff / 2;
+                }
+                
+                maxSP = Math.ceil(targetMax);
+                minSP = Math.max(0, Math.floor(targetMin));
             }
 
             let allRanks = visibleData.map(p => p.rank);
@@ -842,7 +862,7 @@
                 
                 if (spread < 10) spread = 10; // Safety minimum for flatlines
                 
-                const padding = spread * 0.15; // 15% padding
+                const padding = spread * 0.10; // 10% padding
                 
                 maxRank = Math.ceil(highestRankVal + padding);
                 minRank = Math.max(1, Math.floor(lowestRankVal - padding));
@@ -851,10 +871,48 @@
                 if (maxRank < 100) maxRank = 100;
             }
 
+            const xAxisAfterBuildTicks = axis => {
+                const zoomMs = maxTime - minTime;
+                let ticks = [];
+                let stepHrs = 1;
+                
+                if (zoomMs <= 25 * 60 * 60 * 1000) {
+                    if (zoomMs > 16 * 3600000) stepHrs = 4;
+                    else if (zoomMs > 8 * 3600000) stepHrs = 3;
+                    else if (zoomMs > 4 * 3600000) stepHrs = 2;
+                } else {
+                    if (zoomMs > 14 * 24 * 3600000) stepHrs = 72; // Every 3 days for 30d view
+                    else if (zoomMs > 7 * 24 * 3600000) stepHrs = 48; // Every 2 days for 14d view
+                    else stepHrs = 24; // Every 1 day for 3d/7d view
+                }
+                
+                let t = maxTime;
+                while (t >= minTime) {
+                    ticks.unshift({ value: t });
+                    t -= (stepHrs * 3600000);
+                }
+                axis.ticks = ticks;
+            };
+            
+            const xAxisCallback = function(value, index, ticks) {
+                const zoomMs = maxTime - minTime;
+                if (zoomMs <= 25 * 60 * 60 * 1000) {
+                    const diffMs = maxTime - value;
+                    if (diffMs < 60000) return 'Now';
+                    return `${Math.round(diffMs / 3600000)}h ago`;
+                } else {
+                    const d = new Date(value);
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                    return `${months[d.getMonth()]} ${d.getDate()}`;
+                }
+            };
+
             if (State.seasonChartInstance) {
                 State.seasonChartInstance.data.datasets = datasets;
                 State.seasonChartInstance.options.scales.x.min = minTime;
                 State.seasonChartInstance.options.scales.x.max = maxTime;
+                State.seasonChartInstance.options.scales.x.afterBuildTicks = xAxisAfterBuildTicks;
+                State.seasonChartInstance.options.scales.x.ticks.callback = xAxisCallback;
                 State.seasonChartInstance.options.scales.x.time.tooltipFormat = isFullSeason ? 'MMM d' : 'MMM d, h:mm a';
                 if (minSP !== undefined) {
                     State.seasonChartInstance.options.scales.ySP.suggestedMin = minSP;
@@ -873,7 +931,7 @@
                     type: 'line',
                     data: { datasets },
                     options: {
-                        clip: { left: 0, top: false, right: false, bottom: 0 },
+                        clip: { left: false, top: false, right: false, bottom: 0 },
                         responsive: true, maintainAspectRatio: false,
                         layout: { padding: { top: 10 } },
                         interaction: { mode: 'index', intersect: false },
@@ -919,7 +977,12 @@
                                     tooltipFormat: isFullSeason ? 'MMM d' : 'MMM d, h:mm a'
                                 },
                                 grid: { color: '#333' },
-                                ticks: { color: '#aaa', maxTicksLimit: 10 }
+                                afterBuildTicks: xAxisAfterBuildTicks,
+                                ticks: { 
+                                    color: '#aaa', 
+                                    maxTicksLimit: 10,
+                                    callback: xAxisCallback
+                                }
                             },
                             ySP: this.getSPAxis(minSP, maxSP, 'right', false),
                             yRank: rankAxis
@@ -1219,7 +1282,7 @@
             const playerStats = this.getHeaderStats(State, chartInstance);
             const isComparison = playerStats.length > 1;
             const isFullSeason = State.zoomDays >= 30;
-            const height = isFullSeason ? 675 : 600;
+            const height = isFullSeason ? 875 : 800;
 
             // Calculate header height based on number of players
             let headerHeight = 120;
@@ -1559,7 +1622,7 @@
 
         async generateRollingBlob(State, chartInstance) {
             const stats = this.getRollingHeaderStats(State, chartInstance);
-            const { width, height, dpi, padding } = { width: 1200, height: 600, dpi: 2, padding: 30 };
+            const { width, height, dpi, padding } = { width: 1200, height: 800, dpi: 2, padding: 30 };
             const headerHeight = 135;
 
             const canvas = document.createElement('canvas');

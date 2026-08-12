@@ -51,7 +51,9 @@ export function getSeasonStartForMonth(year, monthIndex) {
  * @returns {Date}
  */
 export function getSeasonStart(date) {
-    const { year, month } = getCurrentSeason(new Date(date));
+    const d = new Date(date);
+    d.setUTCHours(20, 0, 0, 0);
+    const { year, month } = getCurrentSeason(d);
     return getSeasonStartForMonth(year, month - 1);
 }
 
@@ -61,7 +63,9 @@ export function getSeasonStart(date) {
  * @returns {Date} The season end date.
  */
 export function getSeasonEnd(date) {
-    const { year, month } = getCurrentSeason(new Date(date));
+    const d = new Date(date);
+    d.setUTCHours(20, 0, 0, 0);
+    const { year, month } = getCurrentSeason(d);
     let nextMonth = month; // Since month is 1-indexed, this is the 0-indexed month index of the next month
     let nextYear = year;
     if (nextMonth > 11) {

@@ -532,7 +532,7 @@
         getRankAxis(display = true) {
             return {
                 type: 'linear', display, position: 'left', reverse: true,
-                min: 0, suggestedMax: 100,
+                suggestedMin: 1, suggestedMax: 100,
                 title: { display: true, text: 'Rank', color: '#2196F3' },
                 grid: { color: '#333' },
                 ticks: {
@@ -936,6 +936,7 @@
                         layout: { padding: { top: 10 } },
                         interaction: { mode: 'index', intersect: false },
                         plugins: {
+                            legend: { display: false },
                             tooltip: {
                                 callbacks: {
                                     title: function(context) {
@@ -986,8 +987,7 @@
                             },
                             ySP: this.getSPAxis(minSP, maxSP, 'right', false),
                             yRank: rankAxis
-                        },
-                        plugins: { legend: { display: false } }
+                        }
                     }
                 });
                 State.seasonChartInstance.visibleData = visibleData;

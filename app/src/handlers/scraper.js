@@ -170,23 +170,29 @@ export async function runDailyScrape(env) {
 
         const seenAt = now.toISOString().split('T')[0];
         
-        // a) Player names for search autocomplete
-        const playersToSync = leaderboard
-            .filter(p => (p.name || p.playerName))
-            .map(p => {
-                const name = (p.name || p.playerName).trim();
-                let id = p.id || p.playerId;
-                
-                // Fallback: If no official ID, try to reuse an existing ID for this name
-                if (!id || id === 'undefined') {
-                    id = existingIdMap[name] || name;
-                }
-                
-                return {
-                    id: String(id),
+        // a) Player names for search autocomplete (preserving highest-ranked entry on duplicate names)
+        const seenSyncIds = new Set();
+        const playersToSync = [];
+        for (const p of leaderboard) {
+            const rawName = p.name || p.playerName;
+            if (!rawName) continue;
+            const name = rawName.trim();
+            let id = p.id || p.playerId;
+            
+            // Fallback: If no official ID, try to reuse an existing ID for this name
+            if (!id || id === 'undefined') {
+                id = existingIdMap[name] || name;
+            }
+            
+            const idStr = String(id);
+            if (!seenSyncIds.has(idStr)) {
+                seenSyncIds.add(idStr);
+                playersToSync.push({
+                    id: idStr,
                     name: name
-                };
-            });
+                });
+            }
+        }
 
         if (playersToSync.length > 0) {
             await batchUpsertPlayers(env.DB, playersToSync, seenAt);
@@ -196,23 +202,29 @@ export async function runDailyScrape(env) {
         // a) Global infinite player count
         await recordDailyTotal(env.DB, seenAt, data.total || 0);
 
-        // b) Individual player ranks and scores for charts
-        const statsEntries = leaderboard
-            .map((p, index) => {
-                const name = (p.name || p.playerName).trim();
-                let id = p.id || p.playerId;
-                
-                if (!id || id === 'undefined') {
-                    id = existingIdMap[name] || name;
-                }
-                
-                return {
-                    playerId: id ? String(id) : null,
+        // b) Individual player ranks and scores for charts (preserving highest-ranked entry on duplicate names)
+        const seenStatIds = new Set();
+        const statsEntries = [];
+        for (const [index, p] of leaderboard.entries()) {
+            const rawName = p.name || p.playerName;
+            if (!rawName) continue;
+            const name = rawName.trim();
+            let id = p.id || p.playerId;
+            
+            if (!id || id === 'undefined') {
+                id = existingIdMap[name] || name;
+            }
+            
+            const playerId = id ? String(id) : null;
+            if (playerId && !seenStatIds.has(playerId)) {
+                seenStatIds.add(playerId);
+                statsEntries.push({
+                    playerId: playerId,
                     rank: index + 1,
                     score: p.score
-                };
-            })
-            .filter(s => s.playerId);
+                });
+            }
+        }
 
         if (statsEntries.length > 0) {
             await recordPlayerStats(env.DB, seenAt, statsEntries);

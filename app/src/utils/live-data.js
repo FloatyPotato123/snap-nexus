@@ -50,12 +50,14 @@ export async function getLiveLeaderboardData() {
                     id = name;
                 }
 
-                newMap.set(id, {
-                    id,
-                    rank,
-                    name,
-                    score: entry.score
-                });
+                if (!newMap.has(id) || rank < newMap.get(id).rank) {
+                    newMap.set(id, {
+                        id,
+                        rank,
+                        name,
+                        score: entry.score
+                    });
+                }
             });
         }
 

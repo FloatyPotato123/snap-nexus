@@ -30,20 +30,7 @@ export async function handleGetHotLocation(c) {
         if (!res.ok) return c.text('Error fetching schedule.');
 
         const html = await res.text();
-        const regex = /(\d{2}\/\d{2}\/\d{4}).*?>(.*?)<\/a>( - (.*?))?<\/li>/gs;
-        let match;
-        const rawSchedule = [];
-
-        while ((match = regex.exec(html)) !== null) {
-            const [_, dateStr, name, __, desc] = match;
-            const [m, d, y] = dateStr.split('/').map(Number);
-            const startTime = new Date(Date.UTC(y, m - 1, d, 19, 0, 0));
-            rawSchedule.push({
-                name: cleanup(name),
-                desc: cleanup(desc || ''),
-                startTime: startTime.toISOString()
-            });
-        }
+        const rawSchedule = parseSnapFanSchedule(html);
 
         // 3. Enrich with Untapped Metadata
         const untappedLocations = await getAllLocationsUntapped(c.env);
@@ -59,6 +46,11 @@ export async function handleGetHotLocation(c) {
                 defId: uLoc ? uLoc.cardDefId : s.name.replace(/[^a-zA-Z]/g, '')
             };
         });
+
+        // 4. Save to KV Cache if entries found
+        if (enrichedSchedule.length > 0 && c.env && c.env.MARVEL_SNAP_HUB) {
+            await c.env.MARVEL_SNAP_HUB.put(LOCATIONS_CACHE_KEY, JSON.stringify(enrichedSchedule), { expirationTtl: CACHE_TTL });
+        }
 
         return await respondWithSchedule(c, enrichedSchedule);
 
@@ -119,6 +111,75 @@ async function respondWithSchedule(c, schedule) {
         upcoming,
         isHotDay
     });
+}
+
+function parseSnapFanSchedule(html) {
+    if (!html) return [];
+
+    const monthNames = {
+        'jan': 0, 'feb': 1, 'mar': 2, 'apr': 3, 'may': 4, 'jun': 5,
+        'jul': 6, 'aug': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dec': 11
+    };
+
+    const rawSchedule = [];
+    const now = new Date();
+    const currentYear = now.getUTCFullYear();
+    const currentMonth = now.getUTCMonth();
+
+    // 1. Try Modern Astro Layout (grouped by data-month sections and spotlight-cards)
+    const monthSections = html.split(/<section[^>]+data-month="([^"]+)"/g);
+    if (monthSections.length > 1) {
+        for (let i = 1; i < monthSections.length; i += 2) {
+            const monthKey = monthSections[i]; // e.g. "2026-09"
+            const sectionContent = monthSections[i + 1] || '';
+            const [yearStr, monthNumStr] = monthKey.split('-');
+            const defaultYear = parseInt(yearStr, 10) || currentYear;
+            const defaultMonth = (parseInt(monthNumStr, 10) - 1) >= 0 ? parseInt(monthNumStr, 10) - 1 : currentMonth;
+
+            // Extract locations tab section
+            const locTabMatch = sectionContent.match(/data-tab="locations"[\s\S]*?(?:<div[^>]+data-tab=|<\/section)/i);
+            const targetHtml = locTabMatch ? locTabMatch[0] : sectionContent;
+
+            const cards = targetHtml.split(/<div class="spotlight-card">/g).slice(1);
+            for (const card of cards) {
+                const dateMatch = card.match(/class="banner-date__dates">([^<]+)<\/span>/i) || card.match(/(\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)/);
+                const nameMatch = card.match(/<a href="\/locations\/[^"]*"[^>]*>([^<]+)<\/a>/i);
+                const descMatch = card.match(/<div class="[^"]*text-snap-gray-300[^"]*">([\s\S]*?)<\/div>/i);
+
+                if (dateMatch && nameMatch) {
+                    const rawDate = dateMatch[1].trim();
+                    const rawName = nameMatch[1].trim();
+                    const rawDesc = descMatch ? descMatch[1].trim() : '';
+
+                    let startTime = null;
+                    const textDateMatch = rawDate.match(/([a-zA-Z]+)\s+(\d{1,2})/);
+                    if (textDateMatch) {
+                        const mPrefix = textDateMatch[1].substring(0, 3).toLowerCase();
+                        const mIndex = monthNames[mPrefix] !== undefined ? monthNames[mPrefix] : defaultMonth;
+                        const day = parseInt(textDateMatch[2], 10);
+                        startTime = new Date(Date.UTC(defaultYear, mIndex, day, 19, 0, 0));
+                    } else if (rawDate.includes('/')) {
+                        const parts = rawDate.split('/').map(Number);
+                        if (parts.length === 3) {
+                            startTime = new Date(Date.UTC(parts[2], parts[0] - 1, parts[1], 19, 0, 0));
+                        } else if (parts.length === 2) {
+                            startTime = new Date(Date.UTC(defaultYear, parts[0] - 1, parts[1], 19, 0, 0));
+                        }
+                    }
+
+                    if (startTime && !isNaN(startTime.getTime())) {
+                        rawSchedule.push({
+                            name: cleanup(rawName),
+                            desc: cleanup(rawDesc),
+                            startTime: startTime.toISOString()
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    return rawSchedule;
 }
 
 function cleanup(str) {
